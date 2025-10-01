@@ -12,43 +12,44 @@ const Sidebar: React.FC<SidebarProps> = ({ activeSection, onSectionChange }) => 
       id: 'generate',
       title: 'Generate',
       icon: Shield,
-      color: 'orange'
     },
     {
       id: 'validate',
       title: 'Validate',
       icon: Search,
-      color: 'blue'
     },
     {
       id: 'analyze',
       title: 'Analyze',
       icon: BarChart3,
-      color: 'purple'
     }
   ];
 
-  const getColorClasses = (color: string, isActive: boolean) => {
+  const getActiveClasses = (isActive: boolean) => {
     if (isActive) {
-      const activeColors = {
-        orange: 'bg-orange-500/10 border-orange-500/30 text-orange-400',
-        blue: 'bg-blue-500/10 border-blue-500/30 text-blue-400',
-        purple: 'bg-purple-500/10 border-purple-500/30 text-purple-400'
-      };
-      return activeColors[color as keyof typeof activeColors];
+      return 'bg-blue-500/10 border-blue-500/30 text-blue-400';
     }
-    return 'bg-slate-800/30 border-slate-700/50 text-slate-400 hover:bg-slate-800/50 hover:text-white';
+    return 'bg-slate-800/30 border-slate-700/50 text-slate-400 hover:bg-slate-800/50 hover:text-white hover:border-slate-600/50';
   };
 
   return (
-    <div className="w-20 bg-slate-900/50 backdrop-blur-xl border-r border-slate-800/50 flex flex-col items-center py-8 space-y-4">
-      {/* Logo */}
-      <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-red-600 rounded-xl flex items-center justify-center mb-8 shadow-lg shadow-orange-500/30">
-        <Shield className="w-6 h-6 text-white" />
+    <div className="w-64 bg-slate-900/50 backdrop-blur-xl border-r border-slate-800/50 flex flex-col py-8 px-6">
+      {/* Logo with Name */}
+      <div className="flex items-center space-x-3 mb-12 pb-6 border-b border-slate-800/50">
+        <div className="relative flex-shrink-0">
+          <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-blue-800 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/20 border border-blue-500/20">
+            <Shield className="w-6 h-6 text-white" />
+          </div>
+          <div className="absolute -inset-0.5 bg-gradient-to-br from-blue-600 to-blue-800 rounded-xl blur opacity-20"></div>
+        </div>
+        <div>
+          <h1 className="text-xl font-bold text-white">Aegis IAM</h1>
+          <p className="text-xs text-slate-400">AI Security Shield</p>
+        </div>
       </div>
 
       {/* Navigation */}
-      <div className="flex-1 flex flex-col space-y-3">
+      <div className="flex-1 space-y-3">
         {sections.map((section) => {
           const Icon = section.icon;
           const isActive = activeSection === section.id;
@@ -58,25 +59,23 @@ const Sidebar: React.FC<SidebarProps> = ({ activeSection, onSectionChange }) => 
               key={section.id}
               onClick={() => onSectionChange(section.id)}
               className={`
-                w-14 h-14 rounded-xl border transition-all duration-200
-                flex items-center justify-center group relative
-                ${getColorClasses(section.color, isActive)}
+                w-full px-4 py-3 rounded-xl border transition-all duration-200
+                flex items-center space-x-3 group
+                ${getActiveClasses(isActive)}
               `}
-              title={section.title}
             >
-              <Icon className="w-6 h-6" />
-              
-              {/* Tooltip */}
-              <div className="absolute left-full ml-4 px-3 py-2 bg-slate-800 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
-                {section.title}
-              </div>
+              <Icon className="w-5 h-5 flex-shrink-0" />
+              <span className="font-medium">{section.title}</span>
             </button>
           );
         })}
       </div>
 
       {/* Status Indicator */}
-      <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
+      <div className="pt-6 border-t border-slate-800/50 flex items-center space-x-2">
+        <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+        <span className="text-xs text-slate-400">System Active</span>
+      </div>
     </div>
   );
 };
