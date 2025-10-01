@@ -47,11 +47,12 @@ def generate(request: GenerationRequest):
             conversations[conversation_id] = []
         
         # Add user message to history
-        conversations[conversation_id].append({
+        user_message = {
             "role": "user",
             "content": request.description,
-            "timestamp": str(uuid.uuid4())  # Simple timestamp placeholder
-        })
+            "timestamp": str(uuid.uuid4())
+        }
+        conversations[conversation_id].append(user_message)
         
         # Build context for agent (include previous messages for follow-ups)
         if request.is_followup and len(conversations[conversation_id]) > 1:
@@ -89,11 +90,12 @@ def generate(request: GenerationRequest):
             security_notes = []
         
         # Add agent response to history
-        conversations[conversation_id].append({
+        assistant_message = {
             "role": "assistant",
             "content": final_message,
             "timestamp": str(uuid.uuid4())
-        })
+        }
+        conversations[conversation_id].append(assistant_message)
         
         # Generate refinement suggestions for initial policies
         refinement_suggestions = []
@@ -112,7 +114,7 @@ def generate(request: GenerationRequest):
             "security_score": security_score,
             "security_notes": security_notes,
             "refinement_suggestions": refinement_suggestions,
-            "conversation_history": conversations[conversation_id]  # Include full history
+            "conversation_history": conversations[conversation_id]  # Full history included
         }
         
     except Exception as e:
@@ -120,15 +122,34 @@ def generate(request: GenerationRequest):
         import traceback
         traceback.print_exc()
         
-        error_response = f"""```json
-{{
-  "Version": "2012-10-17",
-  "Statement": [
-    {{
-      "Effect": "Allow",
-      "Action": ["s3:GetObject"],
-      "Resource": ["arn:aws:s3:::example-bucket/*"]
-    }}
-  ]
-}}
-"""
+        error_response = {
+            "final_answer": "Error generating policy",
+            "conversation_id": str(uuid.uuid4()),
+            "message_count": 0,
+            "security_score": 0,
+            "security_notes": ["Error occurred"],
+            "refinement_suggestions": [],
+            "conversation_history": []
+        }
+        
+        return error_response
+
+@app.get("/conversation/{conversation_id}")
+def get_conversation(conversation_id: str):
+    """Get full conversation history"""
+    if conversation_id not in conversations:
+        return {"error": "Conversation not found", "conversation_id": conversation_id}
+    
+    return {
+        "conversation_id": conversation_id,
+        "messages": conversations[conversation_id],
+        "message_count": len(conversations[conversation_id])
+    }
+
+@app.delete("/conversation/{conversation_id}")
+def clear_conversation(conversation_id: str):
+    """Clear conversation history"""
+    if conversation_id in conversations:
+        del conversations[conversation_id]
+        return {"message": "Conversation cleared", "conversation_id": conversation_id}
+    return {"error": "Conversation not found", "conversation_id": conversation_id}

@@ -21,7 +21,7 @@ const Dashboard: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 flex">
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex">
       <Sidebar 
         activeSection={activeSection} 
         onSectionChange={setActiveSection} 

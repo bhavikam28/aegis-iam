@@ -28,6 +28,13 @@ export interface ComplianceFramework {
   gaps: string[];
 }
 
+// NEW: Chat message interface
+export interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: string;
+}
+
 export interface GeneratePolicyRequest {
   description: string;
   service: string;
@@ -45,8 +52,9 @@ export interface GeneratePolicyResponse {
     actions: string[];
     reflection: string;
   };
-  conversation_id?: string;  // ADD THIS
-  refinement_suggestions?: string[];  // ADD THIS
+  conversation_id?: string;
+  refinement_suggestions?: string[];
+  conversation_history?: ChatMessage[];  // NEW: Full chat history
 }
 
 export interface ValidatePolicyRequest {
