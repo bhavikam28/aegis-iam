@@ -8,7 +8,8 @@ import json
 import re
 
 app = FastAPI(title="Aegis IAM Agent - Intelligent Conversational Server")
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173",
+    "https://aegis-iam.vercel.app"], allow_methods=["*"], allow_headers=["*"])
 
 conversations: Dict[str, List[Dict]] = {}
 
