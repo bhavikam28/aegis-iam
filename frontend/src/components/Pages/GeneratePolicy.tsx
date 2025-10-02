@@ -26,7 +26,6 @@ const GeneratePolicy: React.FC = () => {
     { value: 'cis', label: 'CIS Benchmarks' }
   ];
 
-  // Update chat history when response changes
   useEffect(() => {
     if (response?.conversation_history) {
       setChatHistory(response.conversation_history);
@@ -51,8 +50,6 @@ const GeneratePolicy: React.FC = () => {
       setResponse(result);
       setConversationId(result.conversation_id || null);
       setIsRefining(true);
-      
-      console.log("Policy generated:", result); // Debug log
     } catch (err) {
       console.error("Error generating policy:", err);
       setError(err instanceof Error ? err.message : 'Failed to generate policy');
@@ -69,14 +66,9 @@ const GeneratePolicy: React.FC = () => {
     setError(null);
     
     try {
-      console.log("Sending follow-up message:", followUpMessage); // Debug log
-      
       const result = await sendFollowUp(followUpMessage, conversationId, service);
-      
       setResponse(result);
-      setFollowUpMessage(''); // Clear input after sending
-      
-      console.log("Follow-up response:", result); // Debug log
+      setFollowUpMessage('');
     } catch (err) {
       console.error("Error sending follow-up:", err);
       setError(err instanceof Error ? err.message : 'Failed to refine policy');
@@ -101,15 +93,12 @@ const GeneratePolicy: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
-      {/* Hero Section - Only show when not refining */}
       {!isRefining && !response && (
         <div className="relative overflow-hidden">
-          {/* Background Elements */}
           <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-purple-500/10 rounded-full blur-3xl"></div>
           <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-pink-500/8 rounded-full blur-3xl"></div>
           
           <div className="relative max-w-7xl mx-auto px-8 pt-20 pb-32">
-            {/* Header */}
             <div className="mb-16">
               <div className="inline-flex items-center space-x-2 bg-purple-500/10 border border-purple-500/30 rounded-full px-6 py-2 mb-6">
                 <Shield className="w-4 h-4 text-purple-400" />
@@ -129,11 +118,9 @@ const GeneratePolicy: React.FC = () => {
               </p>
             </div>
 
-            {/* Main Input Card */}
             <div className="max-w-4xl mx-auto">
               <form onSubmit={handleSubmit}>
                 <div className="bg-slate-900/50 backdrop-blur-xl border border-purple-500/20 rounded-3xl p-10 shadow-2xl">
-                  {/* Large Text Input */}
                   <div className="mb-8">
                     <label className="block text-white text-lg font-semibold mb-4">
                       What permissions do you need?
@@ -147,9 +134,7 @@ const GeneratePolicy: React.FC = () => {
                     />
                   </div>
 
-                  {/* Options Row */}
                   <div className="grid grid-cols-2 gap-6 mb-8">
-                    {/* Security Toggle */}
                     <div className="flex items-center space-x-4 bg-slate-800/30 rounded-2xl p-6 border border-slate-700/50">
                       <div className="w-12 h-12 bg-purple-500/10 rounded-xl flex items-center justify-center flex-shrink-0 border border-purple-500/30">
                         <Lock className="w-6 h-6 text-purple-400" />
@@ -171,7 +156,6 @@ const GeneratePolicy: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Compliance Dropdown */}
                     <div className="bg-slate-800/30 rounded-2xl p-6 border border-slate-700/50">
                       <label className="block text-white font-medium mb-3">Compliance</label>
                       <select
@@ -188,7 +172,6 @@ const GeneratePolicy: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Submit Button */}
                   <button
                     type="submit"
                     disabled={loading || !description.trim()}
@@ -210,14 +193,12 @@ const GeneratePolicy: React.FC = () => {
                 </div>
               </form>
 
-              {/* Error Display */}
               {error && (
                 <div className="mt-6 bg-red-500/10 border border-red-500/30 rounded-2xl p-6">
                   <p className="text-red-400">{error}</p>
                 </div>
               )}
 
-              {/* Trust Indicators */}
               <div className="flex items-center justify-center space-x-8 mt-12 text-slate-400">
                 <div className="flex items-center space-x-2">
                   <Shield className="w-5 h-5 text-purple-400" />
@@ -237,10 +218,8 @@ const GeneratePolicy: React.FC = () => {
         </div>
       )}
 
-      {/* Results View - Clean Layout */}
       {(isRefining || response) && (
         <div className="max-w-[1600px] mx-auto px-8 py-12">
-          {/* Top Bar */}
           <div className="flex items-center justify-between mb-12">
             <div>
               <h2 className="text-3xl font-bold text-white mb-2">Policy Generated</h2>
@@ -256,9 +235,7 @@ const GeneratePolicy: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
-            {/* Left Sidebar - Chat (2 columns) */}
             <div className="lg:col-span-2 space-y-6">
-              {/* Chat History */}
               <div className="bg-slate-900/50 backdrop-blur-xl border border-purple-500/20 rounded-2xl overflow-hidden">
                 <div className="bg-slate-800/50 px-6 py-4 border-b border-purple-500/20">
                   <div className="flex items-center justify-between">
@@ -267,7 +244,6 @@ const GeneratePolicy: React.FC = () => {
                       <h3 className="text-white font-semibold">Conversation</h3>
                       <span className="text-slate-400 text-sm">({chatHistory.length})</span>
                     </div>
-                    {/* Expand/Collapse Button */}
                     <button
                       onClick={() => setIsChatExpanded(!isChatExpanded)}
                       className="flex items-center space-x-2 px-3 py-2 bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/30 rounded-lg text-sm text-purple-300 hover:text-purple-200 transition-all"
@@ -321,7 +297,6 @@ const GeneratePolicy: React.FC = () => {
                 </div>
               </div>
 
-              {/* Refine Input */}
               <div className="bg-slate-900/50 backdrop-blur-xl border border-purple-500/20 rounded-2xl p-6">
                 <label className="block text-white font-medium mb-3">Refine Policy</label>
                 <form onSubmit={handleFollowUp} className="flex space-x-3">
@@ -343,7 +318,6 @@ const GeneratePolicy: React.FC = () => {
                 </form>
               </div>
 
-              {/* Quick Actions */}
               {response?.refinement_suggestions && response.refinement_suggestions.length > 0 && (
                 <div className="bg-slate-900/50 backdrop-blur-xl border border-purple-500/20 rounded-2xl p-6">
                   <h4 className="text-white font-medium mb-4">Quick Refinements</h4>
@@ -362,18 +336,42 @@ const GeneratePolicy: React.FC = () => {
               )}
             </div>
 
-            {/* Right Main Area - Policy (3 columns) */}
             <div className="lg:col-span-3 space-y-6">
               {loading && !response ? (
                 <div className="bg-slate-900/50 backdrop-blur-xl border border-purple-500/20 rounded-2xl h-[600px] flex items-center justify-center">
-                  <div className="text-center">
-                    <div className="w-16 h-16 border-4 border-slate-700 border-t-purple-500 rounded-full animate-spin mx-auto mb-4"></div>
-                    <p className="text-slate-400">Generating secure policy...</p>
+                  <div className="text-center max-w-md">
+                    <div className="relative mb-6">
+                      <div className="w-20 h-20 border-4 border-slate-700 border-t-purple-500 rounded-full animate-spin mx-auto"></div>
+                      <Shield className="w-8 h-8 text-purple-400 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2" />
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <p className="text-white text-lg font-semibold">
+                        🤖 Agent is working on your policy...
+                      </p>
+                      <p className="text-slate-400">
+                        Analyzing security requirements and generating least-privilege policy
+                      </p>
+                    </div>
+                    
+                    <div className="mt-8 space-y-3 text-left">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                        <span className="text-slate-300 text-sm">Understanding requirements</span>
+                      </div>
+                      <div className="flex items-center space-x-3">
+                        <div className="w-2 h-2 bg-purple-400 rounded-full animate-pulse"></div>
+                        <span className="text-slate-300 text-sm">Applying AWS best practices</span>
+                      </div>
+                      <div className="flex items-center space-x-3">
+                        <div className="w-2 h-2 bg-slate-600 rounded-full"></div>
+                        <span className="text-slate-500 text-sm">Validating security posture</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
               ) : response ? (
                 <>
-                  {/* Security Score */}
                   <div className="bg-gradient-to-br from-slate-900/50 to-slate-800/50 backdrop-blur-xl border border-purple-500/20 rounded-2xl p-8">
                     <div className="flex items-center justify-between mb-6">
                       <div>
@@ -383,8 +381,8 @@ const GeneratePolicy: React.FC = () => {
                       <div className="text-center">
                         <div className={`text-6xl font-bold ${
                           response.security_score >= 90 ? 'text-green-400' :
-                          response.security_score >= 70 ? 'text-yellow-400' :
-                          response.security_score >= 50 ? 'text-orange-400' :
+                          response.security_score >= 80 ? 'text-yellow-400' :
+                          response.security_score >= 70 ? 'text-orange-400' :
                           'text-red-400'
                         }`}>
                           {response.security_score}
@@ -392,24 +390,32 @@ const GeneratePolicy: React.FC = () => {
                         <div className="text-slate-400 text-sm mt-2">/ 100</div>
                       </div>
                     </div>
-                    <div className="w-full bg-slate-800 rounded-full h-4 mb-4">
+                    
+                    <div className="w-full bg-slate-800 rounded-full h-4 mb-6">
                       <div
                         className={`h-4 rounded-full transition-all duration-1000 ${
                           response.security_score >= 90 ? 'bg-gradient-to-r from-green-500 to-green-400' :
-                          response.security_score >= 70 ? 'bg-gradient-to-r from-yellow-500 to-yellow-400' :
-                          response.security_score >= 50 ? 'bg-gradient-to-r from-orange-500 to-pink-500' :
+                          response.security_score >= 80 ? 'bg-gradient-to-r from-yellow-500 to-yellow-400' :
+                          response.security_score >= 70 ? 'bg-gradient-to-r from-orange-500 to-pink-500' :
                           'bg-gradient-to-r from-red-500 to-pink-500'
                         }`}
                         style={{ width: `${response.security_score}%` }}
                       ></div>
                     </div>
+
+                    {response.score_explanation && (
+                      <div className="mt-6 pt-6 border-t border-slate-700">
+                        <div className="text-slate-300 text-sm leading-relaxed whitespace-pre-line">
+                          {response.score_explanation}
+                        </div>
+                      </div>
+                    )}
                     
-                    {/* Score Breakdown - Only show if points were deducted */}
-                    {response.reasoning?.breakdown && Object.keys(response.reasoning.breakdown).length > 0 && (
+                    {response.score_breakdown && Object.keys(response.score_breakdown).length > 0 && (
                       <div className="mt-4 pt-4 border-t border-slate-700">
-                        <p className="text-slate-400 text-sm mb-3">Score Breakdown:</p>
+                        <p className="text-slate-400 text-sm mb-3 font-semibold">Score Breakdown:</p>
                         <div className="space-y-2">
-                          {Object.entries(response.reasoning.breakdown).map(([key, value]: [string, any]) => (
+                          {Object.entries(response.score_breakdown).map(([key, value]: [string, any]) => (
                             <div key={key} className="flex items-center justify-between text-sm">
                               <span className="text-slate-300">
                                 {key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
@@ -426,7 +432,6 @@ const GeneratePolicy: React.FC = () => {
                     )}
                   </div>
 
-                  {/* Policy Code */}
                   <div>
                     <h3 className="text-white text-xl font-semibold mb-4">IAM Policy</h3>
                     <div className="bg-slate-900 border border-purple-500/20 rounded-2xl overflow-hidden">
@@ -454,7 +459,6 @@ const GeneratePolicy: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Explanation */}
                   <div className="bg-slate-900/50 backdrop-blur-xl border border-purple-500/20 rounded-2xl p-8">
                     <h4 className="text-white text-lg font-semibold mb-4">Explanation</h4>
                     <p className="text-slate-300 leading-relaxed whitespace-pre-wrap">
@@ -462,7 +466,6 @@ const GeneratePolicy: React.FC = () => {
                     </p>
                   </div>
 
-                  {/* Security Notes */}
                   {response.security_notes && response.security_notes.length > 0 && (
                     <div className="bg-purple-500/5 backdrop-blur-xl border border-purple-500/30 rounded-2xl p-8">
                       <h4 className="text-purple-400 text-lg font-semibold mb-4">Security Features</h4>

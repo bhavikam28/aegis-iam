@@ -28,7 +28,6 @@ export interface ComplianceFramework {
   gaps: string[];
 }
 
-// NEW: Chat message interface
 export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
@@ -47,6 +46,8 @@ export interface GeneratePolicyResponse {
   explanation: string;
   security_notes: string[];
   security_score: number;
+  score_breakdown?: Record<string, number>;
+  score_explanation?: string;
   reasoning: {
     plan: string;
     actions: string[];
@@ -54,7 +55,7 @@ export interface GeneratePolicyResponse {
   };
   conversation_id?: string;
   refinement_suggestions?: string[];
-  conversation_history?: ChatMessage[];  // NEW: Full chat history
+  conversation_history?: ChatMessage[];
 }
 
 export interface ValidatePolicyRequest {
