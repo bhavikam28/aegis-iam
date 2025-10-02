@@ -3,7 +3,6 @@ import json
 from strands import tool
 
 bedrock_runtime = boto3.client(service_name='bedrock-runtime', region_name='us-east-1')
-# Use Claude 3.7 Sonnet (latest model)
 MODEL_ID = 'us.anthropic.claude-3-7-sonnet-20250219-v1:0'
 
 @tool
@@ -21,8 +20,7 @@ def generate_policy_from_bedrock(description: str, service: str) -> dict:
     **Primary AWS Service:** "{service}"
     
     Format your response exactly like this:
-    
-    ```json
+```json
     {{
       "Version": "2012-10-17",
       "Statement": [
@@ -33,45 +31,48 @@ def generate_policy_from_bedrock(description: str, service: str) -> dict:
         }}
       ]
     }}
-    ```
+**Explanation:**
+[Explain what the policy does in 2-3 sentences, focusing on the permissions granted]
+
+**Next Steps:**
+[Provide 3-5 specific, actionable suggestions for how the user could enhance this policy based on their specific use case. 
+Each suggestion should be a single sentence that the user can directly use as a follow-up message. 
+Examples: "Add IP restriction for 203.0.113.0/24", "Require MFA for all operations", "Restrict to /reports prefix only"]
+"""
+
+body = json.dumps({
+    "anthropic_version": "bedrock-2023-05-31", 
+    "max_tokens": 2048,
+    "messages": [{"role": "user", "content": [{"type": "text", "text": prompt}]}],
+})
+
+try:
+    response = bedrock_runtime.invoke_model(body=body, modelId=MODEL_ID)
+    response_body = json.loads(response.get('body').read())
+    raw_response_text = response_body['content'][0]['text']
     
-    **Explanation:**
-    [Your explanation here]
-    """
+    return raw_response_text
     
-    body = json.dumps({
-        "anthropic_version": "bedrock-2023-05-31", 
-        "max_tokens": 2048,
-        "messages": [{"role": "user", "content": [{"type": "text", "text": prompt}]}],
-    })
-    
-    try:
-        response = bedrock_runtime.invoke_model(body=body, modelId=MODEL_ID)
-        response_body = json.loads(response.get('body').read())
-        raw_response_text = response_body['content'][0]['text']
-        
-        # Return the raw response so the agent can process it
-        return raw_response_text  # Return string directly, not in a dict
-        
-    except Exception as e:
-        # Return a properly formatted fallback response
-        return f"""```json
+except Exception as e:
+    return f"""```json
 {{
-  "Version": "2012-10-17",
-  "Statement": [
-    {{
-      "Effect": "Allow",
-      "Action": [
-        "s3:GetObject"
-      ],
-      "Resource": [
-        "arn:aws:s3:::example-bucket/*"
-      ]
-    }}
-  ]
+"Version": "2012-10-17",
+"Statement": [
+{{
+"Effect": "Allow",
+"Action": [
+"s3:GetObject"
+],
+"Resource": [
+"arn:aws:s3:::example-bucket/*"
+]
 }}
-```
+]
+}}
 
 **Explanation:**
 Fallback policy generated due to Bedrock error: {str(e)}. This is a basic S3 read policy for demonstration.
+
+**Next Steps:**
+Contact support to resolve the connection issue.
 """
