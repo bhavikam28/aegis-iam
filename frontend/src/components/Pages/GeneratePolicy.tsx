@@ -1,32 +1,21 @@
-import React, { useState } from 'react';
-import { Shield, Send, RefreshCw, User, Bot, MessageSquare, Lock, Zap, ArrowRight, CheckCircle } from 'lucide-react';
-
-// Mock types for demo
-interface ChatMessage {
-  role: 'user' | 'assistant';
-  content: string;
-  timestamp: string;
-}
-
-interface PolicyResponse {
-  policy: any;
-  explanation: string;
-  security_score: number;
-  security_notes: string[];
-  refinement_suggestions?: string[];
-  conversation_history?: ChatMessage[];
-}
+import React, { useState, useEffect } from 'react';
+import { Shield, Send, RefreshCw, User, Bot, MessageSquare, Lock, Zap, ArrowRight, CheckCircle, ChevronDown, ChevronUp } from 'lucide-react';
+import { generatePolicy, sendFollowUp } from '../../services/api';
+import { GeneratePolicyResponse, ChatMessage } from '../../types';
 
 const GeneratePolicy: React.FC = () => {
   const [description, setDescription] = useState('');
+  const [service, setService] = useState('S3');
   const [restrictive, setRestrictive] = useState(true);
   const [compliance, setCompliance] = useState('general');
-  const [response, setResponse] = useState<PolicyResponse | null>(null);
+  const [response, setResponse] = useState<GeneratePolicyResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [followUpMessage, setFollowUpMessage] = useState('');
   const [isRefining, setIsRefining] = useState(false);
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [isChatExpanded, setIsChatExpanded] = useState(false);
 
   const complianceFrameworks = [
     { value: 'general', label: 'General Security' },
@@ -37,36 +26,63 @@ const GeneratePolicy: React.FC = () => {
     { value: 'cis', label: 'CIS Benchmarks' }
   ];
 
+  // Update chat history when response changes
+  useEffect(() => {
+    if (response?.conversation_history) {
+      setChatHistory(response.conversation_history);
+    }
+  }, [response]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!description.trim()) return;
+
     setLoading(true);
+    setError(null);
     
-    // Simulate API call
-    setTimeout(() => {
-      const mockResponse: PolicyResponse = {
-        policy: {
-          Version: "2012-10-17",
-          Statement: [{
-            Effect: "Allow",
-            Action: ["s3:GetObject", "s3:PutObject"],
-            Resource: "arn:aws:s3:::my-bucket/*"
-          }]
-        },
-        explanation: "This policy provides least-privilege access to S3 bucket operations.",
-        security_score: 95,
-        security_notes: ["Policy follows least-privilege principle"],
-        refinement_suggestions: [
-          "Add IP-based restrictions",
-          "Limit to specific S3 prefix",
-          "Add MFA requirement"
-        ]
-      };
+    try {
+      const result = await generatePolicy({
+        description,
+        service,
+        restrictive,
+        compliance
+      });
       
-      setResponse(mockResponse);
-      setConversationId('demo-123');
+      setResponse(result);
+      setConversationId(result.conversation_id || null);
       setIsRefining(true);
+      
+      console.log("Policy generated:", result); // Debug log
+    } catch (err) {
+      console.error("Error generating policy:", err);
+      setError(err instanceof Error ? err.message : 'Failed to generate policy');
+    } finally {
       setLoading(false);
-    }, 1500);
+    }
+  };
+
+  const handleFollowUp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!followUpMessage.trim() || !conversationId) return;
+
+    setLoading(true);
+    setError(null);
+    
+    try {
+      console.log("Sending follow-up message:", followUpMessage); // Debug log
+      
+      const result = await sendFollowUp(followUpMessage, conversationId, service);
+      
+      setResponse(result);
+      setFollowUpMessage(''); // Clear input after sending
+      
+      console.log("Follow-up response:", result); // Debug log
+    } catch (err) {
+      console.error("Error sending follow-up:", err);
+      setError(err instanceof Error ? err.message : 'Failed to refine policy');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleNewConversation = () => {
@@ -76,6 +92,11 @@ const GeneratePolicy: React.FC = () => {
     setFollowUpMessage('');
     setChatHistory([]);
     setDescription('');
+    setError(null);
+  };
+
+  const handleSuggestionClick = (suggestion: string) => {
+    setFollowUpMessage(suggestion);
   };
 
   return (
@@ -88,7 +109,7 @@ const GeneratePolicy: React.FC = () => {
           <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-pink-500/8 rounded-full blur-3xl"></div>
           
           <div className="relative max-w-7xl mx-auto px-8 pt-20 pb-32">
-            {/* Header - Left Aligned (matching Validate & Analyze) */}
+            {/* Header */}
             <div className="mb-16">
               <div className="inline-flex items-center space-x-2 bg-purple-500/10 border border-purple-500/30 rounded-full px-6 py-2 mb-6">
                 <Shield className="w-4 h-4 text-purple-400" />
@@ -189,6 +210,13 @@ const GeneratePolicy: React.FC = () => {
                 </div>
               </form>
 
+              {/* Error Display */}
+              {error && (
+                <div className="mt-6 bg-red-500/10 border border-red-500/30 rounded-2xl p-6">
+                  <p className="text-red-400">{error}</p>
+                </div>
+              )}
+
               {/* Trust Indicators */}
               <div className="flex items-center justify-center space-x-8 mt-12 text-slate-400">
                 <div className="flex items-center space-x-2">
@@ -233,14 +261,31 @@ const GeneratePolicy: React.FC = () => {
               {/* Chat History */}
               <div className="bg-slate-900/50 backdrop-blur-xl border border-purple-500/20 rounded-2xl overflow-hidden">
                 <div className="bg-slate-800/50 px-6 py-4 border-b border-purple-500/20">
-                  <div className="flex items-center space-x-3">
-                    <MessageSquare className="w-5 h-5 text-purple-400" />
-                    <h3 className="text-white font-semibold">Conversation</h3>
-                    <span className="text-slate-400 text-sm">({chatHistory.length})</span>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      <MessageSquare className="w-5 h-5 text-purple-400" />
+                      <h3 className="text-white font-semibold">Conversation</h3>
+                      <span className="text-slate-400 text-sm">({chatHistory.length})</span>
+                    </div>
+                    {/* Expand/Collapse Button */}
+                    <button
+                      onClick={() => setIsChatExpanded(!isChatExpanded)}
+                      className="flex items-center space-x-2 px-3 py-2 bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/30 rounded-lg text-sm text-purple-300 hover:text-purple-200 transition-all"
+                      title={isChatExpanded ? 'Collapse chat' : 'Expand chat'}
+                    >
+                      <span className="font-medium">{isChatExpanded ? 'Collapse' : 'Expand'}</span>
+                      {isChatExpanded ? (
+                        <ChevronUp className="w-4 h-4" />
+                      ) : (
+                        <ChevronDown className="w-4 h-4" />
+                      )}
+                    </button>
                   </div>
                 </div>
                 
-                <div className="p-6 space-y-4 max-h-[500px] overflow-y-auto">
+                <div className={`p-6 space-y-4 overflow-y-auto transition-all duration-300 ${
+                  isChatExpanded ? 'max-h-[800px]' : 'max-h-[400px]'
+                }`}>
                   {chatHistory.length === 0 ? (
                     <div className="text-center py-8 text-slate-400">
                       <Bot className="w-12 h-12 mx-auto mb-3 text-slate-600" />
@@ -265,7 +310,7 @@ const GeneratePolicy: React.FC = () => {
                               ? 'bg-orange-500/10 border border-orange-500/30' 
                               : 'bg-slate-800/50 border border-slate-700/50'
                           }`}>
-                            <p className="text-slate-300 text-sm leading-relaxed">
+                            <p className="text-slate-300 text-sm leading-relaxed whitespace-pre-wrap">
                               {message.content}
                             </p>
                           </div>
@@ -279,7 +324,7 @@ const GeneratePolicy: React.FC = () => {
               {/* Refine Input */}
               <div className="bg-slate-900/50 backdrop-blur-xl border border-purple-500/20 rounded-2xl p-6">
                 <label className="block text-white font-medium mb-3">Refine Policy</label>
-                <div className="flex space-x-3">
+                <form onSubmit={handleFollowUp} className="flex space-x-3">
                   <input
                     type="text"
                     value={followUpMessage}
@@ -289,12 +334,13 @@ const GeneratePolicy: React.FC = () => {
                     disabled={loading}
                   />
                   <button
+                    type="submit"
                     disabled={loading || !followUpMessage.trim()}
                     className="px-5 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-xl disabled:opacity-50 transition-all shadow-lg shadow-purple-500/25"
                   >
                     <Send className="w-5 h-5" />
                   </button>
-                </div>
+                </form>
               </div>
 
               {/* Quick Actions */}
@@ -305,7 +351,7 @@ const GeneratePolicy: React.FC = () => {
                     {response.refinement_suggestions.map((suggestion, index) => (
                       <button
                         key={index}
-                        onClick={() => setFollowUpMessage(suggestion)}
+                        onClick={() => handleSuggestionClick(suggestion)}
                         className="w-full text-left px-4 py-3 bg-slate-800/50 hover:bg-slate-700/50 text-slate-300 rounded-xl text-sm transition-all border border-slate-700/50 hover:border-purple-500/30"
                       >
                         {suggestion}
@@ -329,24 +375,55 @@ const GeneratePolicy: React.FC = () => {
                 <>
                   {/* Security Score */}
                   <div className="bg-gradient-to-br from-slate-900/50 to-slate-800/50 backdrop-blur-xl border border-purple-500/20 rounded-2xl p-8">
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between mb-6">
                       <div>
                         <h3 className="text-white text-2xl font-bold mb-2">Security Score</h3>
                         <p className="text-slate-400">Based on AWS security best practices</p>
                       </div>
                       <div className="text-center">
-                        <div className="text-6xl font-bold bg-gradient-to-r from-orange-400 via-pink-400 to-purple-400 bg-clip-text text-transparent">
+                        <div className={`text-6xl font-bold ${
+                          response.security_score >= 90 ? 'text-green-400' :
+                          response.security_score >= 70 ? 'text-yellow-400' :
+                          response.security_score >= 50 ? 'text-orange-400' :
+                          'text-red-400'
+                        }`}>
                           {response.security_score}
                         </div>
                         <div className="text-slate-400 text-sm mt-2">/ 100</div>
                       </div>
                     </div>
-                    <div className="w-full bg-slate-800 rounded-full h-4 mt-6">
+                    <div className="w-full bg-slate-800 rounded-full h-4 mb-4">
                       <div
-                        className="bg-gradient-to-r from-orange-500 via-pink-500 to-purple-500 h-4 rounded-full transition-all duration-1000"
+                        className={`h-4 rounded-full transition-all duration-1000 ${
+                          response.security_score >= 90 ? 'bg-gradient-to-r from-green-500 to-green-400' :
+                          response.security_score >= 70 ? 'bg-gradient-to-r from-yellow-500 to-yellow-400' :
+                          response.security_score >= 50 ? 'bg-gradient-to-r from-orange-500 to-pink-500' :
+                          'bg-gradient-to-r from-red-500 to-pink-500'
+                        }`}
                         style={{ width: `${response.security_score}%` }}
                       ></div>
                     </div>
+                    
+                    {/* Score Breakdown - Only show if points were deducted */}
+                    {response.reasoning?.breakdown && Object.keys(response.reasoning.breakdown).length > 0 && (
+                      <div className="mt-4 pt-4 border-t border-slate-700">
+                        <p className="text-slate-400 text-sm mb-3">Score Breakdown:</p>
+                        <div className="space-y-2">
+                          {Object.entries(response.reasoning.breakdown).map(([key, value]: [string, any]) => (
+                            <div key={key} className="flex items-center justify-between text-sm">
+                              <span className="text-slate-300">
+                                {key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                              </span>
+                              <span className={`font-medium ${
+                                Number(value) < 0 ? 'text-red-400' : 'text-green-400'
+                              }`}>
+                                {value} pts
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* Policy Code */}
@@ -360,7 +437,12 @@ const GeneratePolicy: React.FC = () => {
                           <div className="w-3 h-3 bg-green-500 rounded-full"></div>
                           <span className="text-sm text-slate-400 ml-2">secure-iam-policy.json</span>
                         </div>
-                        <button className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg text-sm text-white transition-all">
+                        <button 
+                          onClick={() => {
+                            navigator.clipboard.writeText(JSON.stringify(response.policy, null, 2));
+                          }}
+                          className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg text-sm text-white transition-all"
+                        >
                           Copy
                         </button>
                       </div>
@@ -375,7 +457,7 @@ const GeneratePolicy: React.FC = () => {
                   {/* Explanation */}
                   <div className="bg-slate-900/50 backdrop-blur-xl border border-purple-500/20 rounded-2xl p-8">
                     <h4 className="text-white text-lg font-semibold mb-4">Explanation</h4>
-                    <p className="text-slate-300 leading-relaxed">
+                    <p className="text-slate-300 leading-relaxed whitespace-pre-wrap">
                       {response.explanation}
                     </p>
                   </div>
