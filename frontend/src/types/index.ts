@@ -45,6 +45,7 @@ export interface GeneratePolicyResponse {
   policy: any;
   explanation: string;
   security_notes: string[];
+  security_features?: string[];  // ADD THIS LINE
   security_score: number;
   score_breakdown?: Record<string, number>;
   score_explanation?: string;

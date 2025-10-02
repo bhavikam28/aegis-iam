@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Shield, Send, RefreshCw, User, Bot, MessageSquare, Lock, Zap, ArrowRight, CheckCircle, ChevronDown, ChevronUp } from 'lucide-react';
+import { Shield, Send, RefreshCw, User, Bot, MessageSquare, Lock, Zap, ArrowRight, CheckCircle, ChevronDown, ChevronUp, AlertCircle } from 'lucide-react';
 import { generatePolicy, sendFollowUp } from '../../services/api';
 import { GeneratePolicyResponse, ChatMessage } from '../../types';
 
@@ -38,6 +38,7 @@ const GeneratePolicy: React.FC = () => {
 
     setLoading(true);
     setError(null);
+    setResponse(null); // Clear previous response
     
     try {
       const result = await generatePolicy({
@@ -326,9 +327,14 @@ const GeneratePolicy: React.FC = () => {
                       <button
                         key={index}
                         onClick={() => handleSuggestionClick(suggestion)}
-                        className="w-full text-left px-4 py-3 bg-slate-800/50 hover:bg-slate-700/50 text-slate-300 rounded-xl text-sm transition-all border border-slate-700/50 hover:border-purple-500/30"
+                        className="w-full text-left px-4 py-3 bg-slate-800/50 hover:bg-slate-700/50 text-slate-300 rounded-xl text-sm transition-all border border-slate-700/50 hover:border-purple-500/30 flex items-start space-x-2"
                       >
-                        {suggestion}
+                        {suggestion.startsWith('⚠️') ? (
+                          <AlertCircle className="w-4 h-4 text-orange-400 mt-0.5 flex-shrink-0" />
+                        ) : (
+                          <Shield className="w-4 h-4 text-purple-400 mt-0.5 flex-shrink-0" />
+                        )}
+                        <span>{suggestion.replace('⚠️ ', '')}</span>
                       </button>
                     ))}
                   </div>
@@ -347,7 +353,7 @@ const GeneratePolicy: React.FC = () => {
                     
                     <div className="space-y-2">
                       <p className="text-white text-lg font-semibold">
-                        🤖 Agent is working on your policy...
+                        🤖 Aegis is working on your policy...
                       </p>
                       <p className="text-slate-400">
                         Analyzing security requirements and generating least-privilege policy
@@ -466,13 +472,33 @@ const GeneratePolicy: React.FC = () => {
                     </p>
                   </div>
 
-                  {response.security_notes && response.security_notes.length > 0 && (
+                  {response.security_features && response.security_features.length > 0 && (
                     <div className="bg-purple-500/5 backdrop-blur-xl border border-purple-500/30 rounded-2xl p-8">
                       <h4 className="text-purple-400 text-lg font-semibold mb-4">Security Features</h4>
                       <ul className="space-y-3">
+                        {response.security_features.map((feature, index) => (
+                          <li key={index} className="text-slate-300 text-sm flex items-start space-x-3">
+                            {feature.startsWith('✅') ? (
+                              <CheckCircle className="w-4 h-4 text-green-400 mt-0.5 flex-shrink-0" />
+                            ) : feature.startsWith('⚠️') ? (
+                              <AlertCircle className="w-4 h-4 text-yellow-400 mt-0.5 flex-shrink-0" />
+                            ) : (
+                              <Shield className="w-4 h-4 text-purple-400 mt-0.5 flex-shrink-0" />
+                            )}
+                            <span>{feature.replace('✅ ', '').replace('⚠️ ', '')}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {response.security_notes && response.security_notes.length > 0 && (
+                    <div className="bg-orange-500/5 backdrop-blur-xl border border-orange-500/30 rounded-2xl p-8">
+                      <h4 className="text-orange-400 text-lg font-semibold mb-4">Security Considerations</h4>
+                      <ul className="space-y-3">
                         {response.security_notes.map((note, index) => (
                           <li key={index} className="text-slate-300 text-sm flex items-start space-x-3">
-                            <CheckCircle className="w-4 h-4 text-purple-400 mt-0.5 flex-shrink-0" />
+                            <AlertCircle className="w-4 h-4 text-orange-400 mt-0.5 flex-shrink-0" />
                             <span>{note}</span>
                           </li>
                         ))}

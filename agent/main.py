@@ -8,8 +8,15 @@ import json
 import re
 
 app = FastAPI(title="Aegis IAM Agent - Intelligent Conversational Server")
-app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173",
-    "https://aegis-iam.vercel.app"], allow_methods=["*"], allow_headers=["*"])
+app.add_middleware(
+    CORSMiddleware, 
+    allow_origins=[
+        "http://localhost:5173",
+        "https://aegis-iam.vercel.app"
+    ], 
+    allow_methods=["*"], 
+    allow_headers=["*"]
+)
 
 conversations: Dict[str, List[Dict]] = {}
 
@@ -38,20 +45,21 @@ def extract_policy_json(message: str) -> dict:
 def calculate_detailed_security_score(policy_json: dict, user_intent: str = "") -> Dict:
     """
     Calculate security score with contextual awareness and detailed breakdown
-    FIXED: More strict scoring - always deduct for missing conditions
     """
     if not policy_json:
         return {
             "score": 0, 
             "issues": ["No policy provided"], 
             "breakdown": {}, 
-            "explanation": "No policy was generated."
+            "explanation": "No policy was generated.",
+            "security_features": []
         }
     
     score = 100
     issues = []
     breakdown = {}
     explanations = []
+    security_features = []
     
     statements = policy_json.get('Statement', [])
     if not isinstance(statements, list):
@@ -101,7 +109,7 @@ def calculate_detailed_security_score(policy_json: dict, user_intent: str = "") 
             explanations.append("Policy grants full administrative access - extremely dangerous")
             break
     
-    # ALWAYS check for missing conditions (this is the fix!)
+    # ALWAYS check for missing conditions
     has_any_condition = any('Condition' in stmt for stmt in statements)
     
     if not has_any_condition:
@@ -109,11 +117,50 @@ def calculate_detailed_security_score(policy_json: dict, user_intent: str = "") 
         issues.append("No security conditions (IP, MFA, or time restrictions)")
         breakdown['no_conditions'] = -10
         explanations.append("Policy lacks condition blocks to restrict when/how permissions can be used")
+    else:
+        security_features.append("✅ Includes security conditions for enhanced protection")
     
     # Check for specific condition types
     has_ip = any('ipaddress' in str(stmt.get('Condition', {})).lower() for stmt in statements)
     has_mfa = any('multifactor' in str(stmt.get('Condition', {})).lower() for stmt in statements)
     has_vpc = any('vpce' in str(stmt.get('Condition', {})).lower() for stmt in statements)
+    has_org = any('principalorgid' in str(stmt.get('Condition', {})).lower() for stmt in statements)
+    
+    # Add positive security features
+    if has_ip:
+        security_features.append("✅ IP address restrictions enabled")
+    if has_mfa:
+        security_features.append("✅ MFA requirement enforced")
+    if has_vpc:
+        security_features.append("✅ VPC endpoint restrictions applied")
+    if has_org:
+        security_features.append("✅ Organization ID restriction enforced")
+    
+    # Check if using specific resources (not wildcards)
+    has_specific_resources = True
+    for stmt in statements:
+        resources = stmt.get('Resource', [])
+        if isinstance(resources, str):
+            resources = [resources]
+        if any(r == '*' for r in resources):
+            has_specific_resources = False
+            break
+    
+    if has_specific_resources:
+        security_features.append("✅ Uses specific resource ARNs (no wildcards)")
+    
+    # Check if using specific actions (not wildcards)
+    has_specific_actions = True
+    for stmt in statements:
+        actions = stmt.get('Action', [])
+        if isinstance(actions, str):
+            actions = [actions]
+        if '*' in actions or any(':*' in str(a) for a in actions):
+            has_specific_actions = False
+            break
+    
+    if has_specific_actions:
+        security_features.append("✅ Uses specific actions (follows least privilege)")
     
     # Suggest what's missing
     missing_conditions = []
@@ -123,6 +170,8 @@ def calculate_detailed_security_score(policy_json: dict, user_intent: str = "") 
         missing_conditions.append("MFA requirements")
     if not has_vpc:
         missing_conditions.append("VPC endpoint restrictions")
+    if not has_org:
+        missing_conditions.append("Organization ID restrictions")
     
     # Check for encryption requirements (S3 write policies)
     is_s3_policy = any('s3:' in str(stmt.get('Action', [])) for stmt in statements)
@@ -134,6 +183,8 @@ def calculate_detailed_security_score(policy_json: dict, user_intent: str = "") 
         issues.append("S3 write operations without encryption requirements")
         breakdown['no_encryption'] = -5
         explanations.append("S3 upload permissions without requiring encryption")
+    elif is_s3_policy and has_write and has_encryption:
+        security_features.append("✅ Encryption requirements enforced for uploads")
     
     # Ensure score doesn't go below 0
     score = max(0, score)
@@ -141,7 +192,7 @@ def calculate_detailed_security_score(policy_json: dict, user_intent: str = "") 
     # Generate human-readable explanation
     if score >= 95:
         grade = "A+ (Excellent)"
-        summary = "Policy follows security best practices with only minor improvements needed."
+        summary = "Policy follows security best practices with comprehensive protections."
     elif score >= 90:
         grade = "A (Very Good)"
         summary = "Policy is secure with good restrictions, but could be enhanced further."
@@ -168,11 +219,16 @@ def calculate_detailed_security_score(policy_json: dict, user_intent: str = "") 
     if missing_conditions:
         explanation_text += f"\nMissing security controls: {', '.join(missing_conditions)}"
     
+    # If no specific features mentioned, add general positive note
+    if not security_features:
+        security_features.append("⚠️ Consider adding security conditions for enhanced protection")
+    
     return {
         "score": score,
         "issues": issues,
         "breakdown": breakdown,
-        "explanation": explanation_text.strip()
+        "explanation": explanation_text.strip(),
+        "security_features": security_features
     }
 
 def generate_intelligent_suggestions(
@@ -182,7 +238,7 @@ def generate_intelligent_suggestions(
     security_score: int
 ) -> List[str]:
     """
-    FIXED: Generate 2-3 relevant contextual suggestions
+    Generate 5-7 relevant contextual suggestions that update after each conversation turn
     """
     suggestions = []
     
@@ -230,65 +286,68 @@ def generate_intelligent_suggestions(
     
     if has_wildcard_resource:
         suggestions.append("⚠️ Replace wildcard resources with specific ARNs")
-        return suggestions
+        return suggestions[:7]  # Return immediately with critical fix
     
     if has_wildcard_action:
         suggestions.append("⚠️ Replace wildcard actions with specific permissions")
-        return suggestions
+        return suggestions[:7]  # Return immediately with critical fix
     
     # Check what's already in the policy
     has_conditions = any('Condition' in stmt for stmt in statements)
     has_ip = any('ipaddress' in str(stmt.get('Condition', {})).lower() for stmt in statements)
     has_mfa = any('multifactor' in str(stmt.get('Condition', {})).lower() for stmt in statements)
     has_vpc = any('vpce' in str(stmt.get('Condition', {})).lower() for stmt in statements)
+    has_org = any('principalorgid' in str(stmt.get('Condition', {})).lower() for stmt in statements)
     has_prefix = any('/' in str(res) and '*' in str(res) for stmt in statements for res in (stmt.get('Resource', []) if isinstance(stmt.get('Resource', []), list) else [stmt.get('Resource', '')]))
+    has_encryption = any('encryption' in str(stmt.get('Condition', {})).lower() for stmt in statements)
+    has_time = any('datelessthan' in str(stmt.get('Condition', {})).lower() or 'dategreaterthan' in str(stmt.get('Condition', {})).lower() for stmt in statements)
+    has_tags = any('requestedtag' in str(stmt.get('Condition', {})).lower() for stmt in statements)
     
-    # FIRST GENERATION - Suggest foundational security
-    if is_first_generation:
-        # 1. Prefix restriction (for S3 read-only)
-        if is_s3_policy and has_read_only and not has_prefix:
-            suggestions.append("Restrict to specific folder prefix (e.g., /reports/*) to limit file access")
-        
-        # 2. IP restriction (always relevant if no conditions)
-        if not has_ip and not has_conditions:
-            suggestions.append("Add IP address whitelist to allow access only from corporate network")
-        
-        # 3. MFA for write, or VPC for read
-        if has_write_access and not has_mfa:
-            suggestions.append("Require MFA for write/delete operations to prevent unauthorized changes")
-        elif not has_vpc and is_s3_policy:
-            suggestions.append("Add VPC endpoint restriction to force private network access")
+    # ALWAYS offer these core suggestions if missing
+    if not has_ip:
+        suggestions.append("Add IP address whitelist to allow access only from corporate network")
     
-    # FOLLOW-UP GENERATION - Progressive suggestions
-    else:
-        # If user just added prefix
-        if ('prefix' in last_user_msg or has_prefix) and is_s3_policy:
-            if not has_ip:
-                suggestions.append("Add IP restriction to allow access only from specific network ranges")
-            if has_write_access:
-                suggestions.append("Require encryption for all uploads (aws:SecureTransport condition)")
-        
-        # If user just added IP
-        elif ('ip' in last_user_msg or has_ip) and not has_vpc:
-            suggestions.append("Add VPC endpoint restriction for additional network security")
-            if not has_mfa and has_write_access:
-                suggestions.append("Require MFA for sensitive write operations")
-        
-        # If user added VPC
-        elif ('vpc' in last_user_msg or has_vpc) and not has_mfa:
-            suggestions.append("Add MFA requirement for critical operations")
-        
-        # Default - suggest what's missing
-        else:
-            if not has_ip:
-                suggestions.append("Add IP address restrictions for network-level security")
-            if not has_vpc and is_s3_policy:
-                suggestions.append("Restrict access through VPC endpoint only")
-            if not has_mfa and has_write_access:
-                suggestions.append("Require MFA for write/delete operations")
+    if not has_vpc and is_s3_policy:
+        suggestions.append("Add VPC endpoint restriction to force private network access")
     
-    # Return top 3 suggestions
-    return suggestions[:3]
+    if not has_mfa and has_write_access:
+        suggestions.append("Require MFA for write/delete operations to prevent unauthorized changes")
+    
+    if not has_org:
+        suggestions.append("Add organization ID restriction to limit cross-account access")
+    
+    if not has_encryption and is_s3_policy and has_write_access:
+        suggestions.append("Require encryption for all uploads (aws:SecureTransport condition)")
+    
+    # ADVANCED suggestions (always offer if space available)
+    if not has_time and len(suggestions) < 7:
+        suggestions.append("Add time-based access restriction (only allow during business hours)")
+    
+    if not has_tags and len(suggestions) < 7:
+        suggestions.append("Add tag-based condition to restrict by resource tags")
+    
+    if not has_prefix and is_s3_policy and len(suggestions) < 7:
+        suggestions.append("Restrict to specific folder prefix (e.g., /reports/*) to limit file access")
+    
+    # Context-specific suggestions based on what user just did
+    if 'ip' in last_user_msg and has_ip and not has_vpc and len(suggestions) < 7:
+        suggestions.append("Great! Now add VPC endpoint restriction for additional network security")
+    
+    if 'vpc' in last_user_msg and has_vpc and not has_mfa and has_write_access and len(suggestions) < 7:
+        suggestions.append("Excellent! Consider adding MFA requirement for critical operations")
+    
+    if 'mfa' in last_user_msg and has_mfa and not has_time and len(suggestions) < 7:
+        suggestions.append("Perfect! You could also add time-based restrictions for compliance")
+    
+    # Service-specific suggestions
+    if is_s3_policy and len(suggestions) < 7:
+        if not has_encryption and has_write_access:
+            suggestions.append("Add server-side encryption requirement for data at rest")
+        if 'logging' not in policy_str and len(suggestions) < 7:
+            suggestions.append("Consider enabling S3 access logging for audit trails")
+    
+    # Return top 7 suggestions (increased from 3)
+    return suggestions[:7]
 
 @app.post("/generate")
 def generate(request: GenerationRequest):
@@ -347,7 +406,7 @@ def generate(request: GenerationRequest):
         }
         conversations[conversation_id].append(assistant_message)
         
-        # Generate INTELLIGENT suggestions
+        # Generate INTELLIGENT suggestions (now returns 5-7 instead of 3)
         intelligent_suggestions = generate_intelligent_suggestions(
             user_intent=request.description,
             policy_json=policy_json,
@@ -363,6 +422,7 @@ def generate(request: GenerationRequest):
             "security_notes": security_analysis["issues"],
             "score_breakdown": security_analysis["breakdown"],
             "score_explanation": security_analysis["explanation"],
+            "security_features": security_analysis["security_features"],  # NEW: Positive features list
             "refinement_suggestions": intelligent_suggestions,
             "conversation_history": conversations[conversation_id]
         }
@@ -373,13 +433,14 @@ def generate(request: GenerationRequest):
         traceback.print_exc()
         
         return {
-            "final_answer": "Error generating policy",
+            "final_answer": "I apologize, but I encountered an error while generating your policy. Let me try again, or we can start with a basic template that I'll help you customize.",
             "conversation_id": str(uuid.uuid4()),
             "message_count": 0,
             "security_score": 0,
-            "security_notes": ["Error occurred"],
+            "security_notes": ["Error occurred during policy generation"],
             "score_breakdown": {},
-            "score_explanation": "",
+            "score_explanation": "Unable to generate policy due to an error.",
+            "security_features": [],
             "refinement_suggestions": [],
             "conversation_history": []
         }
