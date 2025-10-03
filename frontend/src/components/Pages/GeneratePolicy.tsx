@@ -3,6 +3,11 @@ import { Shield, Send, RefreshCw, User, Bot, MessageSquare, Lock, Zap, ArrowRigh
 import { generatePolicy, sendFollowUp } from '../../services/api';
 import { GeneratePolicyResponse, ChatMessage } from '../../types';
 
+interface ResponseState {
+  hasPolicy: boolean;
+  isQuestion: boolean;
+}
+
 const GeneratePolicy: React.FC = () => {
   const [description, setDescription] = useState('');
   const [service, setService] = useState('S3');
@@ -17,6 +22,10 @@ const GeneratePolicy: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [isChatExpanded, setIsChatExpanded] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [responseState, setResponseState] = useState<ResponseState>({
+    hasPolicy: false,
+    isQuestion: false
+  });
 
   const complianceFrameworks = [
     { value: 'general', label: 'General Security' },
@@ -71,6 +80,7 @@ const GeneratePolicy: React.FC = () => {
     setLoading(true);
     setError(null);
     setResponse(null);
+    setResponseState({ hasPolicy: false, isQuestion: false });
     
     try {
       const result = await generatePolicy({
@@ -82,7 +92,15 @@ const GeneratePolicy: React.FC = () => {
       
       setResponse(result);
       setConversationId(result.conversation_id || null);
-      setIsRefining(true);
+      
+      // Check if agent is asking a question or generated a policy
+      if (result.is_question || !result.policy) {
+        setResponseState({ hasPolicy: false, isQuestion: true });
+        setIsRefining(false); // Stay in input mode
+      } else {
+        setResponseState({ hasPolicy: true, isQuestion: false });
+        setIsRefining(true); // Show policy view
+      }
     } catch (err) {
       console.error("Error generating policy:", err);
       setError(err instanceof Error ? err.message : 'Failed to generate policy');
@@ -102,6 +120,15 @@ const GeneratePolicy: React.FC = () => {
       const result = await sendFollowUp(followUpMessage, conversationId, service);
       setResponse(result);
       setFollowUpMessage('');
+      
+      // Check if agent generated policy or asking more questions
+      if (result.is_question || !result.policy) {
+        setResponseState({ hasPolicy: false, isQuestion: true });
+        setIsRefining(false);
+      } else {
+        setResponseState({ hasPolicy: true, isQuestion: false });
+        setIsRefining(true);
+      }
     } catch (err) {
       console.error("Error sending follow-up:", err);
       setError(err instanceof Error ? err.message : 'Failed to refine policy');
@@ -118,6 +145,7 @@ const GeneratePolicy: React.FC = () => {
     setChatHistory([]);
     setDescription('');
     setError(null);
+    setResponseState({ hasPolicy: false, isQuestion: false });
   };
 
   const handleSuggestionClick = (suggestion: string) => {
@@ -251,7 +279,48 @@ const GeneratePolicy: React.FC = () => {
         </div>
       )}
 
-      {(isRefining || response) && (
+      {responseState.isQuestion && response && !responseState.hasPolicy && (
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
+          <div className="bg-slate-900/50 backdrop-blur-xl border border-yellow-500/30 rounded-2xl p-6 sm:p-8">
+            <div className="flex items-start space-x-3 sm:space-x-4 mb-6">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-yellow-500/20 rounded-xl flex items-center justify-center flex-shrink-0 border border-yellow-500/30">
+                <MessageSquare className="w-5 h-5 sm:w-6 sm:h-6 text-yellow-400" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-white text-lg sm:text-xl font-bold mb-2">More Information Needed</h3>
+                <p className="text-slate-400 text-xs sm:text-sm">The agent needs additional details to generate a secure policy</p>
+              </div>
+            </div>
+            
+            <div className="bg-slate-800/50 rounded-xl p-4 sm:p-6 mb-6">
+              <p className="text-slate-300 text-sm sm:text-base leading-relaxed whitespace-pre-wrap">
+                {cleanMarkdown(response.explanation)}
+              </p>
+            </div>
+            
+            <form onSubmit={handleFollowUp} className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-3">
+              <input
+                type="text"
+                value={followUpMessage}
+                onChange={(e) => setFollowUpMessage(e.target.value)}
+                placeholder="Provide the requested information..."
+                className="flex-1 px-4 py-3 bg-slate-800/50 border border-slate-700/50 rounded-xl text-white text-sm sm:text-base placeholder-slate-500 focus:border-yellow-500 focus:ring-2 focus:ring-yellow-500/20 focus:outline-none"
+                disabled={loading}
+              />
+              <button
+                type="submit"
+                disabled={loading || !followUpMessage.trim()}
+                className="px-5 py-3 bg-yellow-600 hover:bg-yellow-700 text-white rounded-xl disabled:opacity-50 transition-all shadow-lg flex items-center justify-center space-x-2"
+              >
+                <Send className="w-5 h-5" />
+                <span>Send</span>
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {(isRefining || (response && responseState.hasPolicy)) && (
         <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-8 sm:mb-12 gap-4">
             <div>

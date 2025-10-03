@@ -45,7 +45,7 @@ export interface GeneratePolicyResponse {
   policy: any;
   explanation: string;
   security_notes: string[];
-  security_features?: string[];  // ADD THIS LINE
+  security_features?: string[];
   security_score: number;
   score_breakdown?: Record<string, number>;
   score_explanation?: string;
@@ -57,6 +57,7 @@ export interface GeneratePolicyResponse {
   conversation_id?: string;
   refinement_suggestions?: string[];
   conversation_history?: ChatMessage[];
+  is_question?: boolean; // NEW: indicates agent is asking for more info
 }
 
 export interface ValidatePolicyRequest {

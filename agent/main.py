@@ -37,9 +37,12 @@ def extract_policy_json(message: str) -> dict:
     match = re.search(r'```json\n([\s\S]*?)\n```', message)
     if match:
         try:
-            return json.loads(match.group(1))
+            policy_json = json.loads(match.group(1))
+            # Validate it's actually a policy
+            if isinstance(policy_json, dict) and "Version" in policy_json and "Statement" in policy_json:
+                return policy_json
         except:
-            return None
+            pass
     return None
 
 def extract_explanation(message: str) -> str:
@@ -80,9 +83,27 @@ def extract_next_steps(message: str) -> List[str]:
         return suggestions[:5]  # Return max 5 suggestions
     return []
 
+def has_placeholders(policy_json: dict) -> bool:
+    """Check if policy contains placeholder values"""
+    policy_str = json.dumps(policy_json)
+    placeholder_patterns = [
+        r'\$\{AWS::',  # CloudFormation style
+        r'<.*?>',  # <YOUR_ACCOUNT_ID> style
+        r'REPLACE[_-]?WITH',  # REPLACE_WITH_ style
+        r'YOUR[_-]?ACCOUNT',  # YOUR_ACCOUNT_ID style
+        r'YOUR[_-]?REGION',  # YOUR_REGION style
+        r'EXAMPLE[_-]?',  # EXAMPLE_BUCKET style
+        r'123456789012',  # Generic account ID
+        r'example-',  # example-bucket, example-table
+    ]
+    for pattern in placeholder_patterns:
+        if re.search(pattern, policy_str, re.IGNORECASE):
+            return True
+    return False
+
 def calculate_detailed_security_score(policy_json: dict, user_intent: str = "") -> Dict:
     """
-    Calculate security score with STRICTER grading
+    Calculate security score with STRICTER grading and placeholder detection
     """
     if not policy_json:
         return {
@@ -91,6 +112,19 @@ def calculate_detailed_security_score(policy_json: dict, user_intent: str = "") 
             "breakdown": {}, 
             "explanation": "No policy was generated.",
             "security_features": []
+        }
+    
+    # Check for placeholders FIRST - this is a critical issue
+    if has_placeholders(policy_json):
+        return {
+            "score": 0,
+            "issues": [
+                "Policy contains placeholder values that must be replaced",
+                "Cannot use this policy in production without replacing placeholders with actual values"
+            ],
+            "breakdown": {"placeholders": -100},
+            "explanation": "**Grade: F (Unusable)**\n\nThis policy contains placeholder values and cannot be used. The agent should have asked for specific values (AWS Account ID, Region, etc.) before generating the policy.",
+            "security_features": ["⚠️ Contains placeholders - must be replaced before use"]
         }
     
     score = 100
@@ -107,31 +141,31 @@ def calculate_detailed_security_score(policy_json: dict, user_intent: str = "") 
     
     # CRITICAL ISSUES
     
-    # Check for wildcard resources (-30 points)
+    # Check for wildcard resources (-40 points - MORE SEVERE)
     for stmt in statements:
         resources = stmt.get('Resource', [])
         if isinstance(resources, str):
             resources = [resources]
         if any(r == '*' for r in resources):
-            score -= 30
+            score -= 40  # Increased from 30
             issues.append("Wildcard (*) resources allow access to ALL resources")
-            breakdown['wildcard_resources'] = -30
-            explanations.append("Using wildcard resource (*) instead of specific ARNs")
+            breakdown['wildcard_resources'] = -40
+            explanations.append("Using wildcard resource (*) instead of specific ARNs - critical security risk")
             break
     
-    # Check for wildcard actions (-30 points)
+    # Check for wildcard actions (-40 points - MORE SEVERE)
     for stmt in statements:
         actions = stmt.get('Action', [])
         if isinstance(actions, str):
             actions = [actions]
         if '*' in actions or any(':*' in str(a) for a in actions):
-            score -= 30
+            score -= 40  # Increased from 30
             issues.append("Wildcard (*) actions grant overly broad permissions")
-            breakdown['wildcard_actions'] = -30
-            explanations.append("Using wildcard actions (e.g., s3:*) violating least privilege")
+            breakdown['wildcard_actions'] = -40
+            explanations.append("Using wildcard actions (e.g., s3:*) violating least privilege - critical security risk")
             break
     
-    # Check for full admin access (-40 points)
+    # Check for full admin access (-50 points - MOST SEVERE)
     for stmt in statements:
         actions = stmt.get('Action', [])
         resources = stmt.get('Resource', [])
@@ -140,20 +174,20 @@ def calculate_detailed_security_score(policy_json: dict, user_intent: str = "") 
         if isinstance(resources, str):
             resources = [resources]
         if '*' in actions and '*' in resources:
-            score -= 40
-            issues.append("Full administrative access detected")
-            breakdown['full_admin'] = -40
-            explanations.append("Policy grants full administrative access - critical security risk")
+            score -= 50  # Increased from 40
+            issues.append("Full administrative access detected - CRITICAL SECURITY RISK")
+            breakdown['full_admin'] = -50
+            explanations.append("Policy grants full administrative access - immediate security threat")
             break
     
-    # Check for missing conditions (-25 points, STRICTER)
+    # Check for missing conditions (-30 points - MORE STRICT)
     has_any_condition = any('Condition' in stmt for stmt in statements)
     
     if not has_any_condition:
-        score -= 25  # Changed from -10 to -25
+        score -= 30  # Increased from 25
         issues.append("No security conditions (IP, MFA, VPC, or organizational restrictions)")
-        breakdown['no_conditions'] = -25
-        explanations.append("Policy lacks condition blocks - missing critical security controls")
+        breakdown['no_conditions'] = -30
+        explanations.append("Policy lacks condition blocks - missing critical security controls like IP restrictions, MFA, or VPC requirements")
     else:
         security_features.append("✅ Includes security condition blocks")
     
@@ -205,9 +239,9 @@ def calculate_detailed_security_score(policy_json: dict, user_intent: str = "") 
     has_encryption = any('encryption' in str(stmt.get('Condition', {})).lower() or 'securetransport' in str(stmt.get('Condition', {})).lower() for stmt in statements)
     
     if is_s3_policy and has_write and not has_encryption:
-        score -= 10
+        score -= 15  # Increased from 10
         issues.append("S3 write operations without encryption requirements")
-        breakdown['no_encryption'] = -10
+        breakdown['no_encryption'] = -15
         explanations.append("Missing encryption enforcement for S3 uploads")
     elif is_s3_policy and has_write and has_encryption:
         security_features.append("✅ Encryption requirements enforced for uploads")
@@ -222,15 +256,18 @@ def calculate_detailed_security_score(policy_json: dict, user_intent: str = "") 
     elif score >= 85:
         grade = "A (Very Good)"
         summary = "Strong security with good protections. Minor enhancements recommended."
-    elif score >= 75:
+    elif score >= 70:
         grade = "B (Good)"
         summary = "Solid foundation but needs additional security controls for production use."
-    elif score >= 65:
+    elif score >= 50:
         grade = "C (Acceptable)"
         summary = "Functional but requires significant security improvements before production deployment."
+    elif score > 0:
+        grade = "D (Poor)"
+        summary = "Critical security gaps that must be addressed immediately. Not suitable for production."
     else:
-        grade = "D/F (Needs Work)"
-        summary = "Critical security gaps that must be addressed immediately."
+        grade = "F (Unusable)"
+        summary = "Policy is unusable and must be regenerated or fixed before deployment."
     
     # Build detailed explanation
     explanation_text = f"**Grade: {grade}**\n\n{summary}\n\n"
@@ -298,6 +335,32 @@ def generate(request: GenerationRequest):
         
         # Extract components from agent response
         policy_json = extract_policy_json(final_message)
+        
+        # If no valid policy extracted, this is likely a question or clarification
+        if not policy_json:
+            # Agent is asking for more information or providing guidance
+            assistant_message = {
+                "role": "assistant",
+                "content": final_message,
+                "timestamp": str(uuid.uuid4())
+            }
+            conversations[conversation_id].append(assistant_message)
+            
+            return {
+                "final_answer": final_message,
+                "conversation_id": conversation_id,
+                "message_count": len(conversations[conversation_id]),
+                "security_score": 0,
+                "security_notes": [],
+                "score_breakdown": {},
+                "score_explanation": "Agent is requesting more information before generating policy.",
+                "security_features": [],
+                "refinement_suggestions": [],
+                "conversation_history": conversations[conversation_id],
+                "explanation": "The agent needs more information to generate a secure policy.",
+                "is_question": True
+            }
+        
         explanation = extract_explanation(final_message)
         ai_suggestions = extract_next_steps(final_message)
         
@@ -324,9 +387,10 @@ def generate(request: GenerationRequest):
             "score_breakdown": security_analysis["breakdown"],
             "score_explanation": security_analysis["explanation"],
             "security_features": security_analysis["security_features"],
-            "refinement_suggestions": ai_suggestions,  # Now from AI!
+            "refinement_suggestions": ai_suggestions,
             "conversation_history": conversations[conversation_id],
-            "explanation": explanation  # Clean explanation without code blocks
+            "explanation": explanation,
+            "policy": policy_json
         }
         
     except Exception as e:
@@ -334,8 +398,9 @@ def generate(request: GenerationRequest):
         import traceback
         traceback.print_exc()
         
+        # Return professional error message without generating wrong policy
         return {
-            "final_answer": "I apologize, but I encountered an error while generating your policy. Let me try again, or we can start with a basic template that I'll help you customize.",
+            "final_answer": "I apologize, but I encountered an error while processing your request. This could be due to a temporary service issue. Please try again, and if the problem persists, try rephrasing your request or breaking it into smaller steps.",
             "conversation_id": str(uuid.uuid4()),
             "message_count": 0,
             "security_score": 0,
@@ -343,9 +408,14 @@ def generate(request: GenerationRequest):
             "score_breakdown": {},
             "score_explanation": "Unable to generate policy due to an error.",
             "security_features": [],
-            "refinement_suggestions": [],
+            "refinement_suggestions": [
+                "Try rephrasing your request",
+                "Break down the request into smaller components",
+                "Verify all AWS service names are correct",
+                "Ensure you've provided all required information"
+            ],
             "conversation_history": [],
-            "explanation": "Error generating policy."
+            "explanation": "Error generating policy - please try again."
         }
 
 @app.get("/conversation/{conversation_id}")
