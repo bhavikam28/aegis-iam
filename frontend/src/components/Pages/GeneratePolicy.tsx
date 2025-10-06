@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Shield, Send, RefreshCw, User, Bot, MessageSquare, Lock, Zap, ArrowRight, CheckCircle, ChevronDown, ChevronUp, AlertCircle, Download, Copy, Sparkles } from 'lucide-react';
+import { Shield, Send, RefreshCw, User, Bot, MessageSquare, Lock, ArrowRight, CheckCircle, ChevronDown, ChevronUp, AlertCircle, Download, Copy, Sparkles } from 'lucide-react';
 import { generatePolicy, sendFollowUp } from '../../services/api';
 import { GeneratePolicyResponse, ChatMessage } from '../../types';
 
@@ -69,9 +69,14 @@ const GeneratePolicy: React.FC = () => {
   // Extract JSON policy from agent response text
   const extractPolicyFromText = (text: string): any => {
     try {
-      const jsonMatch = text.match(/\{[\s\S]*"Version"[\s\S]*"Statement"[\s\S]*\}/);
+      // Look for JSON between triple backticks or curly braces
+      const jsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/) || 
+                       text.match(/```\s*([\s\S]*?)\s*```/) ||
+                       text.match(/(\{[\s\S]*?"Version"[\s\S]*?"Statement"[\s\S]*?\})/);
+      
       if (jsonMatch) {
-        return JSON.parse(jsonMatch[0]);
+        const jsonStr = jsonMatch[1] || jsonMatch[0];
+        return JSON.parse(jsonStr);
       }
     } catch (e) {
       console.error("Could not extract policy from text", e);
@@ -79,7 +84,7 @@ const GeneratePolicy: React.FC = () => {
     return null;
   };
 
-  // Extract sections from agent response
+  // IMPROVED: Extract all sections from the agent's response
   const parseAgentResponse = (text: string) => {
     const sections = {
       explanation: '',
@@ -90,43 +95,55 @@ const GeneratePolicy: React.FC = () => {
       refinementSuggestions: [] as string[]
     };
 
+    // Remove JSON policy from text first for cleaner parsing
+    const textWithoutJson = text.replace(/```json[\s\S]*?```/g, '').replace(/```[\s\S]*?```/g, '');
+
     // Extract Security Score
-    const scoreMatch = text.match(/Security Score:\s*(\d+)/i);
+    const scoreMatch = textWithoutJson.match(/Security Score[:\s]*(\d+)/i);
     if (scoreMatch) {
       sections.securityScore = parseInt(scoreMatch[1]);
     }
 
-    // Extract Policy Explanation (before Security Score)
-    const explanationMatch = text.match(/Policy Explanation:([\s\S]*?)(?:Security Score:|Security Notes:|$)/i);
+    // Extract Explanation - text before "Security Score" or first section
+    const explanationMatch = textWithoutJson.match(/^([\s\S]*?)(?:Security Score:|Security Analysis:|Security Features:|###)/i);
     if (explanationMatch) {
       sections.explanation = cleanMarkdown(explanationMatch[1]);
     }
 
     // Extract Security Notes
-    const notesMatch = text.match(/Security Notes:([\s\S]*?)(?:Security Features:|Score Explanation:|$)/i);
-    if (notesMatch) {
-      const notes = notesMatch[1].split('\n').filter(line => line.trim().startsWith('-'));
-      sections.securityNotes = notes.map(note => cleanMarkdown(note.replace(/^-\s*/, '')));
+    const notesSection = textWithoutJson.match(/Security (?:Notes|Considerations)[:\s]*([\s\S]*?)(?:Security Features|Score Explanation|Refinement|###|$)/i);
+    if (notesSection) {
+      const lines = notesSection[1].split('\n');
+      sections.securityNotes = lines
+        .filter(line => /^[-•*]\s/.test(line.trim()) || /^\d+\./.test(line.trim()))
+        .map(line => cleanMarkdown(line.replace(/^[-•*]\s*/, '').replace(/^\d+\.\s*/, '')))
+        .filter(note => note.length > 10);
     }
 
     // Extract Security Features
-    const featuresMatch = text.match(/Security Features:([\s\S]*?)(?:Score Explanation:|Refinement Suggestions:|$)/i);
-    if (featuresMatch) {
-      const features = featuresMatch[1].split('\n').filter(line => line.trim().startsWith('-'));
-      sections.securityFeatures = features.map(feature => cleanMarkdown(feature.replace(/^-\s*/, '')));
+    const featuresSection = textWithoutJson.match(/Security Features[:\s]*([\s\S]*?)(?:Score Explanation|Security Notes|Refinement|###|$)/i);
+    if (featuresSection) {
+      const lines = featuresSection[1].split('\n');
+      sections.securityFeatures = lines
+        .filter(line => /^[-•*✅]\s/.test(line.trim()) || /^\d+\./.test(line.trim()))
+        .map(line => cleanMarkdown(line.replace(/^[-•*✅]\s*/, '').replace(/^\d+\.\s*/, '')))
+        .filter(feature => feature.length > 10);
     }
 
     // Extract Score Explanation
-    const scoreExpMatch = text.match(/Score Explanation:([\s\S]*?)(?:Refinement Suggestions:|$)/i);
-    if (scoreExpMatch) {
-      sections.scoreExplanation = cleanMarkdown(scoreExpMatch[1]);
+    const scoreExpSection = textWithoutJson.match(/Score Explanation[:\s]*([\s\S]*?)(?:Refinement|Next Steps|###|$)/i);
+    if (scoreExpSection) {
+      sections.scoreExplanation = cleanMarkdown(scoreExpSection[1]);
     }
 
     // Extract Refinement Suggestions
-    const refineMatch = text.match(/Refinement Suggestions:([\s\S]*?)$/i);
-    if (refineMatch) {
-      const suggestions = refineMatch[1].split('\n').filter(line => line.trim().match(/^\d+\./));
-      sections.refinementSuggestions = suggestions.map(sug => cleanMarkdown(sug.replace(/^\d+\.\s*/, '')));
+    const refinementSection = textWithoutJson.match(/(?:Refinement Suggestions|Next Steps|Recommendations)[:\s]*([\s\S]*?)$/i);
+    if (refinementSection) {
+      const lines = refinementSection[1].split('\n');
+      sections.refinementSuggestions = lines
+        .filter(line => /^[-•*]\s/.test(line.trim()) || /^\d+\./.test(line.trim()))
+        .map(line => cleanMarkdown(line.replace(/^[-•*]\s*/, '').replace(/^\d+\.\s*/, '')))
+        .filter(sug => sug.length > 10);
     }
 
     return sections;
@@ -195,13 +212,12 @@ const GeneratePolicy: React.FC = () => {
   // Check if we have a policy
   const hasPolicy = response?.policy !== null && response?.policy !== undefined;
   
-  // Parse agent response if it's in text format
+  // Parse agent response
   let parsedResponse = null;
   let extractedPolicy = null;
   
   if (response && hasPolicy) {
-    // If explanation contains structured text, parse it
-    if (typeof response.explanation === 'string' && response.explanation.includes('Policy Explanation:')) {
+    if (typeof response.explanation === 'string') {
       parsedResponse = parseAgentResponse(response.explanation);
       extractedPolicy = extractPolicyFromText(response.explanation) || response.policy;
     }
@@ -294,18 +310,9 @@ const GeneratePolicy: React.FC = () => {
                     disabled={loading || !description.trim()}
                     className="w-full bg-gradient-to-r from-orange-600 via-pink-500 to-purple-600 hover:from-orange-700 hover:via-pink-600 hover:to-purple-700 text-white py-4 sm:py-5 px-6 sm:px-8 rounded-xl sm:rounded-2xl font-semibold text-base sm:text-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-purple-500/25 hover:shadow-xl hover:shadow-purple-500/40 flex items-center justify-center space-x-2 sm:space-x-3 group"
                   >
-                    {loading ? (
-                      <>
-                        <div className="w-5 h-5 sm:w-6 sm:h-6 border-3 border-white border-t-transparent rounded-full animate-spin"></div>
-                        <span>Analyzing...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Shield className="w-5 h-5 sm:w-6 sm:h-6" />
-                        <span>Generate Secure Policy</span>
-                        <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 group-hover:translate-x-1 transition-transform" />
-                      </>
-                    )}
+                    <Shield className="w-5 h-5 sm:w-6 sm:h-6" />
+                    <span>Generate Secure Policy</span>
+                    <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 group-hover:translate-x-1 transition-transform" />
                   </button>
                 </div>
               </form>
@@ -320,16 +327,52 @@ const GeneratePolicy: React.FC = () => {
         </div>
       )}
 
-      {/* Conversation/Policy View */}
-      {!showInitialForm && response && (
+      {/* PROFESSIONAL Loading State */}
+      {!showInitialForm && loading && !response && (
+        <div className="relative overflow-hidden min-h-screen flex items-center justify-center">
+          <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-purple-500/10 rounded-full blur-3xl animate-pulse"></div>
+          <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-pink-500/10 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }}></div>
+          
+          <div className="relative text-center px-8 max-w-2xl">
+            {/* Elegant Shield Animation */}
+            <div className="inline-flex items-center justify-center w-24 h-24 mb-8 relative">
+              <div className="absolute inset-0 bg-gradient-to-br from-orange-500/20 via-pink-500/20 to-purple-600/20 rounded-full animate-ping"></div>
+              <div className="absolute inset-0 bg-gradient-to-br from-orange-500 via-pink-500 to-purple-600 rounded-full opacity-20 animate-pulse"></div>
+              <Shield className="w-12 h-12 text-purple-400 relative z-10" />
+            </div>
+            
+            <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">
+              Aegis AI Analyzing
+            </h2>
+            
+            <p className="text-lg sm:text-xl text-slate-300 mb-8 leading-relaxed">
+              Crafting your secure IAM policy with least-privilege principles and AWS best practices...
+            </p>
+            
+            {/* Elegant Progress Dots */}
+            <div className="flex items-center justify-center space-x-2 mb-8">
+              <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '0ms', animationDuration: '1s' }}></div>
+              <div className="w-2 h-2 bg-pink-400 rounded-full animate-bounce" style={{ animationDelay: '200ms', animationDuration: '1s' }}></div>
+              <div className="w-2 h-2 bg-orange-400 rounded-full animate-bounce" style={{ animationDelay: '400ms', animationDuration: '1s' }}></div>
+            </div>
+
+            <div className="text-sm text-slate-500">
+              This may take a few moments...
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Results View */}
+      {!showInitialForm && !loading && response && (
         <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-8 sm:mb-12 gap-4">
             <div>
               <h2 className="text-2xl sm:text-3xl font-bold text-white mb-2">
-                {hasPolicy ? 'Policy Generated' : 'Policy Generation'}
+                {hasPolicy ? 'Policy Generated Successfully' : 'Conversing with Aegis AI'}
               </h2>
               <p className="text-slate-400 text-sm sm:text-base">
-                {hasPolicy ? 'Review and refine your secure IAM policy' : 'Conversing with Aegis AI Agent'}
+                {hasPolicy ? 'Review your secure IAM policy and refine as needed' : 'Providing more information to generate your policy'}
               </p>
             </div>
             <button
@@ -395,23 +438,6 @@ const GeneratePolicy: React.FC = () => {
                       </div>
                     </div>
                   ))}
-                  
-                  {loading && (
-                    <div className="flex items-start space-x-2 sm:space-x-3">
-                      <div className="w-8 h-8 sm:w-10 sm:h-10 bg-slate-700/50 rounded-lg sm:rounded-xl flex items-center justify-center flex-shrink-0 border border-slate-600/50">
-                        <Bot className="w-4 h-4 sm:w-5 sm:h-5 text-slate-400" />
-                      </div>
-                      <div className="flex-1">
-                        <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg sm:rounded-xl p-3 sm:p-4">
-                          <div className="flex items-center space-x-2">
-                            <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-                            <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-                            <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
                 </div>
               </div>
 
@@ -569,8 +595,8 @@ const GeneratePolicy: React.FC = () => {
                   {/* Security Features Box */}
                   {((parsedResponse?.securityFeatures && parsedResponse.securityFeatures.length > 0) || 
                     (response.security_features && response.security_features.length > 0)) && (
-                    <div className="bg-purple-500/5 backdrop-blur-xl border border-purple-500/30 rounded-xl sm:rounded-2xl p-6 sm:p-8">
-                      <h4 className="text-purple-400 text-base sm:text-lg font-semibold mb-3 sm:mb-4 flex items-center space-x-2">
+                    <div className="bg-green-500/5 backdrop-blur-xl border border-green-500/30 rounded-xl sm:rounded-2xl p-6 sm:p-8">
+                      <h4 className="text-green-400 text-base sm:text-lg font-semibold mb-3 sm:mb-4 flex items-center space-x-2">
                         <CheckCircle className="w-5 h-5" />
                         <span>Security Features</span>
                       </h4>
