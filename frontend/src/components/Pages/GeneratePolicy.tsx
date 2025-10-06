@@ -3,6 +3,7 @@ import { Shield, Send, RefreshCw, User, Bot, MessageSquare, Lock, Zap, ArrowRigh
 import { generatePolicy, sendFollowUp } from '../../services/api';
 import { GeneratePolicyResponse, ChatMessage } from '../../types';
 
+
 interface ResponseState {
   hasPolicy: boolean;
   isQuestion: boolean;
@@ -10,7 +11,7 @@ interface ResponseState {
 
 const GeneratePolicy: React.FC = () => {
   const [description, setDescription] = useState('');
-  const [service, setService] = useState('S3');
+  // Service is now detected by the AI agent
   const [restrictive, setRestrictive] = useState(true);
   const [compliance, setCompliance] = useState('general');
   const [response, setResponse] = useState<GeneratePolicyResponse | null>(null);
@@ -85,7 +86,6 @@ const GeneratePolicy: React.FC = () => {
     try {
       const result = await generatePolicy({
         description,
-        service,
         restrictive,
         compliance
       });
@@ -96,7 +96,7 @@ const GeneratePolicy: React.FC = () => {
       // Check if agent is asking a question or generated a policy
       if (result.is_question || !result.policy) {
         setResponseState({ hasPolicy: false, isQuestion: true });
-        setIsRefining(false); // Stay in input mode
+        setIsRefining(true); // Show the chat interface even for questions
       } else {
         setResponseState({ hasPolicy: true, isQuestion: false });
         setIsRefining(true); // Show policy view
@@ -117,14 +117,14 @@ const GeneratePolicy: React.FC = () => {
     setError(null);
     
     try {
-      const result = await sendFollowUp(followUpMessage, conversationId, service);
+      const result = await sendFollowUp(followUpMessage, conversationId);
       setResponse(result);
       setFollowUpMessage('');
       
       // Check if agent generated policy or asking more questions
       if (result.is_question || !result.policy) {
         setResponseState({ hasPolicy: false, isQuestion: true });
-        setIsRefining(false);
+        setIsRefining(true); // Keep showing the chat interface for questions
       } else {
         setResponseState({ hasPolicy: true, isQuestion: false });
         setIsRefining(true);
@@ -217,20 +217,20 @@ const GeneratePolicy: React.FC = () => {
                       </div>
                     </div>
 
-                    <div className="bg-slate-800/30 rounded-xl sm:rounded-2xl p-4 sm:p-6 border border-slate-700/50">
-                      <label className="block text-white text-sm sm:text-base font-medium mb-2 sm:mb-3">Compliance</label>
-                      <select
-                        value={compliance}
-                        onChange={(e) => setCompliance(e.target.value)}
-                        className="w-full px-3 sm:px-4 py-2 sm:py-3 bg-slate-700/50 border border-slate-600/50 rounded-lg sm:rounded-xl text-white text-sm sm:text-base focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 focus:outline-none cursor-pointer"
-                      >
-                        {complianceFrameworks.map(framework => (
-                          <option key={framework.value} value={framework.value}>
-                            {framework.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+                                          <div className="bg-slate-800/30 rounded-xl sm:rounded-2xl p-4 sm:p-6 border border-slate-700/50">
+                        <label className="block text-white text-sm sm:text-base font-medium mb-2 sm:mb-3">Compliance</label>
+                        <select
+                          value={compliance}
+                          onChange={(e) => setCompliance(e.target.value)}
+                          className="w-full px-3 sm:px-4 py-2 sm:py-3 bg-slate-700/50 border border-slate-600/50 rounded-lg sm:rounded-xl text-white text-sm sm:text-base focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 focus:outline-none cursor-pointer"
+                        >
+                          {complianceFrameworks.map(framework => (
+                            <option key={framework.value} value={framework.value}>
+                              {framework.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
                   </div>
 
                   <button
@@ -281,10 +281,10 @@ const GeneratePolicy: React.FC = () => {
 
       {responseState.isQuestion && response && !responseState.hasPolicy && (
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
-          <div className="bg-slate-900/50 backdrop-blur-xl border border-yellow-500/30 rounded-2xl p-6 sm:p-8">
+          <div className="bg-slate-900/50 backdrop-blur-xl border border-purple-500/30 rounded-2xl p-6 sm:p-8">
             <div className="flex items-start space-x-3 sm:space-x-4 mb-6">
-              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-yellow-500/20 rounded-xl flex items-center justify-center flex-shrink-0 border border-yellow-500/30">
-                <MessageSquare className="w-5 h-5 sm:w-6 sm:h-6 text-yellow-400" />
+              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-purple-500/20 rounded-xl flex items-center justify-center flex-shrink-0 border border-purple-500/30">
+                <MessageSquare className="w-5 h-5 sm:w-6 sm:h-6 text-purple-400" />
               </div>
               <div className="flex-1 min-w-0">
                 <h3 className="text-white text-lg sm:text-xl font-bold mb-2">More Information Needed</h3>
@@ -304,13 +304,13 @@ const GeneratePolicy: React.FC = () => {
                 value={followUpMessage}
                 onChange={(e) => setFollowUpMessage(e.target.value)}
                 placeholder="Provide the requested information..."
-                className="flex-1 px-4 py-3 bg-slate-800/50 border border-slate-700/50 rounded-xl text-white text-sm sm:text-base placeholder-slate-500 focus:border-yellow-500 focus:ring-2 focus:ring-yellow-500/20 focus:outline-none"
+                className="flex-1 px-4 py-3 bg-slate-800/50 border border-slate-700/50 rounded-xl text-white text-sm sm:text-base placeholder-slate-500 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 focus:outline-none"
                 disabled={loading}
               />
               <button
                 type="submit"
                 disabled={loading || !followUpMessage.trim()}
-                className="px-5 py-3 bg-yellow-600 hover:bg-yellow-700 text-white rounded-xl disabled:opacity-50 transition-all shadow-lg flex items-center justify-center space-x-2"
+                className="px-5 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-xl disabled:opacity-50 transition-all shadow-lg flex items-center justify-center space-x-2"
               >
                 <Send className="w-5 h-5" />
                 <span>Send</span>

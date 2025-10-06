@@ -36,9 +36,11 @@ export interface ChatMessage {
 
 export interface GeneratePolicyRequest {
   description: string;
-  service: string;
-  restrictive: boolean;
-  compliance: string;
+  restrictive?: boolean;
+  compliance?: string;
+  service?: string;
+  conversation_id?: string;
+  is_followup?: boolean;
 }
 
 export interface GeneratePolicyResponse {

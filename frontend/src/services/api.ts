@@ -15,7 +15,10 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-export interface ConversationalRequest extends GeneratePolicyRequest {
+export interface ConversationalRequest {
+  description: string;
+  compliance?: string;
+  restrictive?: boolean;
   conversation_id?: string;
   is_followup?: boolean;
 }
@@ -44,9 +47,11 @@ export const generatePolicy = async (
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       description: request.description,
-      service: request.service,
+      service: 'lambda', // Set primary service as Lambda
       conversation_id: request.conversation_id || null,
-      is_followup: request.is_followup || false
+      is_followup: request.is_followup || false,
+      restrictive: request.restrictive || false,
+      compliance: request.compliance || 'general'
     }),
   });
 
@@ -106,12 +111,10 @@ export const generatePolicy = async (
 
 export const sendFollowUp = async (
   message: string,
-  conversationId: string,
-  service: string
+  conversationId: string
 ): Promise<GeneratePolicyResponse> => {
   return generatePolicy({
     description: message,
-    service: service,
     restrictive: true,
     compliance: 'general',
     conversation_id: conversationId,
