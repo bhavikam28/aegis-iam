@@ -5,8 +5,17 @@ from strands import tool
 
 logging.basicConfig(level=logging.INFO)
 
-bedrock_runtime = boto3.client(service_name='bedrock-runtime', region_name='us-east-1')
+bedrock_runtime = None  # Will be initialized lazily
 MODEL_ID = 'us.anthropic.claude-3-7-sonnet-20250219-v1:0'
+
+def get_bedrock_client():
+    """Lazy load bedrock client"""
+    global bedrock_runtime
+    if bedrock_runtime is None:
+        logging.info("🔧 Initializing Bedrock client...")
+        bedrock_runtime = boto3.client(service_name='bedrock-runtime', region_name='us-east-1')
+        logging.info("✅ Bedrock client initialized")
+    return bedrock_runtime
 
 
 @tool
@@ -16,7 +25,9 @@ def generate_policy_from_bedrock(description: str, service: str) -> str:
     Returns the raw text response from the model (string). On failure, returns
     an error message explaining what went wrong.
     """
-
+    
+    bedrock = get_bedrock_client()  # Get client lazily
+    
     prompt = f"""
 You are Aegis, an elite AI security agent specialized in AWS IAM policy generation. You are conversational, intelligent, and security-focused.
 
@@ -105,6 +116,9 @@ This ensures the policy has proper ARNs with exact resource references.
 **Don't have these details yet?** No problem! I can generate the policy with placeholders like `{{{{ACCOUNT_ID}}}}` and `{{{{REGION}}}}` that you can replace later. Just let me know!"
 
 **IF GENERATING POLICY:**
+CRITICAL: Start your response DIRECTLY with the JSON code block. DO NOT write any intro text like "I'll create...", "Here's...", or "Let me...".
+Your first line MUST be: ```json
+
 Return JSON policy followed by detailed explanation:
 
 ```json
@@ -176,7 +190,7 @@ Would you like me to add any additional security restrictions or conditions?
     })
 
     try:
-        response = bedrock_runtime.invoke_model(body=body, modelId=MODEL_ID)
+        response = bedrock.invoke_model(body=body, modelId=MODEL_ID)
         body_bytes = response.get('body').read()
         
         try:
