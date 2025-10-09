@@ -144,14 +144,17 @@ export const clearConversation = async (conversationId: string) => {
   return response.json();
 };
 
-export const validatePolicy = async (request: ValidatePolicyRequest): Promise<ValidatePolicyResponse> => {
+export const validatePolicy = async (request: ValidatePolicyRequest | any): Promise<ValidatePolicyResponse> => {
+  const isAuditMode = 'aws_credentials' in request;
+  
   const response = await fetch(`${API_URL}/validate`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       policy_json: request.policy_json || null,
       role_arn: request.role_arn || null,
-      compliance_frameworks: ['pci_dss', 'hipaa', 'sox', 'gdpr', 'cis']
+      aws_credentials: request.aws_credentials || null,
+      compliance_frameworks: request.compliance_frameworks || ['pci_dss', 'hipaa', 'sox', 'gdpr', 'cis']
     }),
   });
 
@@ -172,28 +175,8 @@ export const validatePolicy = async (request: ValidatePolicyRequest): Promise<Va
     security_issues: backendResponse.findings?.map((f: any) => f.description) || [],
     recommendations: backendResponse.recommendations || [],
     compliance_status: backendResponse.compliance_status || {},
-    quick_wins: backendResponse.quick_wins || []
-  };
-};
-
-
-export const analyzeHistory = async (request: AnalyzeHistoryRequest): Promise<AnalyzeHistoryResponse> => {
-  await delay(3000);
-  const response = mockAnalyzeHistoryResponse(request);
-  return response;
-};
-
-export const getJobStatus = async (jobId: string): Promise<JobStatus> => {
-  await delay(2000);
-  const progress = Math.min(100, Math.floor(Math.random() * 30) + 70);
-  
-  return {
-    id: jobId,
-    status: progress >= 100 ? 'completed' : 'running',
-    progress,
-    estimated_completion: progress >= 100 ? 'Complete' : `${Math.floor((100 - progress) / 10)} minutes`,
-    message: progress >= 100 
-      ? 'Analysis complete - optimized policy generated'
-      : 'Analyzing CloudTrail logs and usage patterns...'
+    quick_wins: backendResponse.quick_wins || [],
+    audit_summary: backendResponse.audit_summary || null,
+    top_risks: backendResponse.top_risks || []
   };
 };

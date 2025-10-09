@@ -1,0 +1,28 @@
+{
+    "mcpServers": {
+      "aws-iam": {
+        "command": "npx",
+        "args": ["-y", "@aws-mcp/server-iam"],
+        "env": {
+          "AWS_REGION": "us-east-1",
+          "AWS_PROFILE": "default"
+        }
+      },
+      "aws-cloudtrail": {
+        "command": "npx",
+        "args": ["-y", "@aws-mcp/server-cloudtrail"],
+        "env": {
+          "AWS_REGION": "us-east-1",
+          "AWS_PROFILE": "default"
+        }
+      },
+      "aws-api": {
+        "command": "npx",
+        "args": ["-y", "@aws-mcp/server-aws-api"],
+        "env": {
+          "AWS_REGION": "us-east-1",
+          "AWS_PROFILE": "default"
+        }
+      }
+    }
+  }

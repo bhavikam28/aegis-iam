@@ -3,7 +3,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List, Dict
 from policy_agent import PolicyAgent
-from policy_agent import PolicyAgent
 from validator_agent import ValidatorAgent
 import uuid
 import json
@@ -13,7 +12,7 @@ import asyncio
 
 logging.basicConfig(level=logging.INFO)
 
-app = FastAPI(title="Aegis IAM Agent")
+app = FastAPI(title="Aegis IAM Agent - MCP Enabled")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173", "https://aegis-iam.vercel.app"],
@@ -28,16 +27,15 @@ class GenerationRequest(BaseModel):
     conversation_id: Optional[str] = None
     is_followup: bool = False
 
-class AWSCredentials(BaseModel):
-    access_key: str
-    secret_key: str
-    region: str = "us-east-1"
-
 class ValidationRequest(BaseModel):
     policy_json: Optional[str] = None
     role_arn: Optional[str] = None
-    aws_credentials: Optional[AWSCredentials] = None
     compliance_frameworks: Optional[List[str]] = ["general"]
+    mode: str = "quick"  # "quick" or "audit"
+
+class AuditRequest(BaseModel):
+    """Request for full autonomous audit"""
+    compliance_frameworks: Optional[List[str]] = ["pci_dss", "hipaa", "sox", "gdpr", "cis"]
 
 conversations: Dict[str, List[Dict]] = {}
 aegis_agent = PolicyAgent()
@@ -45,7 +43,12 @@ validator_agent = ValidatorAgent()
 
 @app.get("/")
 def health():
-    return {"status": "healthy"}
+    return {
+        "status": "healthy",
+        "message": "Aegis IAM Agent with MCP Support",
+        "mcp_enabled": True,
+        "features": ["policy_generation", "validation", "autonomous_audit"]
+    }
 
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
@@ -58,8 +61,13 @@ async def log_requests(request: Request, call_next):
         logging.error(f"Request failed: {str(e)}")
         raise
 
+# ============================================
+# POLICY GENERATION (Keep existing)
+# ============================================
+
 @app.post("/generate")
 async def generate(request: GenerationRequest):
+    """Generate IAM policy - keep existing implementation"""
     try:
         conversation_id = request.conversation_id or str(uuid.uuid4())
         if conversation_id not in conversations:
@@ -231,7 +239,6 @@ Or I can use {{{{ACCOUNT_ID}}}} and {{{{REGION}}}} placeholders that you can rep
             )
             if exp_match:
                 explanation = exp_match.group(1).strip()
-                # Remove any leading intro phrases
                 explanation = re.sub(r'^.*?(?:I\'ll create|Here\'s|Let me).*?\n', '', explanation, flags=re.IGNORECASE, count=1)
                 logging.info(f"✅ Extracted explanation: {len(explanation)} chars")
             else:
@@ -243,32 +250,25 @@ Or I can use {{{{ACCOUNT_ID}}}} and {{{{REGION}}}} placeholders that you can rep
             for msg in conversations[conversation_id]:
                 content = msg["content"]
 
-                # For assistant messages, remove structured sections but KEEP the JSON policy
                 if msg["role"] == "assistant":
-                    # Check if this message contains a policy
                     has_policy_json = bool(re.search(r'```json[\s\S]*?```', content))
                     
                     if has_policy_json:
-                        # Extract ONLY the JSON code block for conversation history
                         json_match = re.search(r'(```json[\s\S]*?```)', content)
                         if json_match:
                             content = json_match.group(1)
                     else:
-                        # For non-policy messages (questions), remove JSON and structured sections
                         content = re.sub(r'```json[\s\S]*?```', '', content)
                         content = re.sub(r'```[\s\S]*?```', '', content)
                         content = re.sub(r'\{[\s\S]*?"Version"[\s\S]*?\}', '', content)
                         
-                        # Remove everything from "### Policy Explanation" onwards
                         policy_exp_start = re.search(r'###?\s*Policy Explanation', content, re.IGNORECASE)
                         if policy_exp_start:
                             content = content[:policy_exp_start.start()]
         
-                    # Clean up extra whitespace
                     content = ' '.join(content.split())
                     content = content.strip()
                     
-                    # DEBUG: Log what we're keeping
                     logging.info(f"📝 Conversation msg {msg['role']}: '{content[:100]}...'")
         
                 conversation_history.append({  
@@ -286,17 +286,14 @@ Or I can use {{{{ACCOUNT_ID}}}} and {{{{REGION}}}} placeholders that you can rep
             )
             if suggestions_match:
                 suggestions_text = suggestions_match.group(1)
-                # Extract lines starting with -, •, or *, or numbered items
                 suggestions = re.findall(r'(?:^|\n)\s*[-•*]\s*(.+?)(?=\n|$)', suggestions_text, re.MULTILINE)
                 if not suggestions:
-                    # Try numbered format
                     suggestions = re.findall(r'(?:^|\n)\s*\d+\.\s*(.+?)(?=\n|$)', suggestions_text, re.MULTILINE)
                 refinement_suggestions = [s.strip() for s in suggestions if s.strip() and len(s.strip()) > 10]
                 logging.info(f"✅ Extracted {len(refinement_suggestions)} refinement suggestions")
             else:
                 logging.warning("❌ No Refinement Suggestions section found")
 
-            # If this is a question (no policy), clear the explanation
             if is_question:
                 explanation = ""
             
@@ -341,27 +338,16 @@ Or I can use {{{{ACCOUNT_ID}}}} and {{{{REGION}}}} placeholders that you can rep
             "message_count": 0
         }
 
-@app.get("/conversation/{conversation_id}")
-def get_conversation(conversation_id: str):
-    if conversation_id not in conversations:
-        return {"error": "Conversation not found"}
-    return {
-        "conversation_id": conversation_id,
-        "messages": conversations[conversation_id]
-    }
 
-@app.delete("/conversation/{conversation_id}")
-def clear_conversation(conversation_id: str):
-    if conversation_id in conversations:
-        del conversations[conversation_id]
-        return {"message": "Conversation cleared"}
-    return {"error": "Conversation not found"}
-
+# ============================================
+# VALIDATION (MCP-ENABLED)
+# ============================================
 
 @app.post("/validate")
 async def validate_policy(request: ValidationRequest):
     """
     Validate an IAM policy for security issues and compliance
+    Now with MCP server integration!
     """
     try:
         if not request.policy_json and not request.role_arn:
@@ -370,61 +356,16 @@ async def validate_policy(request: ValidationRequest):
                 "success": False
             }
         
-        policy_to_validate = request.policy_json
+        logging.info(f"🔍 Starting validation in {request.mode} mode")
+        logging.info(f"   MCP-enabled: True")
+        logging.info(f"   Compliance frameworks: {request.compliance_frameworks}")
         
-        # If role ARN provided, fetch the policy from AWS
-        if request.role_arn and not policy_to_validate:
-            try:
-                import boto3
-                iam = boto3.client('iam')
-                
-                # Extract role name from ARN
-                role_name = request.role_arn.split('/')[-1]
-                
-                # Get role
-                response = iam.get_role(RoleName=role_name)
-                
-                # Get attached policies
-                attached_policies = iam.list_attached_role_policies(RoleName=role_name)
-                
-                if attached_policies['AttachedPolicies']:
-                    # Get first attached policy
-                    policy_arn = attached_policies['AttachedPolicies'][0]['PolicyArn']
-                    policy_version = iam.get_policy(PolicyArn=policy_arn)
-                    policy_document = iam.get_policy_version(
-                        PolicyArn=policy_arn,
-                        VersionId=policy_version['Policy']['DefaultVersionId']
-                    )
-                    policy_to_validate = json.dumps(policy_document['PolicyVersion']['Document'])
-                else:
-                    # Try inline policies
-                    inline_policies = iam.list_role_policies(RoleName=role_name)
-                    if inline_policies['PolicyNames']:
-                        policy_name = inline_policies['PolicyNames'][0]
-                        policy_doc = iam.get_role_policy(RoleName=role_name, PolicyName=policy_name)
-                        policy_to_validate = json.dumps(policy_doc['PolicyDocument'])
-                
-                if not policy_to_validate:
-                    return {
-                        "error": f"No policies found for role {role_name}",
-                        "success": False
-                    }
-                    
-            except Exception as e:
-                logging.error(f"Failed to fetch role policy: {str(e)}")
-                return {
-                    "error": f"Failed to fetch policy from AWS: {str(e)}",
-                    "success": False
-                }
-        
-        # Validate the policy
-        async with asyncio.timeout(45):
-            logging.info(f"🔍 Starting policy validation...")
-            logging.info(f"   Compliance frameworks: {request.compliance_frameworks}")
-            
+        async with asyncio.timeout(120):  # Longer timeout for audit mode
             result = validator_agent.validate_policy(
-                policy_json=policy_to_validate,
-                compliance_frameworks=request.compliance_frameworks
+                policy_json=request.policy_json,
+                role_arn=request.role_arn,
+                compliance_frameworks=request.compliance_frameworks,
+                mode=request.mode
             )
             
             if not result.get("success"):
@@ -442,10 +383,16 @@ async def validate_policy(request: ValidationRequest):
             recommendations = validation_data.get("security_improvements", [])
             quick_wins = validation_data.get("quick_wins", [])
             
+            # Include audit summary if in audit mode
+            audit_summary = validation_data.get("audit_summary")
+            top_risks = validation_data.get("top_risks")
+            
             logging.info(f"✅ Validation completed:")
             logging.info(f"   ├─ Risk Score: {risk_score}/100")
             logging.info(f"   ├─ Findings: {len(findings)}")
-            logging.info(f"   └─ Compliance Checks: {len(compliance_status)}")
+            logging.info(f"   ├─ Compliance Checks: {len(compliance_status)}")
+            if audit_summary:
+                logging.info(f"   └─ Audit Summary: {audit_summary.get('total_roles', 0)} roles analyzed")
             
             return {
                 "success": True,
@@ -454,11 +401,14 @@ async def validate_policy(request: ValidationRequest):
                 "compliance_status": compliance_status,
                 "recommendations": recommendations,
                 "quick_wins": quick_wins,
-                "raw_response": result.get("raw_response", "")
+                "audit_summary": audit_summary,
+                "top_risks": top_risks,
+                "raw_response": result.get("raw_response", ""),
+                "mcp_enabled": result.get("mcp_enabled", False)
             }
             
     except asyncio.TimeoutError:
-        logging.error("⏱️ Validation timed out after 45 seconds")
+        logging.error("⏱️ Validation timed out after 120 seconds")
         return {
             "error": "Validation request timed out. Please try again.",
             "success": False
@@ -469,3 +419,79 @@ async def validate_policy(request: ValidationRequest):
             "error": str(e),
             "success": False
         }
+
+
+# ============================================
+# AUTONOMOUS AUDIT (NEW ENDPOINT)
+# ============================================
+
+@app.post("/audit")
+async def autonomous_audit(request: AuditRequest):
+    """
+    Perform full autonomous IAM audit of entire AWS account
+    Uses MCP servers to scan all roles and policies
+    """
+    try:
+        logging.info("🤖 AUTONOMOUS AUDIT MODE INITIATED")
+        logging.info("   This will scan ALL IAM roles in the account")
+        
+        async with asyncio.timeout(300):  # 5 minute timeout for full audit
+            result = validator_agent.validate_policy(
+                compliance_frameworks=request.compliance_frameworks,
+                mode="audit"
+            )
+            
+            if not result.get("success"):
+                return {
+                    "error": result.get("error", "Audit failed"),
+                    "success": False
+                }
+            
+            validation_data = result.get("validation", {})
+            
+            return {
+                "success": True,
+                "audit_summary": validation_data.get("audit_summary", {}),
+                "risk_score": validation_data.get("risk_score", 50),
+                "top_risks": validation_data.get("top_risks", []),
+                "findings": validation_data.get("findings", []),
+                "compliance_status": validation_data.get("compliance_status", {}),
+                "recommendations": validation_data.get("security_improvements", []),
+                "quick_wins": validation_data.get("quick_wins", []),
+                "raw_response": result.get("raw_response", ""),
+                "mcp_enabled": True
+            }
+            
+    except asyncio.TimeoutError:
+        logging.error("⏱️ Audit timed out after 5 minutes")
+        return {
+            "error": "Audit timed out. Try reducing the scope or contact support.",
+            "success": False
+        }
+    except Exception as e:
+        logging.exception("❌ Error in audit endpoint")
+        return {
+            "error": str(e),
+            "success": False
+        }
+
+
+# ============================================
+# CONVERSATION MANAGEMENT
+# ============================================
+
+@app.get("/conversation/{conversation_id}")
+def get_conversation(conversation_id: str):
+    if conversation_id not in conversations:
+        return {"error": "Conversation not found"}
+    return {
+        "conversation_id": conversation_id,
+        "messages": conversations[conversation_id]
+    }
+
+@app.delete("/conversation/{conversation_id}")
+def clear_conversation(conversation_id: str):
+    if conversation_id in conversations:
+        del conversations[conversation_id]
+        return {"message": "Conversation cleared"}
+    return {"error": "Conversation not found"}

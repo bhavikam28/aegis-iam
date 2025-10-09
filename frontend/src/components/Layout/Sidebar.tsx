@@ -16,7 +16,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeSection, onSectionChange, onRet
     },
     {
       id: 'validate',
-      title: 'Validate',
+      title: 'Validate & Audit',
       icon: Search,
     },
     {

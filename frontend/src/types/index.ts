@@ -65,6 +65,23 @@ export interface GeneratePolicyResponse {
 export interface ValidatePolicyRequest {
   policy_json?: string;
   role_arn?: string;
+  aws_credentials?: {
+    access_key: string;
+    secret_key: string;
+    region?: string;
+  };
+  compliance_frameworks?: string[];
+}
+
+export interface AuditSummary {
+  total_roles: number;
+  roles_analyzed: number;
+  total_policies: number;
+  total_findings: number;
+  critical_findings: number;
+  high_findings: number;
+  medium_findings: number;
+  low_findings: number;
 }
 
 export interface ValidatePolicyResponse {
@@ -74,6 +91,8 @@ export interface ValidatePolicyResponse {
   recommendations: string[];
   compliance_status: Record<string, ComplianceFramework>;
   quick_wins?: string[];
+  audit_summary?: AuditSummary | null;
+  top_risks?: string[];
 }
 
 export interface AnalyzeHistoryRequest {

@@ -76,16 +76,17 @@ const LandingPage: React.FC = () => {
           </div>
 
           <h2 className="text-7xl font-bold mb-6 leading-tight">
-            <span className="text-white">Secure Your AWS</span>
+            <span className="text-white">Master AWS IAM</span>
             <br />
             <span className="bg-gradient-to-r from-orange-400 via-pink-400 to-purple-500 bg-clip-text text-transparent">
-              Infrastructure with AI
+              Security with AI Agents
             </span>
           </h2>
 
           <p className="text-xl text-slate-400 max-w-3xl mx-auto mb-12 leading-relaxed">
-            Simply describe your permissions in plain English, and our AI instantly generates secure, 
-            least-privilege IAM policies. Validate existing policies and optimize usage patterns—all in seconds, not hours.
+            Generate secure IAM policies from plain English. Autonomously audit your entire AWS account. 
+            Optimize permissions with CloudTrail analysis. All powered by agentic AI—delivering enterprise-grade 
+            security in seconds, not hours.
           </p>
 
           {/* CTA Buttons with Premium Gradients */}
@@ -98,9 +99,9 @@ const LandingPage: React.FC = () => {
               <ChevronRight className="w-5 h-5 relative z-10 group-hover:translate-x-1 transition-transform" />
               <div className="absolute inset-0 bg-gradient-to-r from-orange-700 via-pink-600 to-purple-700 opacity-0 group-hover:opacity-100 transition-opacity"></div>
             </button>
-            
+
             <a 
-              href="https://github.com/bhavikam28/aegis-iam" 
+              href="https://github.com/yourusername/aegis-iam" 
               target="_blank" 
               rel="noopener noreferrer"
               className="border border-slate-700 text-white px-8 py-4 rounded-xl font-semibold text-lg hover:bg-slate-800/50 hover:border-purple-500/50 transition-all inline-block backdrop-blur-sm"
@@ -113,19 +114,19 @@ const LandingPage: React.FC = () => {
           <div className="flex items-center justify-center space-x-12 text-slate-400">
             <div className="flex items-center space-x-2">
               <CheckCircle className="w-5 h-5 text-purple-400" />
-              <span>Least Privilege</span>
+              <span>Least Privilege IAM</span>
             </div>
             <div className="flex items-center space-x-2">
               <Lock className="w-5 h-5 text-pink-400" />
-              <span>AWS Compliant</span>
+              <span>Multi-Framework Compliance</span>
             </div>
             <div className="flex items-center space-x-2">
               <Shield className="w-5 h-5 text-orange-400" />
-              <span>AI-Powered</span>
+              <span>Agentic AI</span>
             </div>
             <div className="flex items-center space-x-2">
-              <Zap className="w-5 h-5 text-purple-400" />
-              <span>Security First</span>
+              <Zap className="w-5 h-5 text-green-400" />
+              <span>Autonomous Audits</span>
             </div>
           </div>
         </div>
@@ -182,8 +183,8 @@ const LandingPage: React.FC = () => {
                   <div className="w-12 h-12 bg-gradient-to-br from-orange-500/20 to-purple-500/20 rounded-xl flex items-center justify-center mb-4 border border-orange-500/30">
                     <CheckCircle className="w-6 h-6 text-orange-400" />
                   </div>
-                  <h4 className="text-white font-semibold mb-2">Compliance Ready</h4>
-                  <p className="text-slate-400 text-sm">Built-in support for PCI DSS, HIPAA, SOX, and GDPR</p>
+                  <h4 className="text-white font-semibold mb-2">Audit</h4>
+                  <p className="text-slate-400 text-sm">Autonomously scan your entire AWS account for vulnerabilities and compliance</p>
                 </div>
               </div>
             </div>
@@ -193,25 +194,30 @@ const LandingPage: React.FC = () => {
         {/* Features Section with Premium Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-20">
           <div className="bg-gradient-to-br from-slate-900/50 to-slate-800/50 backdrop-blur-xl border border-purple-500/20 rounded-2xl p-8 hover:border-purple-500/40 hover:shadow-2xl hover:shadow-purple-500/20 transition-all group">
-            <div className="w-16 h-16 bg-gradient-to-br from-orange-500/20 via-pink-500/20 to-purple-500/20 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform border border-purple-500/30">
-              <Shield className="w-8 h-8 text-purple-400" />
+            <div className="w-16 h-16 bg-gradient-to-br from-orange-500/20 via-purple-500/20 to-pink-500/20 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform border border-orange-500/30">
+              <Shield className="w-8 h-8 text-orange-400" />
             </div>
-            <h3 className="text-2xl font-bold bg-gradient-to-r from-orange-400 to-purple-400 bg-clip-text text-transparent mb-4">AI Co-Pilot</h3>
+            <h3 className="text-2xl font-bold bg-gradient-to-r from-orange-400 to-purple-400 bg-clip-text text-transparent mb-4">IAM Policy Generator</h3>
             <p className="text-slate-300 leading-relaxed mb-4">
-              Conversational AI that understands your security requirements and generates policies that follow AWS best practices automatically.
+              Conversational AI that transforms plain English descriptions into production-ready IAM policies. 
+              Automatically enforces least-privilege principles and AWS security best practices with every policy generated.
             </p>
             <ul className="space-y-2 text-slate-400 text-sm">
               <li className="flex items-start space-x-2">
                 <CheckCircle className="w-4 h-4 text-purple-400 mt-0.5 flex-shrink-0" />
-                <span>Natural language processing</span>
+                <span>Plain English to IAM policy in seconds</span>
               </li>
               <li className="flex items-start space-x-2">
                 <CheckCircle className="w-4 h-4 text-purple-400 mt-0.5 flex-shrink-0" />
-                <span>Iterative refinement through chat</span>
+                <span>Interactive refinement through conversation</span>
               </li>
               <li className="flex items-start space-x-2">
                 <CheckCircle className="w-4 h-4 text-purple-400 mt-0.5 flex-shrink-0" />
-                <span>Least-privilege enforcement</span>
+                <span>Automatic least-privilege enforcement</span>
+              </li>
+              <li className="flex items-start space-x-2">
+                <CheckCircle className="w-4 h-4 text-purple-400 mt-0.5 flex-shrink-0" />
+                <span>Security scoring and recommendations</span>
               </li>
             </ul>
           </div>
@@ -220,23 +226,27 @@ const LandingPage: React.FC = () => {
             <div className="w-16 h-16 bg-gradient-to-br from-pink-500/20 via-purple-500/20 to-orange-500/20 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform border border-pink-500/30">
               <Search className="w-8 h-8 text-pink-400" />
             </div>
-            <h3 className="text-2xl font-bold bg-gradient-to-r from-pink-400 to-purple-400 bg-clip-text text-transparent mb-4">Security Analyst</h3>
+            <h3 className="text-2xl font-bold bg-gradient-to-r from-pink-400 to-purple-400 bg-clip-text text-transparent mb-4">Security Analyst & Auditor</h3>
             <p className="text-slate-300 leading-relaxed mb-4">
-              Deep security analysis of existing IAM policies and roles. Identify vulnerabilities, 
-              check compliance, and get actionable remediation steps.
+              Autonomous AI agent that scans your entire AWS account, analyzes all IAM policies and roles, 
+              identifies vulnerabilities, checks compliance, and delivers actionable security insights—completely hands-free.
             </p>
             <ul className="space-y-2 text-slate-400 text-sm">
               <li className="flex items-start space-x-2">
                 <CheckCircle className="w-4 h-4 text-pink-400 mt-0.5 flex-shrink-0" />
-                <span>Vulnerability detection</span>
+                <span>Autonomous account-wide audits</span>
               </li>
               <li className="flex items-start space-x-2">
                 <CheckCircle className="w-4 h-4 text-pink-400 mt-0.5 flex-shrink-0" />
-                <span>Compliance checking</span>
+                <span>Multi-framework compliance (PCI DSS, HIPAA, SOX, GDPR)</span>
               </li>
               <li className="flex items-start space-x-2">
                 <CheckCircle className="w-4 h-4 text-pink-400 mt-0.5 flex-shrink-0" />
-                <span>Risk scoring</span>
+                <span>Intelligent risk prioritization</span>
+              </li>
+              <li className="flex items-start space-x-2">
+                <CheckCircle className="w-4 h-4 text-pink-400 mt-0.5 flex-shrink-0" />
+                <span>Quick-win security recommendations</span>
               </li>
             </ul>
           </div>
@@ -270,10 +280,10 @@ const LandingPage: React.FC = () => {
         <div className="relative">
           <div className="absolute inset-0 bg-gradient-to-r from-orange-500/10 via-purple-500/10 to-pink-500/10 rounded-3xl blur-2xl"></div>
           <div className="relative bg-gradient-to-r from-slate-800/50 via-purple-900/30 to-slate-800/50 backdrop-blur-xl border border-purple-500/30 rounded-3xl p-12 text-center">
-            <h3 className="text-4xl font-bold text-white mb-4">Ready to Secure Your AWS Infrastructure?</h3>
+            <h3 className="text-4xl font-bold text-white mb-4">Ready to Master AWS IAM Security?</h3>
             <p className="text-xl text-slate-300 mb-8 max-w-2xl mx-auto">
-              Start automating your IAM policy management with AI-powered security. 
-              Generate, validate, and optimize policies in seconds.
+              Automate IAM policy management with agentic AI. Generate policies, audit accounts, 
+              and optimize permissions—all in seconds with enterprise-grade security.
             </p>
             <button
               onClick={() => setShowDashboard(true)}
