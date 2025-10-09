@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request
+﻿from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List, Dict
@@ -33,7 +33,6 @@ aegis_agent = PolicyAgent()
 def health():
     return {"status": "healthy"}
 
-# Add request logging middleware
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
     logging.info(f"Incoming request: {request.method} {request.url}")
@@ -58,6 +57,46 @@ async def generate(request: GenerationRequest):
             "timestamp": str(uuid.uuid4())
         }
         conversations[conversation_id].append(user_message)
+        
+        # Check if user specified specific resource names
+        has_specific_resources = bool(re.search(r'(bucket|table|function|queue|topic)\s+(?:named|called)?\s*["\']?[\w-]+["\']?', request.description, re.IGNORECASE))
+
+        if has_specific_resources and not request.is_followup:
+            # Force a question response
+            question_response = f"""Hi! I'd be happy to help create a secure IAM policy.
+
+I see you need a policy for {request.service} with specific resource names. To create production-ready ARNs with exact resource references, I need:
+
+- **AWS Account ID** (12 digits)
+- **AWS Region** (e.g., us-east-1)
+
+Or I can use {{{{ACCOUNT_ID}}}} and {{{{REGION}}}} placeholders that you can replace later - which would you prefer?"""
+            
+            assistant_message = {
+                "role": "assistant",
+                "content": question_response,
+                "timestamp": str(uuid.uuid4())
+            }
+            conversations[conversation_id].append(assistant_message)
+            
+            return {
+                "conversation_id": conversation_id,
+                "final_answer": question_response,
+                "message_count": len(conversations[conversation_id]),
+                "policy": None,
+                "explanation": "",
+                "security_score": 0,
+                "security_notes": [],
+                "security_features": [],
+                "score_explanation": "",
+                "is_question": True,
+                "conversation_history": [
+                    {"role": "user", "content": request.description, "timestamp": user_message["timestamp"]},
+                    {"role": "assistant", "content": question_response, "timestamp": assistant_message["timestamp"]}
+                ],
+                "refinement_suggestions": []
+            }
+        
         prompt = request.description
         if request.is_followup and len(conversations[conversation_id]) > 1:
             context = "\n".join([
@@ -83,7 +122,6 @@ async def generate(request: GenerationRequest):
             }
             conversations[conversation_id].append(assistant_message)
             
-            # Parse the agent's response to extract structured data
             policy = None
             explanation = final_message
             security_score = 0
@@ -96,46 +134,38 @@ async def generate(request: GenerationRequest):
             
             # Try to extract JSON policy from the response
             json_str = None
-            matched_pattern = None
             
-            # Pattern 1: Markdown code block with json tag (flexible whitespace)
+            # Pattern 1: Markdown code block with json tag
             markdown_match = re.search(r'```json\s*([\s\S]*?)```', final_message, re.IGNORECASE)
             if markdown_match:
                 json_str = markdown_match.group(1).strip()
-                matched_pattern = "markdown with json tag"
-                logging.info(f"🔍 Found JSON in markdown code block (pattern 1, length: {len(json_str)} chars)")
+                logging.info(f"🔍 Found JSON in markdown code block")
             
             if not json_str:
                 # Pattern 2: Any markdown code block containing Version and Statement
                 markdown_match = re.search(r'```\s*([\s\S]*?Version[\s\S]*?Statement[\s\S]*?)```', final_message, re.IGNORECASE)
                 if markdown_match:
                     json_str = markdown_match.group(1).strip()
-                    matched_pattern = "markdown with Version/Statement"
-                    logging.info(f"🔍 Found JSON in code block (pattern 2, length: {len(json_str)} chars)")
+                    logging.info(f"🔍 Found JSON in code block")
             
             if not json_str:
-                # Pattern 3: Raw JSON in text (look for complete JSON object)
+                # Pattern 3: Raw JSON in text
                 json_match = re.search(r'\{[\s\S]*?"Version"\s*:\s*"[^"]*"[\s\S]*?"Statement"\s*:[\s\S]*?\][\s\S]*?\}', final_message)
                 if json_match:
                     json_str = json_match.group(0)
-                    matched_pattern = "raw JSON"
-                    logging.info(f"🔍 Found raw JSON structure (pattern 3, length: {len(json_str)} chars)")
+                    logging.info(f"🔍 Found raw JSON structure")
             
             if json_str:
                 logging.info(f"📄 Extracted JSON ({len(json_str)} chars)")
                 try:
-                    # Parse JSON directly
                     policy = json.loads(json_str)
-                    
                     is_question = False
                     logging.info("✅ Successfully extracted and parsed policy JSON")
                     logging.info(f"   Policy has {len(policy.get('Statement', []))} statements")
                 except json.JSONDecodeError as e:
                     logging.warning(f"❌ JSON parse error: {str(e)}")
-                    logging.warning(f"JSON snippet: {json_str[:300]}...")
-                    logging.warning(f"Trying to parse around error position...")
             else:
-                logging.warning("❌ No JSON structure matching any pattern found")
+                logging.warning("❌ No JSON structure found")
             
             # Extract security score
             score_match = re.search(r'Security Score[:\s]+(\d+)', final_message, re.IGNORECASE)
@@ -143,73 +173,114 @@ async def generate(request: GenerationRequest):
                 security_score = int(score_match.group(1))
             
             # Extract security notes
-            notes_section = re.search(r'Security Notes?:(.*?)(?=Security Features?:|Score Explanation:|Refinement Suggestions?:|Implementation|$)', final_message, re.DOTALL | re.IGNORECASE)
+            notes_section = re.search(
+                r'###?\s*Security Notes?:(.*?)(?=###?\s*Security Features?:|###?\s*Score Explanation:|###?\s*Refinement Suggestions?:|$)', 
+                final_message, 
+                re.DOTALL | re.IGNORECASE
+            )
             if notes_section:
                 notes_text = notes_section.group(1)
-                security_notes = [line.strip('- ').strip() for line in notes_text.split('\n') if line.strip() and line.strip().startswith('-')]
+                security_notes = [
+                    line.strip('- ').strip() 
+                    for line in notes_text.split('\n') 
+                    if line.strip() and (line.strip().startswith('-') or line.strip().startswith('•'))
+                ]
             
             # Extract security features
-            features_section = re.search(r'Security Features?:(.*?)(?=Security Notes?:|Score Explanation:|Refinement Suggestions?:|Implementation|$)', final_message, re.DOTALL | re.IGNORECASE)
+            features_section = re.search(
+                r'###?\s*Security Features?:(.*?)(?=###?\s*Security Notes?:|###?\s*Score Explanation:|###?\s*Refinement Suggestions?:|$)', 
+                final_message, 
+                re.DOTALL | re.IGNORECASE
+            )
             if features_section:
                 features_text = features_section.group(1)
-                security_features = [line.strip('- ').strip() for line in features_text.split('\n') if line.strip() and line.strip().startswith('-')]
+                security_features = [
+                    line.strip('- ').strip() 
+                    for line in features_text.split('\n') 
+                    if line.strip() and (line.strip().startswith('-') or line.strip().startswith('•'))
+                ]
             
             # Extract score explanation
-            score_exp_section = re.search(r'Score Explanation:(.*?)(?=Security Features?:|Security Notes?:|Refinement Suggestions?:|$)', final_message, re.DOTALL | re.IGNORECASE)
+            score_exp_section = re.search(
+                r'###?\s*Score Explanation:(.*?)(?=###?\s*Security Features?:|###?\s*Security Notes?:|###?\s*Refinement Suggestions?:|$)', 
+                final_message, 
+                re.DOTALL | re.IGNORECASE
+            )
             if score_exp_section:
                 score_explanation = score_exp_section.group(1).strip()
             
             # Extract explanation (Policy Explanation section ONLY)
-            # Match from "Policy Explanation" until "Security Score" (with or without ###)
-            exp_match = re.search(r'###?\s*Policy Explanation[:\s]*(.*?)(?=###?\s*Security Score:|Security Score:)', final_message, re.DOTALL | re.IGNORECASE)
+            exp_match = re.search(
+                r'###?\s*Policy Explanation[:\s]*\n(.*?)(?=###?\s*Security Score:|###?\s*Security Features:|$)', 
+                final_message, 
+                re.DOTALL | re.IGNORECASE
+            )
             if exp_match:
                 explanation = exp_match.group(1).strip()
+                # Remove any leading intro phrases
+                explanation = re.sub(r'^.*?(?:I\'ll create|Here\'s|Let me).*?\n', '', explanation, flags=re.IGNORECASE, count=1)
+                logging.info(f"✅ Extracted explanation: {len(explanation)} chars")
             else:
                 explanation = ""
-            
-            # Remove any remaining intro phrases
-            explanation = re.sub(r'^.*?(?:function|policy|Lambda):\s*', '', explanation, flags=re.IGNORECASE | re.DOTALL, count=1)
-            explanation = re.sub(r"^I'll create.*?\.\s*", '', explanation, flags=re.IGNORECASE)
-            explanation = explanation.strip()
-        
+                logging.warning("❌ No Policy Explanation section found")
             
             # Build conversation history - clean up agent responses
             conversation_history = []
             for msg in conversations[conversation_id]:
                 content = msg["content"]
-    
-                # For assistant messages, remove JSON blocks and structured sections
+
+                # For assistant messages, remove structured sections but KEEP the JSON policy
                 if msg["role"] == "assistant":
-                    # Remove JSON code blocks (with or without language specifier)
-                    content = re.sub(r'```json[\s\S]*?```', '', content)
-                    content = re.sub(r'```[\s\S]*?```', '', content)
+                    # Check if this message contains a policy
+                    has_policy_json = bool(re.search(r'```json[\s\S]*?```', content))
                     
-                    # Remove raw JSON objects (not in code blocks) - matches {"Version": ...}
-                    content = re.sub(r'\{[\s\S]*?"Version"[\s\S]*?\}', '', content)
-                    
-                    # Remove everything after first ### heading (Policy Explanation, Security Score, etc.)
-                    if '###' in content:
-                        content = content.split('###')[0]
-                    
+                    if has_policy_json:
+                        # Extract ONLY the JSON code block for conversation history
+                        json_match = re.search(r'(```json[\s\S]*?```)', content)
+                        if json_match:
+                            content = json_match.group(1)
+                    else:
+                        # For non-policy messages (questions), remove JSON and structured sections
+                        content = re.sub(r'```json[\s\S]*?```', '', content)
+                        content = re.sub(r'```[\s\S]*?```', '', content)
+                        content = re.sub(r'\{[\s\S]*?"Version"[\s\S]*?\}', '', content)
+                        
+                        # Remove everything from "### Policy Explanation" onwards
+                        policy_exp_start = re.search(r'###?\s*Policy Explanation', content, re.IGNORECASE)
+                        if policy_exp_start:
+                            content = content[:policy_exp_start.start()]
+        
                     # Clean up extra whitespace
                     content = ' '.join(content.split())
                     content = content.strip()
+                    
+                    # DEBUG: Log what we're keeping
+                    logging.info(f"📝 Conversation msg {msg['role']}: '{content[:100]}...'")
+        
                 conversation_history.append({  
                     "role": msg["role"],
                     "content": content,
                     "timestamp": msg["timestamp"]
                 })
 
-            # Extract refinement suggestions (numbered list after ### Refinement Suggestions)
+            # Extract refinement suggestions
             refinement_suggestions = []
-            suggestions_match = re.search(r'###?\s*Refinement Suggestions?[:\s]*(.*?)(?=###|$)', final_message, re.DOTALL | re.IGNORECASE)
+            suggestions_match = re.search(
+                r'###?\s*Refinement Suggestions?[:\s]*\n(.*?)(?=###|##|$)', 
+                final_message, 
+                re.DOTALL | re.IGNORECASE
+            )
             if suggestions_match:
                 suggestions_text = suggestions_match.group(1)
-                # Extract lines starting with - or numbered items
-                suggestions = re.findall(r'(?:^|\n)\s*[-•]\s*(.+?)(?=\n|$)', suggestions_text, re.MULTILINE)
+                # Extract lines starting with -, •, or *, or numbered items
+                suggestions = re.findall(r'(?:^|\n)\s*[-•*]\s*(.+?)(?=\n|$)', suggestions_text, re.MULTILINE)
                 if not suggestions:
+                    # Try numbered format
                     suggestions = re.findall(r'(?:^|\n)\s*\d+\.\s*(.+?)(?=\n|$)', suggestions_text, re.MULTILINE)
                 refinement_suggestions = [s.strip() for s in suggestions if s.strip() and len(s.strip()) > 10]
+                logging.info(f"✅ Extracted {len(refinement_suggestions)} refinement suggestions")
+            else:
+                logging.warning("❌ No Refinement Suggestions section found")
 
             # If this is a question (no policy), clear the explanation
             if is_question:
@@ -236,6 +307,7 @@ async def generate(request: GenerationRequest):
             logging.info(f"   ├─ security_score: {security_score}")
             logging.info(f"   ├─ security_notes: {len(security_notes)} items")
             logging.info(f"   ├─ security_features: {len(security_features)} items")
+            logging.info(f"   ├─ refinement_suggestions: {len(refinement_suggestions)} items")
             logging.info(f"   └─ conversation_history: {len(conversation_history)} messages")
             
             return response

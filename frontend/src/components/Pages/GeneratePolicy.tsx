@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Shield, Send, RefreshCw, User, Bot, MessageSquare, Lock, ArrowRight, CheckCircle, ChevronDown, ChevronUp, AlertCircle, Download, Copy, Sparkles } from 'lucide-react';
+import { Shield, Send, RefreshCw, User, Bot, MessageSquare, Lock, ArrowRight, CheckCircle, ChevronDown, ChevronUp, AlertCircle, Download, Copy, Sparkles, Info } from 'lucide-react';
 import { generatePolicy, sendFollowUp } from '../../services/api';
 import { GeneratePolicyResponse, ChatMessage } from '../../types';
 
@@ -81,7 +81,6 @@ const GeneratePolicy: React.FC = () => {
         restrictive,
         compliance
       });
-      console.log('🔍 RECEIVED EXPLANATION:', result.explanation);  // ADD THIS
       setResponse(result);
       setConversationId(result.conversation_id || null);
     } catch (err) {
@@ -322,7 +321,7 @@ const GeneratePolicy: React.FC = () => {
                 <button
                   type="submit"
                   disabled={loading || !followUpMessage.trim()}
-                  className="w-full bg-gradient-to-r from-orange-600 via-pink-500 to-purple-600 hover:from-orange-700 hover:via-pink-600 hover:to-purple-700 text-white py-4 px-6 rounded-xl font-semibold disabled:opacity-50 transition-all shadow-lg shadow-purple-500/25 flex items-center justify-center space-x-2"
+                  className="w-full bg-gradient-to-r from-orange-600 via-pink-500 to-purple-600 hover:from-orange-700 hover:via-pink-600 hover:to-purple-700 text-white py-4 px-6 rounded-xl font-semibold disabled:opacity-50 transition-all shadow-lg shadow-purple-500/25 hover:shadow-xl hover:shadow-purple-500/40 flex items-center justify-center space-x-2 sm:space-x-3 group"
                 >
                   {loading ? (
                     <>
@@ -342,7 +341,7 @@ const GeneratePolicy: React.FC = () => {
             {/* Quick Tips - SEPARATE BOX */}
             <div className="bg-purple-500/10 backdrop-blur-xl border border-purple-500/30 rounded-2xl p-6 mb-6">
               <div className="flex items-start space-x-3">
-                <Sparkles className="w-5 h-5 text-purple-400 mt-0.5 flex-shrink-0" />
+                <Sparkles className="w-5 h-5 text-purple-400" />
                 <div>
                   <h4 className="text-purple-300 font-semibold mb-2">Quick Tips</h4>
                   <ul className="space-y-1 text-slate-400 text-sm">
@@ -389,10 +388,9 @@ const GeneratePolicy: React.FC = () => {
             </button>
           </div>
 
-
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
             {/* Security Score - SEPARATE BOX (Full Width) */}
-            <div className="lg:col-span-3">
+            <div className="lg:col-span-12">
               <div className="bg-gradient-to-br from-slate-900/50 to-slate-800/50 backdrop-blur-xl border border-purple-500/20 rounded-2xl p-8">
                 <div className="flex items-center justify-between mb-6">
                   <div>
@@ -426,7 +424,7 @@ const GeneratePolicy: React.FC = () => {
             </div>
 
             {/* LEFT COLUMN - Main Content */}
-            <div className="lg:col-span-2 space-y-6">
+            <div className="lg:col-span-8 space-y-6">
               {/* IAM Policy Box */}
               <div>
                 <h3 className="text-white text-xl font-semibold mb-4">IAM Policy</h3>
@@ -466,7 +464,7 @@ const GeneratePolicy: React.FC = () => {
                       </button>
                     </div>
                   </div>
-                  <div className="p-6 overflow-x-auto">
+                  <div className="p-6 overflow-x-auto max-h-[500px]">
                     <pre className="text-sm text-slate-300 font-mono leading-relaxed">
                       {JSON.stringify(response.policy, null, 2)}
                     </pre>
@@ -508,10 +506,15 @@ const GeneratePolicy: React.FC = () => {
                       <button
                         key={index}
                         onClick={() => setFollowUpMessage(suggestion)}
-                        className="px-4 py-3 bg-slate-800/50 hover:bg-slate-700/50 border border-purple-500/30 hover:border-purple-500/50 rounded-lg text-sm text-slate-300 hover:text-white transition-all flex items-center space-x-3 group text-left"
+                        className="group px-4 py-3 bg-slate-800/50 hover:bg-purple-500/20 border border-purple-500/30 hover:border-purple-500/50 rounded-xl text-sm text-slate-300 hover:text-white transition-all flex items-center justify-between text-left"
                       >
-                        <ArrowRight className="w-4 h-4 text-purple-400 group-hover:translate-x-1 transition-transform flex-shrink-0" />
-                        <span>{suggestion}</span>
+                        <div className="flex items-center space-x-3">
+                          <div className="w-8 h-8 bg-purple-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                            <Sparkles className="w-4 h-4 text-purple-400" />
+                          </div>
+                          <span>{suggestion}</span>
+                        </div>
+                        <ArrowRight className="w-4 h-4 text-purple-400 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
                       </button>
                     ))}
                   </div>
@@ -520,7 +523,7 @@ const GeneratePolicy: React.FC = () => {
             </div>
 
             {/* RIGHT SIDEBAR */}
-            <div className="space-y-6">
+            <div className="lg:col-span-4 space-y-6">
               {/* Security Features */}
               {response.security_features && response.security_features.length > 0 && (
                 <div className="bg-green-500/5 backdrop-blur-xl border border-green-500/30 rounded-2xl p-6">
@@ -556,99 +559,214 @@ const GeneratePolicy: React.FC = () => {
                   </ul>
                 </div>
               )}
-
-              {/* Conversation History */}
-              {chatHistory && chatHistory.length > 0 && (
-                <div className="bg-slate-900/50 backdrop-blur-xl border border-slate-700/50 rounded-2xl overflow-hidden">
-                  <button
-                    onClick={() => setIsChatExpanded(!isChatExpanded)}
-                    className="w-full px-6 py-4 flex items-center justify-between hover:bg-slate-800/50 transition-all"
-                  >
-                    <div className="flex items-center space-x-3">
-                      <MessageSquare className="w-5 h-5 text-purple-400" />
-                      <span className="text-white font-semibold text-sm">History ({chatHistory.length})</span>
-                    </div>
-                    {isChatExpanded ? (
-                      <ChevronUp className="w-5 h-5 text-slate-400" />
-                    ) : (
-                      <ChevronDown className="w-5 h-5 text-slate-400" />
-                    )}
-                  </button>
-                  
-                  {isChatExpanded && (
-                    <div className="px-6 py-4 space-y-4 max-h-[600px] overflow-y-auto border-t border-slate-700/50">
-                      {chatHistory.map((msg, index) => (
-                        <div key={index} className={`flex items-start space-x-3 ${
-                          msg.role === 'user' ? 'justify-end' : 'justify-start'
-                        }`}>
-                          {msg.role === 'assistant' && (
-                            <div className="w-8 h-8 rounded-full bg-purple-500/20 flex items-center justify-center flex-shrink-0">
-                              <Bot className="w-4 h-4 text-purple-400" />
-                            </div>
-                          )}
-                          <div className={`max-w-[80%] rounded-xl px-4 py-3 ${
-                            msg.role === 'user'
-                              ? 'bg-gradient-to-r from-orange-600/20 to-pink-600/20 border border-orange-500/30'
-                              : 'bg-slate-800/50 border border-slate-700/50'
-                          }`}>
-                            <p className="text-sm text-slate-300 whitespace-pre-wrap">
-                              {msg.content}
-                            </p>
-                          </div>
-                          {msg.role === 'user' && (
-                            <div className="w-8 h-8 rounded-full bg-orange-500/20 flex items-center justify-center flex-shrink-0">
-                              <User className="w-4 h-4 text-orange-400" />
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
             </div>
           </div>
 
-                    {/* Policy Explanation - FULL WIDTH BELOW GRID */}
-                    <div className="mt-8 bg-slate-900/50 backdrop-blur-xl border border-purple-500/20 rounded-2xl p-8">
-            <h4 className="text-white text-lg font-semibold mb-6 flex items-center space-x-2">
-              <Shield className="w-5 h-5 text-purple-400" />
-              <span>Policy Explanation</span>
+          {/* Policy Explanation - IMPROVED VISUAL VERSION - FULL WIDTH */}
+          <div className="mt-8 bg-slate-900/50 backdrop-blur-xl border border-purple-500/20 rounded-2xl p-8">
+            <h4 className="text-white text-2xl font-bold mb-2 flex items-center space-x-2">
+              <Shield className="w-6 h-6 text-purple-400" />
+              <span>What This Policy Does</span>
             </h4>
-            <div className="space-y-6">
-              {response.explanation.split(/\n(?=\d+\.)/).filter(para => para.trim()).map((paragraph, index) => {
-                const match = paragraph.match(/^(\d+)\.\s*(.+?)\n\s*(.+)/s);
-                if (match) {
-                  const [, num, title, content] = match;
+            <p className="text-slate-400 mb-8">Quick overview of each permission granted</p>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {(() => {
+                if (!response.explanation || response.explanation.trim() === '') {
                   return (
-                    <div key={index} className="bg-slate-800/30 rounded-xl p-6 border border-slate-700/30">
-                      <div className="flex items-start space-x-3 mb-3">
-                        <div className="flex-shrink-0 w-8 h-8 bg-purple-500/20 rounded-lg flex items-center justify-center">
-                          <span className="text-purple-400 font-bold">{num}</span>
-                        </div>
-                        <h5 className="text-white font-semibold text-lg">{title.trim()}</h5>
-                      </div>
-                      <div className="ml-11 space-y-2 text-slate-300 text-sm leading-relaxed">
-                        {content.split(/\n\s*/).filter(line => line.trim()).map((line, i) => (
-                          <div key={i} className="flex items-start space-x-2">
-                            {line.includes(':') ? (
-                              <>
-                                <span className="font-semibold text-purple-300">{line.split(':')[0]}:</span>
-                                <span>{line.split(':').slice(1).join(':').trim()}</span>
-                              </>
-                            ) : (
-                              <span>{line}</span>
-                            )}
-                          </div>
-                        ))}
-                      </div>
+                    <div className="col-span-2 text-slate-400 text-center py-8">
+                      No detailed explanation available
                     </div>
                   );
                 }
-                return null;
-              })}
+
+                const sections = response.explanation
+                  .split(/(?=^\d+\.\s+)/m)
+                  .filter(section => section.trim());
+                
+                if (sections.length === 0) {
+                  return (
+                    <div className="col-span-2 text-slate-400 text-center py-8">
+                      Unable to parse explanation
+                    </div>
+                  );
+                }
+
+                // Helper function to get icon based on title
+                const getIcon = (title: string) => {
+                  const lowerTitle = title.toLowerCase();
+                  if (lowerTitle.includes('s3') || lowerTitle.includes('bucket')) {
+                    return '🪣';
+                  }
+                  if (lowerTitle.includes('dynamo')) {
+                    return '🗄️';
+                  }
+                  if (lowerTitle.includes('cloudwatch') || lowerTitle.includes('log')) {
+                    return '📊';
+                  }
+                  if (lowerTitle.includes('lambda')) {
+                    return '⚡';
+                  }
+                  return '🔒';
+                };
+
+                return sections.map((section, index) => {
+                  const match = section.match(/^(\d+)\.\s+(.+?)(?:\n|$)([\s\S]*)/);
+                  if (!match) return null;
+                  
+                  const [, num, title, content] = match;
+                  
+                  // Parse content into key-value pairs
+                  const details: { [key: string]: string } = {};
+                  const lines = content.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+                  
+                  lines.forEach(line => {
+                    const colonIndex = line.indexOf(':');
+                    if (colonIndex > 0 && colonIndex < 30) {
+                      const key = line.substring(0, colonIndex).replace(/^-\s*/, '').trim();
+                      const value = line.substring(colonIndex + 1).trim();
+                      details[key] = value;
+                    }
+                  });
+                  
+                  return (
+                    <div key={index} className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 rounded-2xl p-6 border border-slate-700/50 hover:border-purple-500/30 transition-all group">
+                      {/* Header */}
+                      <div className="flex items-start space-x-4 mb-4">
+                        <div className="text-4xl">{getIcon(title)}</div>
+                        <div className="flex-1">
+                          <div className="flex items-center space-x-2 mb-1">
+                            <span className="text-xs font-bold text-purple-400">STATEMENT {num}</span>
+                          </div>
+                          <h5 className="text-white font-bold text-lg leading-tight">{title.trim()}</h5>
+                        </div>
+                      </div>
+                      
+                      {/* Key Details */}
+                      <div className="space-y-3">
+                        {details['Permission'] && (
+                          <div className="bg-slate-900/50 rounded-lg p-3">
+                            <div className="text-xs text-purple-300 font-semibold mb-1">Permission</div>
+                            <div className="text-sm text-slate-200 font-mono break-all">{details['Permission']}</div>
+                          </div>
+                        )}
+                        
+                        {details['Purpose'] && (
+                          <div>
+                            <div className="text-xs text-slate-400 font-semibold mb-1">What it does</div>
+                            <div className="text-sm text-slate-300">{details['Purpose']}</div>
+                          </div>
+                        )}
+                        
+                        {details['Security'] && (
+                          <div className="flex items-start space-x-2 bg-green-500/5 border border-green-500/20 rounded-lg p-3">
+                            <CheckCircle className="w-4 h-4 text-green-400 mt-0.5 flex-shrink-0" />
+                            <div className="text-xs text-green-300">{details['Security']}</div>
+                          </div>
+                        )}
+                        
+                        {details['Why this ARN'] && (
+                          <div className="text-xs text-slate-500 italic">
+                            💡 {details['Why this ARN']}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                }).filter(Boolean);
+              })()}
+            </div>
+            
+            {/* Quick Summary */}
+            <div className="mt-6 bg-purple-500/5 border border-purple-500/20 rounded-xl p-4 flex items-start space-x-3">
+              <Info className="w-5 h-5 text-purple-400 mt-0.5 flex-shrink-0" />
+              <div className="flex-1">
+                <div className="text-sm font-semibold text-purple-300 mb-1">Summary</div>
+                <div className="text-sm text-slate-300">
+                  This policy grants secure access with minimum necessary permissions. All actions are scoped to specific resources following AWS best practices.
+                </div>
+              </div>
             </div>
           </div>
+
+          {/* Conversation History - FULL WIDTH BELOW GRID */}
+          {chatHistory && chatHistory.length > 0 && (
+            <div className="mt-8 bg-slate-900/50 backdrop-blur-xl border border-slate-700/50 rounded-2xl overflow-hidden">
+              <button
+                onClick={() => setIsChatExpanded(!isChatExpanded)}
+                className="w-full px-6 py-4 flex items-center justify-between hover:bg-slate-800/50 transition-all"
+              >
+                <div className="flex items-center space-x-3">
+                  <MessageSquare className="w-5 h-5 text-purple-400" />
+                  <span className="text-white font-semibold text-sm">Conversation ({chatHistory.length} messages)</span>
+                </div>
+                {isChatExpanded ? (
+                  <ChevronUp className="w-5 h-5 text-slate-400" />
+                ) : (
+                  <ChevronDown className="w-5 h-5 text-slate-400" />
+                )}
+              </button>
+              
+              {isChatExpanded && (
+                <div className="px-6 py-6 space-y-4 max-h-[600px] overflow-y-auto border-t border-slate-700/50 bg-slate-800/20">
+                  {chatHistory.map((msg, index) => (
+                    <div key={index} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                      <div className={`flex items-start space-x-3 ${msg.content.startsWith('```json') ? 'w-full' : 'max-w-[70%]'} ${msg.role === 'user' ? 'flex-row-reverse space-x-reverse' : ''}`}>
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
+                          msg.role === 'user' 
+                            ? 'bg-gradient-to-br from-orange-500/20 to-pink-500/20 border border-orange-500/30' 
+                            : 'bg-gradient-to-br from-purple-500/20 to-pink-500/20 border border-purple-500/30'
+                        }`}>
+                          {msg.role === 'user' ? (
+                            <User className="w-5 h-5 text-orange-400" />
+                          ) : (
+                            <Bot className="w-5 h-5 text-purple-400" />
+                          )}
+                        </div>
+                        
+                        <div className={`flex-1 rounded-2xl px-5 py-4 ${
+                          msg.role === 'user'
+                            ? 'bg-gradient-to-br from-orange-600/20 to-pink-600/20 border border-orange-500/30'
+                            : 'bg-slate-800/80 border border-slate-700/50'
+                        }`}>
+                          <div className="flex items-center space-x-2 mb-2">
+                            <span className={`text-xs font-semibold ${
+                              msg.role === 'user' ? 'text-orange-300' : 'text-purple-300'
+                            }`}>
+                              {msg.role === 'user' ? 'You' : 'Aegis AI'}
+                            </span>
+                            <span className="text-xs text-slate-500">•</span>
+                            <span className="text-xs text-slate-500">now</span>
+                          </div>
+                          {/* Check if content is JSON code block */}
+                          {msg.content.startsWith('```json') ? (
+                            <div className="bg-slate-900/70 rounded-xl p-4 overflow-x-auto border border-slate-700/50">
+                              <pre className="text-[10px] text-slate-300 font-mono leading-relaxed whitespace-pre">
+                                {(() => {
+                                  try {
+                                    const jsonStr = msg.content.replace(/```json\n?/, '').replace(/\n?```$/, '').trim();
+                                    const parsed = JSON.parse(jsonStr);
+                                    return JSON.stringify(parsed, null, 2);
+                                  } catch (e) {
+                                    // If parsing fails, show as-is
+                                    return msg.content.replace(/```json\n?/, '').replace(/\n?```$/, '').trim();
+                                  }
+                                })()}
+                              </pre>
+                            </div>
+                          ) : (
+                            <p className="text-sm text-slate-200 leading-relaxed whitespace-pre-wrap break-words">
+                              {msg.content}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>
