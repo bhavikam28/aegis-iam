@@ -28,9 +28,15 @@ class GenerationRequest(BaseModel):
     conversation_id: Optional[str] = None
     is_followup: bool = False
 
+class AWSCredentials(BaseModel):
+    access_key: str
+    secret_key: str
+    region: str = "us-east-1"
+
 class ValidationRequest(BaseModel):
     policy_json: Optional[str] = None
     role_arn: Optional[str] = None
+    aws_credentials: Optional[AWSCredentials] = None
     compliance_frameworks: Optional[List[str]] = ["general"]
 
 conversations: Dict[str, List[Dict]] = {}
