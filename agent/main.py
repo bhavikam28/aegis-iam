@@ -3,6 +3,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List, Dict
 from policy_agent import PolicyAgent
+from policy_agent import PolicyAgent
+from validator_agent import ValidatorAgent
 import uuid
 import json
 import re
@@ -26,8 +28,14 @@ class GenerationRequest(BaseModel):
     conversation_id: Optional[str] = None
     is_followup: bool = False
 
+class ValidationRequest(BaseModel):
+    policy_json: Optional[str] = None
+    role_arn: Optional[str] = None
+    compliance_frameworks: Optional[List[str]] = ["general"]
+
 conversations: Dict[str, List[Dict]] = {}
 aegis_agent = PolicyAgent()
+validator_agent = ValidatorAgent()
 
 @app.get("/")
 def health():
@@ -342,3 +350,116 @@ def clear_conversation(conversation_id: str):
         del conversations[conversation_id]
         return {"message": "Conversation cleared"}
     return {"error": "Conversation not found"}
+
+
+@app.post("/validate")
+async def validate_policy(request: ValidationRequest):
+    """
+    Validate an IAM policy for security issues and compliance
+    """
+    try:
+        if not request.policy_json and not request.role_arn:
+            return {
+                "error": "Either policy_json or role_arn must be provided",
+                "success": False
+            }
+        
+        policy_to_validate = request.policy_json
+        
+        # If role ARN provided, fetch the policy from AWS
+        if request.role_arn and not policy_to_validate:
+            try:
+                import boto3
+                iam = boto3.client('iam')
+                
+                # Extract role name from ARN
+                role_name = request.role_arn.split('/')[-1]
+                
+                # Get role
+                response = iam.get_role(RoleName=role_name)
+                
+                # Get attached policies
+                attached_policies = iam.list_attached_role_policies(RoleName=role_name)
+                
+                if attached_policies['AttachedPolicies']:
+                    # Get first attached policy
+                    policy_arn = attached_policies['AttachedPolicies'][0]['PolicyArn']
+                    policy_version = iam.get_policy(PolicyArn=policy_arn)
+                    policy_document = iam.get_policy_version(
+                        PolicyArn=policy_arn,
+                        VersionId=policy_version['Policy']['DefaultVersionId']
+                    )
+                    policy_to_validate = json.dumps(policy_document['PolicyVersion']['Document'])
+                else:
+                    # Try inline policies
+                    inline_policies = iam.list_role_policies(RoleName=role_name)
+                    if inline_policies['PolicyNames']:
+                        policy_name = inline_policies['PolicyNames'][0]
+                        policy_doc = iam.get_role_policy(RoleName=role_name, PolicyName=policy_name)
+                        policy_to_validate = json.dumps(policy_doc['PolicyDocument'])
+                
+                if not policy_to_validate:
+                    return {
+                        "error": f"No policies found for role {role_name}",
+                        "success": False
+                    }
+                    
+            except Exception as e:
+                logging.error(f"Failed to fetch role policy: {str(e)}")
+                return {
+                    "error": f"Failed to fetch policy from AWS: {str(e)}",
+                    "success": False
+                }
+        
+        # Validate the policy
+        async with asyncio.timeout(45):
+            logging.info(f"🔍 Starting policy validation...")
+            logging.info(f"   Compliance frameworks: {request.compliance_frameworks}")
+            
+            result = validator_agent.validate_policy(
+                policy_json=policy_to_validate,
+                compliance_frameworks=request.compliance_frameworks
+            )
+            
+            if not result.get("success"):
+                return {
+                    "error": result.get("error", "Validation failed"),
+                    "success": False
+                }
+            
+            validation_data = result.get("validation", {})
+            
+            # Extract structured data
+            risk_score = validation_data.get("risk_score", 50)
+            findings = validation_data.get("findings", [])
+            compliance_status = validation_data.get("compliance_status", {})
+            recommendations = validation_data.get("security_improvements", [])
+            quick_wins = validation_data.get("quick_wins", [])
+            
+            logging.info(f"✅ Validation completed:")
+            logging.info(f"   ├─ Risk Score: {risk_score}/100")
+            logging.info(f"   ├─ Findings: {len(findings)}")
+            logging.info(f"   └─ Compliance Checks: {len(compliance_status)}")
+            
+            return {
+                "success": True,
+                "risk_score": risk_score,
+                "findings": findings,
+                "compliance_status": compliance_status,
+                "recommendations": recommendations,
+                "quick_wins": quick_wins,
+                "raw_response": result.get("raw_response", "")
+            }
+            
+    except asyncio.TimeoutError:
+        logging.error("⏱️ Validation timed out after 45 seconds")
+        return {
+            "error": "Validation request timed out. Please try again.",
+            "success": False
+        }
+    except Exception as e:
+        logging.exception("❌ Error in validate endpoint")
+        return {
+            "error": str(e),
+            "success": False
+        }

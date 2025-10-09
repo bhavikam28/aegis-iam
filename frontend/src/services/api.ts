@@ -144,12 +144,38 @@ export const clearConversation = async (conversationId: string) => {
   return response.json();
 };
 
-// These functions use mock data and do not need the API_URL
 export const validatePolicy = async (request: ValidatePolicyRequest): Promise<ValidatePolicyResponse> => {
-  await delay(1500);
-  const response = mockValidatePolicyResponse(request);
-  return response;
+  const response = await fetch(`${API_URL}/validate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      policy_json: request.policy_json || null,
+      role_arn: request.role_arn || null,
+      compliance_frameworks: ['pci_dss', 'hipaa', 'sox', 'gdpr', 'cis']
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Validation failed: ${response.status} - ${errorText}`);
+  }
+
+  const backendResponse = await response.json();
+  
+  if (!backendResponse.success) {
+    throw new Error(backendResponse.error || 'Validation failed');
+  }
+
+  return {
+    findings: backendResponse.findings || [],
+    risk_score: backendResponse.risk_score || 50,
+    security_issues: backendResponse.findings?.map((f: any) => f.description) || [],
+    recommendations: backendResponse.recommendations || [],
+    compliance_status: backendResponse.compliance_status || {},
+    quick_wins: backendResponse.quick_wins || []
+  };
 };
+
 
 export const analyzeHistory = async (request: AnalyzeHistoryRequest): Promise<AnalyzeHistoryResponse> => {
   await delay(3000);

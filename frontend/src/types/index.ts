@@ -73,6 +73,7 @@ export interface ValidatePolicyResponse {
   security_issues: string[];
   recommendations: string[];
   compliance_status: Record<string, ComplianceFramework>;
+  quick_wins?: string[];
 }
 
 export interface AnalyzeHistoryRequest {
