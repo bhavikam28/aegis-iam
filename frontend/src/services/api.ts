@@ -171,6 +171,16 @@ export const validatePolicy = async (request: ValidatePolicyRequest): Promise<Va
     throw new Error(backendResponse.error || 'Validation failed');
   }
 
+  // Extract agent reasoning from raw response if available
+  let agentReasoning = '';
+  if (backendResponse.raw_response) {
+    // Look for " Agent Reasoning" section in the raw response
+    const reasoningMatch = backendResponse.raw_response.match(/ Agent Reasoning[\s\S]*?(?=##|$)/);
+    if (reasoningMatch) {
+      agentReasoning = reasoningMatch[0].trim();
+    }
+  }
+
   return {
     findings: backendResponse.findings || [],
     risk_score: backendResponse.risk_score || 50,
@@ -179,7 +189,8 @@ export const validatePolicy = async (request: ValidatePolicyRequest): Promise<Va
     compliance_status: backendResponse.compliance_status || {},
     quick_wins: backendResponse.quick_wins || [],
     audit_summary: backendResponse.audit_summary || null,
-    top_risks: backendResponse.top_risks || []
+    top_risks: backendResponse.top_risks || [],
+    agent_reasoning: agentReasoning
   };
 };
 
@@ -240,6 +251,16 @@ export const performAutonomousAudit = async (
     throw new Error(result.error || 'Audit failed');
   }
 
+  // Extract agent reasoning from raw response if available
+  let agentReasoning = '';
+  if (result.raw_response) {
+    // Look for " Agent Reasoning" section in the raw response
+    const reasoningMatch = result.raw_response.match(/ Agent Reasoning[\s\S]*?(?=##|$)/);
+    if (reasoningMatch) {
+      agentReasoning = reasoningMatch[0].trim();
+    }
+  }
+
   // Convert audit response to ValidatePolicyResponse format
   return {
     findings: result.findings || [],
@@ -249,8 +270,81 @@ export const performAutonomousAudit = async (
     compliance_status: result.compliance_status || {},
     quick_wins: result.quick_wins || [],
     audit_summary: result.audit_summary || null,
-    top_risks: result.top_risks || []
+    top_risks: result.top_risks || [],
+    agent_reasoning: agentReasoning
   };
+};
+
+// ============================================
+// STREAMING AUDIT (SSE) - NEW!
+// ============================================
+
+export interface AuditProgressEvent {
+  type: 'start' | 'progress' | 'thinking' | 'complete' | 'error';
+  message: string;
+  progress: number;
+  result?: any;
+}
+
+export const performStreamingAudit = (
+  request: AuditRequest = {},
+  onProgress: (event: AuditProgressEvent) => void
+): Promise<ValidatePolicyResponse> => {
+  return new Promise((resolve, reject) => {
+    const frameworks = request.compliance_frameworks || ['pci_dss', 'hipaa', 'sox', 'gdpr', 'cis'];
+    const url = `${API_URL}/audit/stream?compliance_frameworks=${frameworks.join(',')}`;
+    
+    const eventSource = new EventSource(url);
+    
+    eventSource.onmessage = (event) => {
+      try {
+        const data: AuditProgressEvent = JSON.parse(event.data);
+        
+        // Call progress callback
+        onProgress(data);
+        
+        // If complete, extract result and resolve
+        if (data.type === 'complete' && data.result) {
+          eventSource.close();
+          
+          // Extract agent reasoning
+          let agentReasoning = '';
+          if (data.result.raw_response) {
+            const reasoningMatch = data.result.raw_response.match(/ Agent Reasoning[\s\S]*?(?=##|$)/);
+            if (reasoningMatch) {
+              agentReasoning = reasoningMatch[0].trim();
+            }
+          }
+          
+          resolve({
+            findings: data.result.findings || [],
+            risk_score: data.result.risk_score || 50,
+            security_issues: data.result.findings?.map((f: any) => f.description) || [],
+            recommendations: data.result.recommendations || [],
+            compliance_status: data.result.compliance_status || {},
+            quick_wins: data.result.quick_wins || [],
+            audit_summary: data.result.audit_summary || null,
+            top_risks: data.result.top_risks || [],
+            agent_reasoning: agentReasoning
+          });
+        }
+        
+        // If error, reject
+        if (data.type === 'error') {
+          eventSource.close();
+          reject(new Error(data.message));
+        }
+      } catch (error) {
+        console.error('Error parsing SSE event:', error);
+      }
+    };
+    
+    eventSource.onerror = (error) => {
+      console.error('SSE error:', error);
+      eventSource.close();
+      reject(new Error('Stream connection failed'));
+    };
+  });
 };
 
 // ============================================

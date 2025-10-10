@@ -89,10 +89,11 @@ export interface ValidatePolicyResponse {
   risk_score: number;
   security_issues: string[];
   recommendations: string[];
-  compliance_status: Record<string, ComplianceFramework>;
-  quick_wins?: string[];
+  compliance_status: Record<string, any>;
+  quick_wins: string[];
   audit_summary?: AuditSummary | null;
-  top_risks?: string[];
+  top_risks?: any[];
+  agent_reasoning?: string; // NEW: Agent's thinking process and decision-making
 }
 
 export interface AnalyzeHistoryRequest {

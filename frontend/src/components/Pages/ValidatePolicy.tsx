@@ -1,7 +1,149 @@
 import React, { useState } from 'react';
 import { Search, AlertTriangle, XCircle, CheckCircle, Info, AlertCircle, Shield, Sparkles, Copy, Download, RefreshCw, Zap, Bot } from 'lucide-react';
-import { validatePolicy, performAutonomousAudit } from '../../services/api';
-import { SecurityFinding, ValidatePolicyRequest, ValidatePolicyResponse } from '../../types';
+
+// Type definitions
+interface SecurityFinding {
+  id: string;
+  severity: 'Critical' | 'High' | 'Medium' | 'Low';
+  type: string;
+  title: string;
+  description: string;
+  recommendation: string;
+  affectedStatement?: number;
+}
+
+interface ComplianceFramework {
+  name: string;
+  status: 'Compliant' | 'NonCompliant' | 'Partial';
+  gaps?: string[];
+}
+
+interface AuditSummary {
+  total_roles: number;
+  roles_analyzed: number;
+  total_policies: number;
+  total_findings: number;
+  critical_findings: number;
+  high_findings: number;
+  medium_findings: number;
+  low_findings: number;
+}
+
+interface ValidatePolicyRequest {
+  policy_json?: string;
+  role_arn?: string;
+  compliance_frameworks?: string[];
+}
+
+interface AuditProgressEvent {
+  type: 'thinking' | 'progress' | 'complete' | 'error';
+  message: string;
+  progress: number;
+}
+
+interface ValidatePolicyResponse {
+  findings: SecurityFinding[];
+  risk_score: number;
+  security_issues: string[];
+  recommendations: string[];
+  compliance_status: Record<string, ComplianceFramework>;
+  quick_wins?: string[];
+  audit_summary?: AuditSummary | null;
+  top_risks?: string[];
+  agent_reasoning?: string;
+}
+
+// API functions (inline)
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
+const validatePolicy = async (request: ValidatePolicyRequest): Promise<ValidatePolicyResponse> => {
+  const mode = request.policy_json || request.role_arn ? 'quick' : 'audit';
+  
+  const response = await fetch(`${API_URL}/validate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      policy_json: request.policy_json || null,
+      role_arn: request.role_arn || null,
+      compliance_frameworks: request.compliance_frameworks || ['pci_dss', 'hipaa', 'sox', 'gdpr', 'cis'],
+      mode: mode
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Validation failed: ${response.status} - ${errorText}`);
+  }
+
+  const backendResponse = await response.json();
+  
+  if (!backendResponse.success) {
+    throw new Error(backendResponse.error || 'Validation failed');
+  }
+
+  return {
+    findings: backendResponse.findings || [],
+    risk_score: backendResponse.risk_score || 50,
+    security_issues: backendResponse.findings?.map((f: any) => f.description) || [],
+    recommendations: backendResponse.recommendations || [],
+    compliance_status: backendResponse.compliance_status || {},
+    quick_wins: backendResponse.quick_wins || [],
+    audit_summary: backendResponse.audit_summary || null,
+    top_risks: backendResponse.top_risks || [],
+    agent_reasoning: backendResponse.agent_reasoning || backendResponse.raw_response || null
+  };
+};
+
+const performStreamingAudit = async (
+  request: { compliance_frameworks?: string[] },
+  onProgress: (event: AuditProgressEvent) => void
+): Promise<ValidatePolicyResponse> => {
+  const response = await fetch(`${API_URL}/audit`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      compliance_frameworks: request.compliance_frameworks || ['pci_dss', 'hipaa', 'sox', 'gdpr', 'cis']
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Audit failed: ${response.status} - ${errorText}`);
+  }
+
+  const result = await response.json();
+  
+  if (!result.success) {
+    throw new Error(result.error || 'Audit failed');
+  }
+
+  // Simulate progress updates for better UX
+  onProgress({ type: 'thinking', message: 'Starting autonomous audit...', progress: 10 });
+  await new Promise(resolve => setTimeout(resolve, 500));
+  
+  onProgress({ type: 'progress', message: 'Fetching IAM roles...', progress: 30 });
+  await new Promise(resolve => setTimeout(resolve, 500));
+  
+  onProgress({ type: 'progress', message: 'Analyzing policies...', progress: 60 });
+  await new Promise(resolve => setTimeout(resolve, 500));
+  
+  onProgress({ type: 'progress', message: 'Running compliance checks...', progress: 85 });
+  await new Promise(resolve => setTimeout(resolve, 500));
+  
+  onProgress({ type: 'complete', message: 'Audit complete!', progress: 100 });
+
+  return {
+    findings: result.findings || [],
+    risk_score: result.risk_score || 50,
+    security_issues: result.findings?.map((f: any) => f.description) || [],
+    recommendations: result.recommendations || [],
+    compliance_status: result.compliance_status || {},
+    quick_wins: result.quick_wins || [],
+    audit_summary: result.audit_summary || null,
+    top_risks: result.top_risks || [],
+    agent_reasoning: result.agent_reasoning || result.raw_response || null
+  };
+};
 
 type ValidationMode = 'quick' | 'audit';
 type InputType = 'policy' | 'arn';
@@ -19,6 +161,7 @@ const ValidatePolicy: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [auditProgress, setAuditProgress] = useState<AuditProgressEvent[]>([]);
 
   const handleCopy = async (text: string) => {
     await navigator.clipboard.writeText(text);
@@ -54,7 +197,6 @@ const ValidatePolicy: React.FC = () => {
     setResponse(null);
 
     try {
-      // Call autonomous audit endpoint - uses MCP servers with system AWS credentials
       const result = await performAutonomousAudit({
         compliance_frameworks: ['pci_dss', 'hipaa', 'sox', 'gdpr', 'cis']
       });
@@ -100,25 +242,24 @@ const ValidatePolicy: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-purple-950/20 to-slate-950">
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
       {/* Animated Background */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-20 right-20 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl animate-pulse-slow"></div>
-        <div className="absolute bottom-20 left-20 w-96 h-96 bg-pink-500/10 rounded-full blur-3xl animate-pulse-slow" style={{ animationDelay: '2s' }}></div>
-        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-orange-500/5 rounded-full blur-3xl animate-pulse-slow" style={{ animationDelay: '4s' }}></div>
+        <div className="absolute top-20 right-20 w-[500px] h-[500px] bg-purple-500/10 rounded-full blur-3xl"></div>
+        <div className="absolute bottom-20 left-20 w-[500px] h-[500px] bg-pink-500/8 rounded-full blur-3xl"></div>
       </div>
 
       <div className="relative max-w-7xl mx-auto px-4 sm:px-8 py-12 sm:py-16">
         {!loading && !response && (
           <>
             {/* Header */}
-            <div className="mb-12">
-              <div className="inline-flex items-center space-x-2 bg-purple-500/10 border border-purple-500/30 rounded-full px-6 py-2 mb-6">
+            <div className="mb-16">
+              <div className="inline-flex items-center space-x-2 bg-gradient-to-r from-purple-500/10 via-pink-500/10 to-purple-500/10 border border-purple-500/30 rounded-full px-6 py-2 mb-6 backdrop-blur-sm">
                 <Sparkles className="w-4 h-4 text-purple-400" />
-                <span className="text-purple-300 text-sm font-medium">Security Analyst</span>
+                <span className="text-purple-300 text-sm font-medium">AI-Powered Security Analysis</span>
               </div>
               
-              <h1 className="text-5xl sm:text-6xl font-bold mb-6 leading-tight">
+              <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold mb-6 leading-tight">
                 <span className="text-white">Validate &</span>
                 <br />
                 <span className="bg-gradient-to-r from-orange-400 via-pink-400 to-purple-400 bg-clip-text text-transparent">
@@ -126,110 +267,233 @@ const ValidatePolicy: React.FC = () => {
                 </span>
               </h1>
               
-              <p className="text-lg sm:text-xl text-slate-300 max-w-3xl leading-relaxed">
-                Choose your analysis mode: Quick validation for single policies, or autonomous audit 
-                for comprehensive account-wide security assessment using MCP servers.
+              <p className="text-xl text-slate-300 max-w-3xl leading-relaxed">
+                Choose your security analysis mode: Quick validation for individual policies, or autonomous 
+                full-account audit powered by AI agents and MCP servers.
               </p>
             </div>
 
+            {/* What is Security Validation? Educational Section */}
+            <div className="max-w-5xl mx-auto mb-12">
+              <div className="bg-gradient-to-br from-slate-900/50 to-slate-800/50 backdrop-blur-xl border border-purple-500/20 rounded-3xl p-8 sm:p-10">
+                <div className="flex items-start space-x-4 mb-6">
+                  <div className="w-14 h-14 bg-gradient-to-br from-purple-500/20 to-pink-500/20 rounded-2xl flex items-center justify-center flex-shrink-0 border border-purple-500/30">
+                    <Shield className="w-7 h-7 text-purple-400" />
+                  </div>
+                  <div>
+                    <h3 className="text-2xl font-bold text-white mb-2">What is IAM Security Validation?</h3>
+                    <p className="text-slate-400 text-sm">Understanding the importance of security analysis</p>
+                  </div>
+                </div>
+
+                <div className="grid md:grid-cols-3 gap-6">
+                  <div className="bg-slate-800/30 rounded-2xl p-6 border border-slate-700/50">
+                    <div className="w-10 h-10 bg-orange-500/10 rounded-xl flex items-center justify-center mb-4 border border-orange-500/30">
+                      <Search className="w-5 h-5 text-orange-400" />
+                    </div>
+                    <h4 className="text-white font-semibold mb-2">Find Vulnerabilities</h4>
+                    <p className="text-slate-400 text-sm leading-relaxed">
+                      Identify overly permissive policies, privilege escalation risks, and security misconfigurations before attackers do.
+                    </p>
+                  </div>
+
+                  <div className="bg-slate-800/30 rounded-2xl p-6 border border-slate-700/50">
+                    <div className="w-10 h-10 bg-purple-500/10 rounded-xl flex items-center justify-center mb-4 border border-purple-500/30">
+                      <CheckCircle className="w-5 h-5 text-purple-400" />
+                    </div>
+                    <h4 className="text-white font-semibold mb-2">Ensure Compliance</h4>
+                    <p className="text-slate-400 text-sm leading-relaxed">
+                      Validate against PCI DSS, HIPAA, SOX, GDPR, and CIS benchmarks to meet regulatory requirements and industry standards.
+                    </p>
+                  </div>
+
+                  <div className="bg-slate-800/30 rounded-2xl p-6 border border-slate-700/50">
+                    <div className="w-10 h-10 bg-pink-500/10 rounded-xl flex items-center justify-center mb-4 border border-pink-500/30">
+                      <Shield className="w-5 h-5 text-pink-400" />
+                    </div>
+                    <h4 className="text-white font-semibold mb-2">Prevent Breaches</h4>
+                    <p className="text-slate-400 text-sm leading-relaxed">
+                      Proactively detect and fix security issues that could lead to data breaches, unauthorized access, or compliance violations.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-6 bg-purple-500/5 border border-purple-500/20 rounded-xl p-4 flex items-start space-x-3">
+                  <Info className="w-5 h-5 text-purple-400 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <p className="text-slate-300 text-sm leading-relaxed">
+                      <span className="font-semibold text-purple-300">Pro Tip:</span> Regular security validation helps you maintain least-privilege access, 
+                      reduce attack surface, and detect drift from security baselines—all critical for cloud security posture management.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             {/* MODE SELECTION */}
-            <div className="max-w-5xl mx-auto mb-8">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="max-w-5xl mx-auto mb-12">
+              <div className="text-center mb-8">
+                <h2 className="text-3xl font-bold text-white mb-3">Choose Analysis Mode</h2>
+                <p className="text-slate-400">Select the type of security assessment you need</p>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 {/* Quick Validation Card */}
                 <button
                   onClick={() => setMode('quick')}
-                  className={`relative group p-8 rounded-3xl border-2 transition-all ${
+                  className={`relative group text-left transition-all duration-300 ${
                     mode === 'quick'
-                      ? 'border-purple-500 bg-gradient-to-br from-purple-500/20 to-pink-500/10'
-                      : 'border-slate-700 bg-slate-900/50 hover:border-purple-500/50'
+                      ? 'scale-[1.02]'
+                      : 'hover:scale-[1.01]'
                   }`}
                 >
-                  <div className="flex items-start space-x-4 mb-4">
-                    <div className={`w-16 h-16 rounded-2xl flex items-center justify-center ${
-                      mode === 'quick'
-                        ? 'bg-gradient-to-br from-purple-500/30 to-pink-500/30 border border-purple-500/50'
-                        : 'bg-slate-800/50 border border-slate-700'
-                    }`}>
-                      <Search className="w-8 h-8 text-purple-400" />
+                  <div className={`absolute inset-0 rounded-3xl transition-all ${
+                    mode === 'quick'
+                      ? 'bg-gradient-to-br from-purple-500/20 via-pink-500/20 to-purple-500/20 blur-xl'
+                      : 'bg-gradient-to-br from-slate-800/50 to-slate-900/50 blur-xl opacity-0 group-hover:opacity-100'
+                  }`}></div>
+                  
+                  <div className={`relative p-8 rounded-3xl border-2 transition-all backdrop-blur-xl ${
+                    mode === 'quick'
+                      ? 'border-purple-500 bg-gradient-to-br from-purple-500/10 via-pink-500/5 to-purple-500/10 shadow-2xl shadow-purple-500/25'
+                      : 'border-slate-700 bg-slate-900/50 group-hover:border-purple-500/50 group-hover:bg-gradient-to-br group-hover:from-purple-500/5 group-hover:via-pink-500/5 group-hover:to-purple-500/5'
+                  }`}>
+                    {/* Badge */}
+                    <div className="inline-flex items-center space-x-2 bg-purple-500/10 border border-purple-500/30 rounded-full px-4 py-1.5 mb-6">
+                      <Zap className="w-3.5 h-3.5 text-purple-400" />
+                      <span className="text-purple-300 text-xs font-semibold">FAST</span>
                     </div>
-                    <div className="flex-1 text-left">
-                      <h3 className="text-2xl font-bold text-white mb-2">Quick Validation</h3>
-                      <p className="text-slate-400 text-sm leading-relaxed">
-                        Analyze a single IAM policy or role. Fast, focused security analysis.
+
+                    <div className="flex items-start space-x-4 mb-6">
+                      <div className={`w-16 h-16 rounded-2xl flex items-center justify-center transition-all ${
+                        mode === 'quick'
+                          ? 'bg-gradient-to-br from-purple-500/30 to-pink-500/30 border border-purple-500/50 shadow-lg shadow-purple-500/25'
+                          : 'bg-slate-800/50 border border-slate-700 group-hover:bg-gradient-to-br group-hover:from-purple-500/20 group-hover:to-pink-500/20 group-hover:border-purple-500/40'
+                      }`}>
+                        <Search className="w-8 h-8 text-purple-400" />
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="text-2xl font-bold text-white mb-2">Quick Validation</h3>
+                        <p className="text-slate-400 text-sm leading-relaxed">
+                          Analyze a single IAM policy or role. Perfect for spot-checks and rapid security assessments.
+                        </p>
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-3 mb-6">
+                      <div className="flex items-start space-x-3">
+                        <CheckCircle className="w-4 h-4 text-purple-400 mt-0.5 flex-shrink-0" />
+                        <span className="text-slate-300 text-sm">Paste policy JSON or provide role ARN</span>
+                      </div>
+                      <div className="flex items-start space-x-3">
+                        <CheckCircle className="w-4 h-4 text-purple-400 mt-0.5 flex-shrink-0" />
+                        <span className="text-slate-300 text-sm">Get results in ~5 seconds</span>
+                      </div>
+                      <div className="flex items-start space-x-3">
+                        <CheckCircle className="w-4 h-4 text-purple-400 mt-0.5 flex-shrink-0" />
+                        <span className="text-slate-300 text-sm">Uses MCP servers for role ARN analysis</span>
+                      </div>
+                      <div className="flex items-start space-x-3">
+                        <CheckCircle className="w-4 h-4 text-purple-400 mt-0.5 flex-shrink-0" />
+                        <span className="text-slate-300 text-sm">Multi-framework compliance checking</span>
+                      </div>
+                    </div>
+
+                    <div className="bg-purple-500/5 border border-purple-500/20 rounded-xl p-4">
+                      <div className="flex items-center space-x-2 mb-2">
+                        <Shield className="w-4 h-4 text-purple-400" />
+                        <span className="text-purple-300 text-xs font-semibold">BEST FOR</span>
+                      </div>
+                      <p className="text-slate-400 text-sm">
+                        Individual policy reviews, pre-deployment checks, and quick security validations
                       </p>
                     </div>
+                    
+                    {mode === 'quick' && (
+                      <div className="absolute top-4 right-4 w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center shadow-lg shadow-purple-500/50">
+                        <CheckCircle className="w-6 h-6 text-white" />
+                      </div>
+                    )}
                   </div>
-                  
-                  <div className="space-y-2 text-sm text-slate-400">
-                    <div className="flex items-center space-x-2">
-                      <CheckCircle className="w-4 h-4 text-purple-400" />
-                      <span>Paste policy JSON or role ARN</span>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <CheckCircle className="w-4 h-4 text-purple-400" />
-                      <span>Results in ~5 seconds</span>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <CheckCircle className="w-4 h-4 text-purple-400" />
-                      <span>Uses MCP if role ARN provided</span>
-                    </div>
-                  </div>
-                  
-                  {mode === 'quick' && (
-                    <div className="absolute top-4 right-4 w-8 h-8 bg-purple-500 rounded-full flex items-center justify-center">
-                      <CheckCircle className="w-5 h-5 text-white" />
-                    </div>
-                  )}
                 </button>
 
                 {/* Autonomous Audit Card */}
                 <button
                   onClick={() => setMode('audit')}
-                  className={`relative group p-8 rounded-3xl border-2 transition-all ${
+                  className={`relative group text-left transition-all duration-300 ${
                     mode === 'audit'
-                      ? 'border-orange-500 bg-gradient-to-br from-orange-500/20 to-purple-500/10'
-                      : 'border-slate-700 bg-slate-900/50 hover:border-orange-500/50'
+                      ? 'scale-[1.02]'
+                      : 'hover:scale-[1.01]'
                   }`}
                 >
-                  <div className="flex items-start space-x-4 mb-4">
-                    <div className={`w-16 h-16 rounded-2xl flex items-center justify-center ${
-                      mode === 'audit'
-                        ? 'bg-gradient-to-br from-orange-500/30 to-pink-500/30 border border-orange-500/50'
-                        : 'bg-slate-800/50 border border-slate-700'
-                    }`}>
-                      <Bot className="w-8 h-8 text-orange-400" />
+                  <div className={`absolute inset-0 rounded-3xl transition-all ${
+                    mode === 'audit'
+                      ? 'bg-gradient-to-br from-orange-500/20 via-pink-500/20 to-purple-500/20 blur-xl'
+                      : 'bg-gradient-to-br from-slate-800/50 to-slate-900/50 blur-xl opacity-0 group-hover:opacity-100'
+                  }`}></div>
+                  
+                  <div className={`relative p-8 rounded-3xl border-2 transition-all backdrop-blur-xl ${
+                    mode === 'audit'
+                      ? 'border-orange-500 bg-gradient-to-br from-orange-500/10 via-pink-500/5 to-purple-500/10 shadow-2xl shadow-orange-500/25'
+                      : 'border-slate-700 bg-slate-900/50 group-hover:border-orange-500/50 group-hover:bg-gradient-to-br group-hover:from-orange-500/5 group-hover:via-pink-500/5 group-hover:to-purple-500/5'
+                  }`}>
+                    {/* Badge */}
+                    <div className="inline-flex items-center space-x-2 bg-orange-500/10 border border-orange-500/30 rounded-full px-4 py-1.5 mb-6">
+                      <Sparkles className="w-3.5 h-3.5 text-orange-400" />
+                      <span className="text-orange-300 text-xs font-semibold">AI AGENT + MCP</span>
                     </div>
-                    <div className="flex-1 text-left">
-                      <h3 className="text-2xl font-bold text-white mb-2 flex items-center space-x-2">
-                        <span>Full Account Audit</span>
-                        <span className="text-xs px-2 py-1 bg-orange-500/20 text-orange-400 rounded-full border border-orange-500/30">MCP</span>
-                      </h3>
-                      <p className="text-slate-400 text-sm leading-relaxed">
-                        AI agent autonomously scans your entire AWS account for security issues.
+
+                    <div className="flex items-start space-x-4 mb-6">
+                      <div className={`w-16 h-16 rounded-2xl flex items-center justify-center transition-all ${
+                        mode === 'audit'
+                          ? 'bg-gradient-to-br from-orange-500/30 to-pink-500/30 border border-orange-500/50 shadow-lg shadow-orange-500/25'
+                          : 'bg-slate-800/50 border border-slate-700 group-hover:bg-gradient-to-br group-hover:from-orange-500/20 group-hover:to-pink-500/20 group-hover:border-orange-500/40'
+                      }`}>
+                        <Bot className="w-8 h-8 text-orange-400" />
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="text-2xl font-bold text-white mb-2">Full Account Audit</h3>
+                        <p className="text-slate-400 text-sm leading-relaxed">
+                          Autonomous AI agent scans your entire AWS account for security vulnerabilities and compliance gaps.
+                        </p>
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-3 mb-6">
+                      <div className="flex items-start space-x-3">
+                        <Zap className="w-4 h-4 text-orange-400 mt-0.5 flex-shrink-0" />
+                        <span className="text-slate-300 text-sm">Scans ALL IAM roles and policies automatically</span>
+                      </div>
+                      <div className="flex items-start space-x-3">
+                        <Zap className="w-4 h-4 text-orange-400 mt-0.5 flex-shrink-0" />
+                        <span className="text-slate-300 text-sm">Autonomous AI decision-making and prioritization</span>
+                      </div>
+                      <div className="flex items-start space-x-3">
+                        <Zap className="w-4 h-4 text-orange-400 mt-0.5 flex-shrink-0" />
+                        <span className="text-slate-300 text-sm">Uses system AWS credentials via MCP</span>
+                      </div>
+                      <div className="flex items-start space-x-3">
+                        <Zap className="w-4 h-4 text-orange-400 mt-0.5 flex-shrink-0" />
+                        <span className="text-slate-300 text-sm">Comprehensive compliance and risk assessment</span>
+                      </div>
+                    </div>
+
+                    <div className="bg-orange-500/5 border border-orange-500/20 rounded-xl p-4">
+                      <div className="flex items-center space-x-2 mb-2">
+                        <Bot className="w-4 h-4 text-orange-400" />
+                        <span className="text-orange-300 text-xs font-semibold">BEST FOR</span>
+                      </div>
+                      <p className="text-slate-400 text-sm">
+                        Complete security posture assessment, compliance audits, and organization-wide security reviews
                       </p>
                     </div>
+                    
+                    {mode === 'audit' && (
+                      <div className="absolute top-4 right-4 w-10 h-10 bg-gradient-to-br from-orange-500 to-pink-500 rounded-full flex items-center justify-center shadow-lg shadow-orange-500/50">
+                        <CheckCircle className="w-6 h-6 text-white" />
+                      </div>
+                    )}
                   </div>
-                  
-                  <div className="space-y-2 text-sm text-slate-400">
-                    <div className="flex items-center space-x-2">
-                      <Zap className="w-4 h-4 text-orange-400" />
-                      <span>Scans ALL IAM roles & policies</span>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <Zap className="w-4 h-4 text-orange-400" />
-                      <span>Autonomous AI decision-making</span>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <Zap className="w-4 h-4 text-orange-400" />
-                      <span>Uses system AWS credentials</span>
-                    </div>
-                  </div>
-                  
-                  {mode === 'audit' && (
-                    <div className="absolute top-4 right-4 w-8 h-8 bg-orange-500 rounded-full flex items-center justify-center">
-                      <CheckCircle className="w-5 h-5 text-white" />
-                    </div>
-                  )}
                 </button>
               </div>
             </div>
@@ -316,7 +580,7 @@ const ValidatePolicy: React.FC = () => {
                   </button>
                 </div>
               ) : (
-                // AUTONOMOUS AUDIT FORM (NO CREDENTIALS NEEDED!)
+                // AUTONOMOUS AUDIT FORM
                 <div className="bg-slate-900/50 backdrop-blur-xl border border-orange-500/20 rounded-3xl p-8 sm:p-10 shadow-2xl">
                   <div className="mb-8 flex items-start space-x-4 bg-orange-500/10 border border-orange-500/30 rounded-2xl p-6">
                     <Bot className="w-8 h-8 text-orange-400 flex-shrink-0 mt-1" />
@@ -428,6 +692,57 @@ const ValidatePolicy: React.FC = () => {
                   : 'Scanning for vulnerabilities, compliance issues, and security best practices...'
                 }
               </p>
+
+              {/* Real-Time Progress Timeline (for audit mode) */}
+              {mode === 'audit' && auditProgress.length > 0 && (
+                <div 
+                  id="progress-container"
+                  className="bg-slate-900/50 backdrop-blur-xl border border-purple-500/20 rounded-2xl p-6 max-h-[400px] overflow-y-auto mb-6 text-left"
+                >
+                  <div className="space-y-4">
+                    {auditProgress.map((step, index) => (
+                      <div 
+                        key={index}
+                        className={`flex items-start space-x-4 ${
+                          step.type === 'error' ? 'text-red-400' :
+                          step.type === 'complete' ? 'text-green-400' :
+                          step.type === 'thinking' ? 'text-purple-400' :
+                          'text-slate-300'
+                        }`}
+                      >
+                        {step.type === 'thinking' ? (
+                          <Bot className="w-5 h-5 mt-0.5 flex-shrink-0 animate-pulse" />
+                        ) : step.type === 'complete' ? (
+                          <CheckCircle className="w-5 h-5 mt-0.5 flex-shrink-0" />
+                        ) : step.type === 'error' ? (
+                          <XCircle className="w-5 h-5 mt-0.5 flex-shrink-0" />
+                        ) : (
+                          <Sparkles className="w-5 h-5 mt-0.5 flex-shrink-0" />
+                        )}
+                        
+                        <div className="flex-1">
+                          <div className="text-sm leading-relaxed">
+                            {step.message}
+                          </div>
+                          
+                          {step.type === 'progress' && step.progress < 100 && (
+                            <div className="w-full bg-slate-800 rounded-full h-1 mt-2">
+                              <div
+                                className="bg-gradient-to-r from-orange-500 via-pink-500 to-purple-600 h-1 rounded-full transition-all duration-500"
+                                style={{ width: `${step.progress}%` }}
+                              ></div>
+                            </div>
+                          )}
+                        </div>
+                        
+                        <div className="text-xs text-slate-500 flex-shrink-0">
+                          {new Date().toLocaleTimeString()}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
               
               <div className="flex items-center justify-center space-x-2 mb-8">
                 <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '0ms', animationDuration: '1s' }}></div>
@@ -462,6 +777,7 @@ const ValidatePolicy: React.FC = () => {
                   setResponse(null);
                   setInputValue('');
                   setError(null);
+                  setAuditProgress([]);
                 }}
                 className="px-6 py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-xl transition-all border border-slate-700 flex items-center space-x-2"
               >
@@ -471,6 +787,40 @@ const ValidatePolicy: React.FC = () => {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+              {/* Agent Reasoning Section - Full Width - PREMIUM */}
+              {response.agent_reasoning && (
+                <div className="lg:col-span-12">
+                  <div className="bg-gradient-to-br from-slate-900/50 to-slate-800/50 backdrop-blur-xl border border-purple-500/20 rounded-2xl p-8">
+                    <div className="flex items-start space-x-4 mb-6">
+                      <div className="w-14 h-14 bg-gradient-to-br from-purple-500/20 to-pink-500/20 rounded-2xl flex items-center justify-center flex-shrink-0 border border-purple-500/30">
+                        <Bot className="w-7 h-7 text-purple-400 animate-pulse" />
+                      </div>
+                      <div>
+                        <div className="flex items-center space-x-3 mb-2">
+                          <h3 className="text-2xl font-bold text-white">Agent Reasoning</h3>
+                          <span className="px-3 py-1 bg-purple-500/20 text-purple-300 text-xs font-semibold rounded-full border border-purple-500/30">AUTONOMOUS</span>
+                        </div>
+                        <p className="text-slate-400 text-sm">Real-time decision-making process</p>
+                      </div>
+                    </div>
+                    
+                    <div className="bg-slate-950/50 rounded-2xl p-6 border border-slate-700/50 overflow-x-auto max-h-[600px] overflow-y-auto"
+                      style={{
+                        scrollbarWidth: 'thin',
+                        scrollbarColor: '#a855f7 #1e293b'
+                      }}>
+                      <pre className="text-slate-300 text-sm font-mono leading-relaxed whitespace-pre-wrap">
+                        {response.agent_reasoning}
+                      </pre>
+                    </div>
+
+                    <div className="mt-4 flex items-center space-x-2 text-sm text-slate-500">
+                      <Sparkles className="w-4 h-4 text-purple-400" />
+                      <span>This shows the AI agent's autonomous thinking and decision-making in real-time</span>
+                    </div>
+                  </div>
+                </div>
+              )}
               {/* Risk Score Card - Full Width */}
               <div className="lg:col-span-12">
                 <div className="bg-gradient-to-br from-slate-900/50 to-slate-800/50 backdrop-blur-xl border border-purple-500/20 rounded-2xl p-8">

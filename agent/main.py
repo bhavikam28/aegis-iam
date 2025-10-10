@@ -1,5 +1,6 @@
-﻿from fastapi import FastAPI, Request
+﻿from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import Optional, List, Dict
 from policy_agent import PolicyAgent
@@ -474,6 +475,80 @@ async def autonomous_audit(request: AuditRequest):
             "error": str(e),
             "success": False
         }
+
+
+# ============================================
+# STREAMING AUDIT ENDPOINT (SSE)
+# ============================================
+
+@app.get("/audit/stream")
+async def stream_audit(
+    compliance_frameworks: str = "pci_dss,hipaa,sox,gdpr,cis"
+):
+    """
+    Stream autonomous audit progress using Server-Sent Events (SSE)
+    
+    Usage: EventSource('/audit/stream?compliance_frameworks=pci_dss,hipaa')
+    """
+    frameworks = compliance_frameworks.split(',')
+    
+    async def event_generator():
+        """Generate SSE events for audit progress"""
+        try:
+            # Send initial event
+            yield f"data: {json.dumps({'type': 'start', 'message': '🚀 Audit started - Initializing agent...', 'progress': 5})}\n\n"
+            await asyncio.sleep(0.5)
+            
+            yield f"data: {json.dumps({'type': 'progress', 'message': '🔧 Loading MCP tools...', 'progress': 10})}\n\n"
+            await asyncio.sleep(0.5)
+            
+            yield f"data: {json.dumps({'type': 'progress', 'message': '🔍 Discovering IAM roles...', 'progress': 20})}\n\n"
+            await asyncio.sleep(1)
+            
+            # Run actual audit
+            validator = ValidatorAgent()
+            
+            yield f"data: {json.dumps({'type': 'thinking', 'message': '🤖 Agent analyzing account...', 'progress': 30})}\n\n"
+            
+            result = validator.validate_policy(
+                compliance_frameworks=frameworks,
+                mode="audit"
+            )
+            
+            if not result.get("success"):
+                error_msg = f'❌ Error: {result.get("error")}'
+                yield f"data: {json.dumps({'type': 'error', 'message': error_msg, 'progress': 100})}\n\n"
+                return
+            
+            validation_data = result.get("validation", {})
+            
+            # Send progress updates based on findings
+            yield f"data: {json.dumps({'type': 'progress', 'message': '📊 Analyzing findings...', 'progress': 70})}\n\n"
+            await asyncio.sleep(0.5)
+            
+            yield f"data: {json.dumps({'type': 'progress', 'message': '🔗 Detecting patterns...', 'progress': 85})}\n\n"
+            await asyncio.sleep(0.5)
+            
+            yield f"data: {json.dumps({'type': 'progress', 'message': '📝 Generating report...', 'progress': 95})}\n\n"
+            await asyncio.sleep(0.5)
+            
+            # Send completion with full results
+            yield f"data: {json.dumps({'type': 'complete', 'message': '✅ Audit complete!', 'progress': 100, 'result': {'success': True, 'audit_summary': validation_data.get('audit_summary', {}), 'risk_score': validation_data.get('risk_score', 50), 'top_risks': validation_data.get('top_risks', []), 'findings': validation_data.get('findings', []), 'compliance_status': validation_data.get('compliance_status', {}), 'recommendations': validation_data.get('security_improvements', []), 'quick_wins': validation_data.get('quick_wins', []), 'raw_response': result.get('raw_response', ''), 'mcp_enabled': True}})}\n\n"
+            
+        except Exception as e:
+            logging.exception("❌ Error in streaming audit")
+            error_msg = f'❌ Error: {str(e)}'
+            yield f"data: {json.dumps({'type': 'error', 'message': error_msg, 'progress': 100})}\n\n"
+    
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no"
+        }
+    )
 
 
 # ============================================
