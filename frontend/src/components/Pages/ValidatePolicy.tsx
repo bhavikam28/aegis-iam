@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Search, AlertTriangle, XCircle, CheckCircle, Info, AlertCircle, Shield, Sparkles, Copy, Download, RefreshCw, Zap, Bot, Key, Lock } from 'lucide-react';
-import { validatePolicy } from '../../services/api';
+import { Search, AlertTriangle, XCircle, CheckCircle, Info, AlertCircle, Shield, Sparkles, Copy, Download, RefreshCw, Zap, Bot } from 'lucide-react';
+import { validatePolicy, performAutonomousAudit } from '../../services/api';
 import { SecurityFinding, ValidatePolicyRequest, ValidatePolicyResponse } from '../../types';
 
 type ValidationMode = 'quick' | 'audit';
@@ -14,17 +14,11 @@ const ValidatePolicy: React.FC = () => {
   const [inputType, setInputType] = useState<InputType>('policy');
   const [inputValue, setInputValue] = useState('');
   
-  // Audit mode state
-  const [awsAccessKey, setAwsAccessKey] = useState('');
-  const [awsSecretKey, setAwsSecretKey] = useState('');
-  const [awsRegion, setAwsRegion] = useState('us-east-1');
-  
   // Shared state
   const [response, setResponse] = useState<ValidatePolicyResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const [isAuditMode, setIsAuditMode] = useState(false);
 
   const handleCopy = async (text: string) => {
     await navigator.clipboard.writeText(text);
@@ -38,12 +32,11 @@ const ValidatePolicy: React.FC = () => {
     setLoading(true);
     setError(null);
     setResponse(null);
-    setIsAuditMode(false);
 
     try {
       const request: ValidatePolicyRequest = inputType === 'policy' 
-        ? { policy_json: inputValue }
-        : { role_arn: inputValue };
+        ? { policy_json: inputValue, compliance_frameworks: ['pci_dss', 'hipaa', 'sox', 'gdpr', 'cis'] }
+        : { role_arn: inputValue, compliance_frameworks: ['pci_dss', 'hipaa', 'sox', 'gdpr', 'cis'] };
       
       const result = await validatePolicy(request);
       setResponse(result);
@@ -56,28 +49,15 @@ const ValidatePolicy: React.FC = () => {
   };
 
   const handleAudit = async () => {
-    if (!awsAccessKey.trim() || !awsSecretKey.trim()) {
-      setError('Please provide AWS credentials');
-      return;
-    }
-
     setLoading(true);
     setError(null);
     setResponse(null);
-    setIsAuditMode(true);
 
     try {
-      // Call API with AWS credentials for autonomous audit
-      const request = {
-        aws_credentials: {
-          access_key: awsAccessKey,
-          secret_key: awsSecretKey,
-          region: awsRegion
-        },
+      // Call autonomous audit endpoint - uses MCP servers with system AWS credentials
+      const result = await performAutonomousAudit({
         compliance_frameworks: ['pci_dss', 'hipaa', 'sox', 'gdpr', 'cis']
-      };
-      
-      const result = await validatePolicy(request);
+      });
       setResponse(result);
     } catch (err) {
       console.error("Audit error:", err);
@@ -148,7 +128,7 @@ const ValidatePolicy: React.FC = () => {
               
               <p className="text-lg sm:text-xl text-slate-300 max-w-3xl leading-relaxed">
                 Choose your analysis mode: Quick validation for single policies, or autonomous audit 
-                for comprehensive account-wide security assessment.
+                for comprehensive account-wide security assessment using MCP servers.
               </p>
             </div>
 
@@ -191,7 +171,7 @@ const ValidatePolicy: React.FC = () => {
                     </div>
                     <div className="flex items-center space-x-2">
                       <CheckCircle className="w-4 h-4 text-purple-400" />
-                      <span>No AWS credentials needed</span>
+                      <span>Uses MCP if role ARN provided</span>
                     </div>
                   </div>
                   
@@ -222,7 +202,7 @@ const ValidatePolicy: React.FC = () => {
                     <div className="flex-1 text-left">
                       <h3 className="text-2xl font-bold text-white mb-2 flex items-center space-x-2">
                         <span>Full Account Audit</span>
-                        <span className="text-xs px-2 py-1 bg-orange-500/20 text-orange-400 rounded-full border border-orange-500/30">AGENTIC</span>
+                        <span className="text-xs px-2 py-1 bg-orange-500/20 text-orange-400 rounded-full border border-orange-500/30">MCP</span>
                       </h3>
                       <p className="text-slate-400 text-sm leading-relaxed">
                         AI agent autonomously scans your entire AWS account for security issues.
@@ -241,7 +221,7 @@ const ValidatePolicy: React.FC = () => {
                     </div>
                     <div className="flex items-center space-x-2">
                       <Zap className="w-4 h-4 text-orange-400" />
-                      <span>Comprehensive security report</span>
+                      <span>Uses system AWS credentials</span>
                     </div>
                   </div>
                   
@@ -319,7 +299,7 @@ const ValidatePolicy: React.FC = () => {
                         className="w-full px-6 py-5 bg-slate-800/50 border border-slate-600/50 rounded-2xl text-white text-lg placeholder-slate-500 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 focus:outline-none font-mono"
                       />
                       <p className="text-sm text-slate-500 mt-3">
-                        We'll fetch and analyze the role's policies from AWS
+                        MCP server will fetch and analyze the role's policies from AWS
                       </p>
                     </div>
                   )}
@@ -336,61 +316,17 @@ const ValidatePolicy: React.FC = () => {
                   </button>
                 </div>
               ) : (
-                // AUTONOMOUS AUDIT FORM
+                // AUTONOMOUS AUDIT FORM (NO CREDENTIALS NEEDED!)
                 <div className="bg-slate-900/50 backdrop-blur-xl border border-orange-500/20 rounded-3xl p-8 sm:p-10 shadow-2xl">
                   <div className="mb-8 flex items-start space-x-4 bg-orange-500/10 border border-orange-500/30 rounded-2xl p-6">
                     <Bot className="w-8 h-8 text-orange-400 flex-shrink-0 mt-1" />
                     <div>
-                      <h4 className="text-orange-400 font-bold text-lg mb-2">Autonomous AI Agent</h4>
+                      <h4 className="text-orange-400 font-bold text-lg mb-2">Autonomous AI Agent (MCP-Powered)</h4>
                       <p className="text-slate-300 text-sm leading-relaxed">
-                        The AI agent will autonomously scan your entire AWS account, analyze all IAM roles and policies, 
-                        and generate a comprehensive security report. No manual intervention required.
+                        The AI agent will autonomously scan your entire AWS account using MCP servers. 
+                        It uses your system's AWS credentials (from AWS CLI or environment variables). 
+                        No manual credential input required!
                       </p>
-                    </div>
-                  </div>
-
-                  {/* AWS Credentials */}
-                  <div className="space-y-6 mb-8">
-                    <div>
-                      <label className="block text-white text-lg font-semibold mb-4 flex items-center space-x-2">
-                        <Key className="w-5 h-5 text-orange-400" />
-                        <span>AWS Access Key ID</span>
-                      </label>
-                      <input
-                        type="text"
-                        value={awsAccessKey}
-                        onChange={(e) => setAwsAccessKey(e.target.value)}
-                        placeholder="AKIAIOSFODNN7EXAMPLE"
-                        className="w-full px-6 py-5 bg-slate-800/50 border border-slate-600/50 rounded-2xl text-white text-lg placeholder-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 focus:outline-none font-mono"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-white text-lg font-semibold mb-4 flex items-center space-x-2">
-                        <Lock className="w-5 h-5 text-orange-400" />
-                        <span>AWS Secret Access Key</span>
-                      </label>
-                      <input
-                        type="password"
-                        value={awsSecretKey}
-                        onChange={(e) => setAwsSecretKey(e.target.value)}
-                        placeholder="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
-                        className="w-full px-6 py-5 bg-slate-800/50 border border-slate-600/50 rounded-2xl text-white text-lg placeholder-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 focus:outline-none font-mono"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-white text-lg font-semibold mb-4">AWS Region</label>
-                      <select
-                        value={awsRegion}
-                        onChange={(e) => setAwsRegion(e.target.value)}
-                        className="w-full px-6 py-5 bg-slate-800/50 border border-slate-600/50 rounded-2xl text-white text-lg focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 focus:outline-none cursor-pointer"
-                      >
-                        <option value="us-east-1">US East (N. Virginia)</option>
-                        <option value="us-west-2">US West (Oregon)</option>
-                        <option value="eu-west-1">EU (Ireland)</option>
-                        <option value="ap-southeast-1">Asia Pacific (Singapore)</option>
-                      </select>
                     </div>
                   </div>
 
@@ -401,10 +337,38 @@ const ValidatePolicy: React.FC = () => {
                       <div>
                         <h5 className="text-purple-300 font-semibold mb-2">Security & Permissions</h5>
                         <ul className="space-y-1 text-slate-400 text-sm">
+                          <li>• Uses AWS credentials from your system (AWS CLI or environment variables)</li>
                           <li>• Read-only IAM permissions required (iam:ListRoles, iam:GetRolePolicy, iam:GetPolicy)</li>
-                          <li>• Credentials are never stored and used only for this analysis</li>
-                          <li>• Consider using a dedicated read-only IAM user for audits</li>
+                          <li>• MCP servers run on your backend with your configured credentials</li>
+                          <li>• No credentials are sent through the frontend</li>
                         </ul>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Compliance Frameworks Info */}
+                  <div className="mb-8 bg-slate-800/50 border border-slate-700/50 rounded-2xl p-6">
+                    <h5 className="text-white font-semibold mb-3">Compliance Frameworks to Check</h5>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="flex items-center space-x-2">
+                        <CheckCircle className="w-4 h-4 text-green-400" />
+                        <span className="text-slate-300 text-sm">PCI DSS</span>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <CheckCircle className="w-4 h-4 text-green-400" />
+                        <span className="text-slate-300 text-sm">HIPAA</span>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <CheckCircle className="w-4 h-4 text-green-400" />
+                        <span className="text-slate-300 text-sm">SOX</span>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <CheckCircle className="w-4 h-4 text-green-400" />
+                        <span className="text-slate-300 text-sm">GDPR</span>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <CheckCircle className="w-4 h-4 text-green-400" />
+                        <span className="text-slate-300 text-sm">CIS Benchmarks</span>
                       </div>
                     </div>
                   </div>
@@ -412,7 +376,7 @@ const ValidatePolicy: React.FC = () => {
                   {/* Submit Button */}
                   <button
                     onClick={handleAudit}
-                    disabled={loading || !awsAccessKey.trim() || !awsSecretKey.trim()}
+                    disabled={loading}
                     className="w-full bg-gradient-to-r from-orange-500 via-pink-500 to-purple-600 text-white py-5 px-8 rounded-2xl font-semibold text-lg hover:from-orange-600 hover:via-pink-600 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-orange-500/25 hover:shadow-xl hover:shadow-orange-500/40 flex items-center justify-center space-x-3"
                   >
                     <Bot className="w-6 h-6" />
@@ -447,7 +411,7 @@ const ValidatePolicy: React.FC = () => {
               <div className="inline-flex items-center justify-center w-24 h-24 mb-8 relative">
                 <div className="absolute inset-0 bg-gradient-to-br from-orange-500/20 via-pink-500/20 to-purple-600/20 rounded-full animate-ping"></div>
                 <div className="absolute inset-0 bg-gradient-to-br from-orange-500 via-pink-500 to-purple-600 rounded-full opacity-20 animate-pulse"></div>
-                {isAuditMode ? (
+                {mode === 'audit' ? (
                   <Bot className="w-12 h-12 text-orange-400 relative z-10" />
                 ) : (
                   <Search className="w-12 h-12 text-purple-400 relative z-10" />
@@ -455,12 +419,12 @@ const ValidatePolicy: React.FC = () => {
               </div>
               
               <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">
-                {isAuditMode ? 'Autonomous AI Audit Running' : 'Deep Security Analysis'}
+                {mode === 'audit' ? 'Autonomous AI Audit Running' : 'Deep Security Analysis'}
               </h2>
               
               <p className="text-lg sm:text-xl text-slate-300 mb-8 leading-relaxed">
-                {isAuditMode 
-                  ? 'AI agent is autonomously scanning your entire AWS account, analyzing all IAM roles and policies...'
+                {mode === 'audit' 
+                  ? 'AI agent is autonomously scanning your entire AWS account using MCP servers...'
                   : 'Scanning for vulnerabilities, compliance issues, and security best practices...'
                 }
               </p>
@@ -472,23 +436,23 @@ const ValidatePolicy: React.FC = () => {
               </div>
 
               <div className="text-sm text-slate-500">
-                {isAuditMode ? 'This may take 30-60 seconds for large accounts...' : 'This may take up to 30 seconds...'}
+                {mode === 'audit' ? 'This may take 30-60 seconds for large accounts...' : 'This may take up to 30 seconds...'}
               </div>
             </div>
           </div>
         )}
 
-        {/* RESULTS - Same premium display as before */}
+        {/* RESULTS DISPLAY */}
         {!loading && response && (
           <div className="max-w-[1600px] mx-auto">
             <div className="flex items-center justify-between mb-12">
               <div>
                 <h2 className="text-3xl font-bold text-white mb-2">
-                  {isAuditMode ? 'Autonomous Audit Complete' : 'Security Analysis Complete'}
+                  {mode === 'audit' ? 'Autonomous Audit Complete' : 'Security Analysis Complete'}
                 </h2>
                 <p className="text-slate-400">
-                  {isAuditMode 
-                    ? 'Comprehensive security assessment of your entire AWS account'
+                  {mode === 'audit' 
+                    ? `Analyzed ${response.audit_summary?.total_roles || 0} IAM roles across your AWS account`
                     : 'Comprehensive security assessment of your IAM policy'
                   }
                 </p>
@@ -497,8 +461,6 @@ const ValidatePolicy: React.FC = () => {
                 onClick={() => {
                   setResponse(null);
                   setInputValue('');
-                  setAwsAccessKey('');
-                  setAwsSecretKey('');
                   setError(null);
                 }}
                 className="px-6 py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-xl transition-all border border-slate-700 flex items-center space-x-2"
@@ -508,7 +470,6 @@ const ValidatePolicy: React.FC = () => {
               </button>
             </div>
 
-            {/* Rest of results display - using same premium design from before */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
               {/* Risk Score Card - Full Width */}
               <div className="lg:col-span-12">
@@ -588,9 +549,160 @@ const ValidatePolicy: React.FC = () => {
                 </div>
               </div>
 
-              {/* Continue with findings and other sections... */}
-              {/* (Using the same premium design from the previous ValidatePolicy component) */}
-              
+              {/* Audit Summary (only for audit mode) */}
+              {response.audit_summary && (
+                <div className="lg:col-span-12">
+                  <div className="bg-gradient-to-br from-orange-500/10 to-purple-500/10 backdrop-blur-xl border border-orange-500/30 rounded-2xl p-8">
+                    <div className="flex items-center space-x-3 mb-6">
+                      <Bot className="w-6 h-6 text-orange-400" />
+                      <h3 className="text-white text-2xl font-bold">Autonomous Audit Summary</h3>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                      <div className="bg-slate-800/50 rounded-xl p-4 text-center border border-slate-700/50">
+                        <div className="text-3xl font-bold text-purple-400 mb-1">
+                          {response.audit_summary.total_roles}
+                        </div>
+                        <div className="text-sm text-slate-400">Total Roles</div>
+                      </div>
+                      
+                      <div className="bg-slate-800/50 rounded-xl p-4 text-center border border-slate-700/50">
+                        <div className="text-3xl font-bold text-blue-400 mb-1">
+                          {response.audit_summary.total_policies}
+                        </div>
+                        <div className="text-sm text-slate-400">Total Policies</div>
+                      </div>
+                      
+                      <div className="bg-slate-800/50 rounded-xl p-4 text-center border border-slate-700/50">
+                        <div className="text-3xl font-bold text-orange-400 mb-1">
+                          {response.audit_summary.total_findings}
+                        </div>
+                        <div className="text-sm text-slate-400">Total Findings</div>
+                      </div>
+                      
+                      <div className="bg-slate-800/50 rounded-xl p-4 text-center border border-slate-700/50">
+                        <div className="text-3xl font-bold text-red-400 mb-1">
+                          {response.audit_summary.critical_findings}
+                        </div>
+                        <div className="text-sm text-slate-400">Critical Issues</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Findings List */}
+              <div className="lg:col-span-8 space-y-6">
+                <h3 className="text-white text-xl font-semibold">Security Findings</h3>
+                
+                {response.findings.length === 0 ? (
+                  <div className="bg-green-500/10 border border-green-500/30 rounded-2xl p-8 text-center">
+                    <CheckCircle className="w-16 h-16 text-green-400 mx-auto mb-4" />
+                    <h4 className="text-green-400 font-bold text-xl mb-2">No Security Issues Found!</h4>
+                    <p className="text-slate-300">This policy follows AWS security best practices.</p>
+                  </div>
+                ) : (
+                  response.findings.map((finding, index) => {
+                    const Icon = getSeverityIcon(finding.severity);
+                    return (
+                      <div key={index} className={`bg-gradient-to-br ${getSeverityColor(finding.severity)} backdrop-blur-xl border rounded-2xl p-6`}>
+                        <div className="flex items-start space-x-4">
+                          <div className="flex-shrink-0">
+                            <Icon className="w-6 h-6" />
+                          </div>
+                          <div className="flex-1">
+                            <div className="flex items-center justify-between mb-2">
+                              <h4 className="text-white font-bold text-lg">{finding.title}</h4>
+                              <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                                finding.severity === 'Critical' ? 'bg-red-500/20 text-red-400' :
+                                finding.severity === 'High' ? 'bg-orange-500/20 text-orange-400' :
+                                finding.severity === 'Medium' ? 'bg-yellow-500/20 text-yellow-400' :
+                                'bg-blue-500/20 text-blue-400'
+                              }`}>
+                                {finding.severity}
+                              </span>
+                            </div>
+                            
+                            <p className="text-slate-300 text-sm mb-4 leading-relaxed">
+                              {finding.description}
+                            </p>
+                            
+                            <div className="bg-slate-900/50 border border-slate-700/50 rounded-xl p-4">
+                              <div className="flex items-start space-x-2">
+                                <Sparkles className="w-4 h-4 text-purple-400 mt-0.5 flex-shrink-0" />
+                                <div>
+                                  <div className="text-purple-300 font-semibold text-sm mb-1">Recommendation</div>
+                                  <p className="text-slate-400 text-sm">{finding.recommendation}</p>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* Right Sidebar - Recommendations & Quick Wins */}
+              <div className="lg:col-span-4 space-y-6">
+                {/* Quick Wins */}
+                {response.quick_wins && response.quick_wins.length > 0 && (
+                  <div className="bg-green-500/10 backdrop-blur-xl border border-green-500/30 rounded-2xl p-6">
+                    <h4 className="text-green-400 text-lg font-semibold mb-4 flex items-center space-x-2">
+                      <Zap className="w-5 h-5" />
+                      <span>Quick Wins</span>
+                    </h4>
+                    <ul className="space-y-3">
+                      {response.quick_wins.map((win, index) => (
+                        <li key={index} className="text-slate-300 text-sm flex items-start space-x-3">
+                          <CheckCircle className="w-4 h-4 text-green-400 mt-0.5 flex-shrink-0" />
+                          <span>{win}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Recommendations */}
+                {response.recommendations && response.recommendations.length > 0 && (
+                  <div className="bg-purple-500/10 backdrop-blur-xl border border-purple-500/30 rounded-2xl p-6">
+                    <h4 className="text-purple-400 text-lg font-semibold mb-4 flex items-center space-x-2">
+                      <Shield className="w-5 h-5" />
+                      <span>Security Improvements</span>
+                    </h4>
+                    <ul className="space-y-3">
+                      {response.recommendations.map((rec, index) => (
+                        <li key={index} className="text-slate-300 text-sm flex items-start space-x-3">
+                          <AlertCircle className="w-4 h-4 text-purple-400 mt-0.5 flex-shrink-0" />
+                          <span>{rec}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Compliance Status */}
+                {Object.keys(response.compliance_status).length > 0 && (
+                  <div className="bg-slate-900/50 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-6">
+                    <h4 className="text-white text-lg font-semibold mb-4">Compliance Status</h4>
+                    <div className="space-y-3">
+                      {Object.entries(response.compliance_status).map(([key, framework]: [string, any]) => (
+                        <div key={key} className="flex items-center justify-between p-3 bg-slate-800/50 rounded-xl">
+                          <span className="text-slate-300 text-sm font-medium">{framework.name}</span>
+                          <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                            framework.status === 'Compliant' ? 'bg-green-500/20 text-green-400' :
+                            framework.status === 'Partial' ? 'bg-yellow-500/20 text-yellow-400' :
+                            'bg-red-500/20 text-red-400'
+                          }`}>
+                            {framework.status}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         )}

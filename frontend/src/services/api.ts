@@ -8,7 +8,6 @@ import {
   JobStatus,
   ChatMessage
 } from '../types';
-import { mockValidatePolicyResponse, mockAnalyzeHistoryResponse } from './mockData';
 
 // API URL - uses environment variable on Vercel, localhost for local development
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
@@ -47,7 +46,7 @@ export const generatePolicy = async (
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       description: request.description,
-      service: 'lambda', // Set primary service as Lambda
+      service: 'lambda',
       conversation_id: request.conversation_id || null,
       is_followup: request.is_followup || false,
       restrictive: request.restrictive || false,
@@ -67,7 +66,6 @@ export const generatePolicy = async (
     throw new Error("No response received from the agent backend.");
   }
 
-  // If the agent is asking a question (no policy generated yet)
   if (backendResponse.is_question || !backendResponse.policy) {
     return {
       policy: null,
@@ -89,7 +87,6 @@ export const generatePolicy = async (
     };
   }
 
-  // Policy was successfully generated
   return {
     policy: backendResponse.policy,
     explanation: backendResponse.explanation || "Policy generated successfully.",
@@ -144,8 +141,13 @@ export const clearConversation = async (conversationId: string) => {
   return response.json();
 };
 
-export const validatePolicy = async (request: ValidatePolicyRequest | any): Promise<ValidatePolicyResponse> => {
-  const isAuditMode = 'aws_credentials' in request;
+// ============================================
+// VALIDATION API (MCP-ENABLED)
+// ============================================
+
+export const validatePolicy = async (request: ValidatePolicyRequest): Promise<ValidatePolicyResponse> => {
+  // Determine mode based on what's provided
+  const mode = request.policy_json || request.role_arn ? 'quick' : 'audit';
   
   const response = await fetch(`${API_URL}/validate`, {
     method: 'POST',
@@ -153,8 +155,8 @@ export const validatePolicy = async (request: ValidatePolicyRequest | any): Prom
     body: JSON.stringify({
       policy_json: request.policy_json || null,
       role_arn: request.role_arn || null,
-      aws_credentials: request.aws_credentials || null,
-      compliance_frameworks: request.compliance_frameworks || ['pci_dss', 'hipaa', 'sox', 'gdpr', 'cis']
+      compliance_frameworks: request.compliance_frameworks || ['pci_dss', 'hipaa', 'sox', 'gdpr', 'cis'],
+      mode: mode
     }),
   });
 
@@ -178,5 +180,115 @@ export const validatePolicy = async (request: ValidatePolicyRequest | any): Prom
     quick_wins: backendResponse.quick_wins || [],
     audit_summary: backendResponse.audit_summary || null,
     top_risks: backendResponse.top_risks || []
+  };
+};
+
+// ============================================
+// AUTONOMOUS AUDIT API (MCP-ENABLED)
+// ============================================
+
+export interface AuditRequest {
+  compliance_frameworks?: string[];
+}
+
+export interface AuditResponse {
+  success: boolean;
+  audit_summary: {
+    total_roles: number;
+    roles_analyzed: number;
+    total_policies: number;
+    total_findings: number;
+    critical_findings: number;
+    high_findings: number;
+    medium_findings: number;
+    low_findings: number;
+  };
+  risk_score: number;
+  top_risks: Array<{
+    role_name: string;
+    risk_score: number;
+    critical_issues: number;
+    findings: any[];
+  }>;
+  findings: any[];
+  compliance_status: Record<string, any>;
+  recommendations: string[];
+  quick_wins: string[];
+  raw_response: string;
+  mcp_enabled: boolean;
+}
+
+export const performAutonomousAudit = async (
+  request: AuditRequest = {}
+): Promise<ValidatePolicyResponse> => {
+  const response = await fetch(`${API_URL}/audit`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      compliance_frameworks: request.compliance_frameworks || ['pci_dss', 'hipaa', 'sox', 'gdpr', 'cis']
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Audit failed: ${response.status} - ${errorText}`);
+  }
+
+  const result = await response.json();
+  
+  if (!result.success) {
+    throw new Error(result.error || 'Audit failed');
+  }
+
+  // Convert audit response to ValidatePolicyResponse format
+  return {
+    findings: result.findings || [],
+    risk_score: result.risk_score || 50,
+    security_issues: result.findings?.map((f: any) => f.description) || [],
+    recommendations: result.recommendations || [],
+    compliance_status: result.compliance_status || {},
+    quick_wins: result.quick_wins || [],
+    audit_summary: result.audit_summary || null,
+    top_risks: result.top_risks || []
+  };
+};
+
+// ============================================
+// ANALYZE HISTORY (MOCK FOR NOW)
+// ============================================
+
+export const analyzeHistory = async (request: AnalyzeHistoryRequest): Promise<AnalyzeHistoryResponse> => {
+  // Mock implementation - will be replaced with real CloudTrail analysis
+  await delay(3000);
+  
+  return {
+    risk_reduction: 78,
+    usage_summary: {
+      total_permissions: 120,
+      used_permissions: 26,
+      unused_permissions: 94,
+      usage_percentage: 22,
+    },
+    optimized_policy: {
+      Version: "2012-10-17",
+      Statement: [
+        {
+          Effect: "Allow",
+          Action: "s3:GetObject",
+          Resource: "arn:aws:s3:::specific-bucket/*"
+        }
+      ]
+    },
+    implementation_steps: [
+      "Review the optimized policy to ensure it meets business needs.",
+      "Create a new IAM policy version with the optimized JSON.",
+      "Set the new policy version as the default for the role.",
+      "Monitor application functionality after deployment."
+    ],
+    security_improvements: [
+      "Reduced attack surface by removing 94 unused permissions.",
+      "Enforced least privilege based on actual usage.",
+      "Eliminated potential privilege escalation paths."
+    ]
   };
 };
