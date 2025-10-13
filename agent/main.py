@@ -158,9 +158,13 @@ Or I can use {{{{ACCOUNT_ID}}}} and {{{{REGION}}}} placeholders that you can rep
             
             logging.info(f"📝 Parsing agent response (length: {len(final_message)} chars)")
             
-            # Extract both Permissions Policy and Trust Policy
-            # Pattern 1: Extract Permissions Policy (labeled with 🔐)
-            permissions_match = re.search(r'##\s*🔐\s*Permissions Policy[\s\S]*?```json\s*([\s\S]*?)```', final_message, re.IGNORECASE)
+            # Extract BOTH Permissions Policy and Trust Policy
+            # Pattern 1: Extract labeled Permissions Policy
+            permissions_match = re.search(
+                r'##\s*🔐\s*Permissions\s+Policy[\s\S]*?```json\s*([\s\S]*?)```', 
+                final_message, 
+                re.IGNORECASE
+            )
             if permissions_match:
                 try:
                     policy = json.loads(permissions_match.group(1).strip())
@@ -170,49 +174,59 @@ Or I can use {{{{ACCOUNT_ID}}}} and {{{{REGION}}}} placeholders that you can rep
                 except json.JSONDecodeError as e:
                     logging.warning(f"❌ Permissions Policy JSON parse error: {str(e)}")
             
-            # Pattern 2: Extract Trust Policy (labeled with 🤝)
-            trust_match = re.search(r'##\s*🤝\s*Trust Policy[\s\S]*?```json\s*([\s\S]*?)```', final_message, re.IGNORECASE)
+            # Pattern 2: Extract labeled Trust Policy
+            trust_match = re.search(
+                r'##\s*🤝\s*Trust\s+Policy[\s\S]*?```json\s*([\s\S]*?)```', 
+                final_message, 
+                re.IGNORECASE
+            )
             if trust_match:
                 try:
                     trust_policy = json.loads(trust_match.group(1).strip())
                     logging.info("✅ Found and parsed Trust Policy")
+                    logging.info(f"   Trust policy has {len(trust_policy.get('Statement', []))} statements")
                 except json.JSONDecodeError as e:
                     logging.warning(f"❌ Trust Policy JSON parse error: {str(e)}")
             
-            # Fallback: Try old extraction method if labeled policies not found
+            # Fallback: Try alternate patterns if labeled policies not found
             if not policy:
-                logging.info("🔍 Labeled policies not found, trying fallback extraction...")
-                json_str = None
+                logging.info("🔍 Labeled Permissions Policy not found, trying fallback extraction...")
                 
-                # Pattern 1: Markdown code block with json tag
-                markdown_match = re.search(r'```json\s*([\s\S]*?)```', final_message, re.IGNORECASE)
-                if markdown_match:
-                    json_str = markdown_match.group(1).strip()
-                    logging.info(f"🔍 Found JSON in markdown code block")
+                # Try to find all JSON blocks (likely permissions policy first, trust policy second)
+                all_json_blocks = re.findall(r'```json\s*([\s\S]*?)```', final_message, re.IGNORECASE)
                 
-                if not json_str:
-                    # Pattern 2: Any markdown code block containing Version and Statement
-                    markdown_match = re.search(r'```\s*([\s\S]*?Version[\s\S]*?Statement[\s\S]*?)```', final_message, re.IGNORECASE)
-                    if markdown_match:
-                        json_str = markdown_match.group(1).strip()
-                        logging.info(f"🔍 Found JSON in code block")
-                
-                if not json_str:
-                    # Pattern 3: Raw JSON in text
-                    json_match = re.search(r'\{[\s\S]*?"Version"\s*:\s*"[^"]*"[\s\S]*?"Statement"\s*:[\s\S]*?\][\s\S]*?\}', final_message)
-                    if json_match:
-                        json_str = json_match.group(0)
-                        logging.info(f"🔍 Found raw JSON structure")
-                
-                if json_str:
-                    logging.info(f"📄 Extracted JSON ({len(json_str)} chars)")
+                if len(all_json_blocks) >= 1:
                     try:
-                        policy = json.loads(json_str)
+                        policy = json.loads(all_json_blocks[0].strip())
                         is_question = False
-                        logging.info("✅ Successfully extracted and parsed policy JSON")
+                        logging.info("✅ Extracted Permissions Policy from first JSON block")
                         logging.info(f"   Policy has {len(policy.get('Statement', []))} statements")
-                    except json.JSONDecodeError as e:
-                        logging.warning(f"❌ JSON parse error: {str(e)}")
+                    except json.JSONDecodeError:
+                        logging.warning("❌ Failed to parse first JSON block")
+                
+                if len(all_json_blocks) >= 2 and not trust_policy:
+                    try:
+                        trust_policy = json.loads(all_json_blocks[1].strip())
+                        logging.info("✅ Extracted Trust Policy from second JSON block")
+                        logging.info(f"   Trust policy has {len(trust_policy.get('Statement', []))} statements")
+                    except json.JSONDecodeError:
+                        logging.warning("❌ Failed to parse second JSON block")
+            
+            # If still no policy found, try raw JSON search
+            if not policy:
+                logging.info("🔍 Trying raw JSON structure search...")
+                json_match = re.search(
+                    r'\{[\s\S]*?"Version"\s*:\s*"[^"]*"[\s\S]*?"Statement"\s*:[\s\S]*?\][\s\S]*?\}', 
+                    final_message
+                )
+                if json_match:
+                    try:
+                        policy = json.loads(json_match.group(0))
+                        is_question = False
+                        logging.info("✅ Extracted policy from raw JSON")
+                        logging.info(f"   Policy has {len(policy.get('Statement', []))} statements")
+                    except json.JSONDecodeError:
+                        logging.warning("❌ Failed to parse raw JSON")
                 else:
                     logging.warning("❌ No JSON structure found")
             

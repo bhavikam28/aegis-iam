@@ -44,8 +44,11 @@ export interface GeneratePolicyRequest {
 }
 
 export interface GeneratePolicyResponse {
-  policy: any;  // Permissions policy
-  trust_policy?: any;  // NEW: Trust policy
+  conversation_id: string;
+  final_answer: string;
+  message_count: number;
+  policy: any;
+  trust_policy?: any;  // ADD THIS LINE - Trust policy for IAM roles
   explanation: string;
   security_notes: string[];
   security_features?: string[];
@@ -57,7 +60,6 @@ export interface GeneratePolicyResponse {
     actions: string[];
     reflection: string;
   };
-  conversation_id?: string;
   refinement_suggestions?: string[];
   conversation_history?: ChatMessage[];
   is_question?: boolean;
