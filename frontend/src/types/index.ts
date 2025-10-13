@@ -60,6 +60,12 @@ export interface GeneratePolicyResponse {
   refinement_suggestions?: string[];
   conversation_history?: ChatMessage[];
   is_question?: boolean; // NEW: indicates agent is asking for more info
+  validation_issues?: Array<{  // NEW: input validation errors
+    type: string;
+    found: string;
+    problem: string;
+    suggestion: string;
+  }>;
 }
 
 export interface ValidatePolicyRequest {

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Shield, Send, RefreshCw, User, Bot, MessageSquare, Lock, ArrowRight, CheckCircle, ChevronDown, ChevronUp, AlertCircle, Download, Copy, Sparkles, Info } from 'lucide-react';
+import { Shield, Send, RefreshCw, User, Bot, MessageSquare, Lock, ArrowRight, CheckCircle, ChevronDown, ChevronUp, AlertCircle, Download, Copy, Sparkles, Info, AlertTriangle } from 'lucide-react';
 import { generatePolicy, sendFollowUp } from '../../services/api';
 import { GeneratePolicyResponse, ChatMessage } from '../../types';
 
@@ -282,13 +282,62 @@ const GeneratePolicy: React.FC = () => {
               </div>
               
               <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">
-                Just a Few More Details
+                {response.validation_issues && response.validation_issues.length > 0 
+                  ? "Let's Fix These Issues" 
+                  : "Just a Few More Details"}
               </h2>
               
               <p className="text-lg text-slate-400">
-                To generate the most secure policy, I need some additional information
+                {response.validation_issues && response.validation_issues.length > 0
+                  ? "I found some invalid information in your request"
+                  : "To generate the most secure policy, I need some additional information"}
               </p>
             </div>
+
+            {/* Validation Issues - If present */}
+            {response.validation_issues && response.validation_issues.length > 0 && (
+              <div className="mb-6 space-y-4">
+                {response.validation_issues.map((issue, idx) => (
+                  <div key={idx} className="bg-gradient-to-br from-orange-500/10 to-red-500/10 border border-orange-500/30 rounded-2xl p-6">
+                    <div className="flex items-start space-x-4">
+                      <div className="w-12 h-12 bg-orange-500/20 rounded-xl flex items-center justify-center flex-shrink-0 border border-orange-500/30">
+                        <AlertTriangle className="w-6 h-6 text-orange-400" />
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-center space-x-2 mb-2">
+                          <h4 className="text-orange-300 font-bold">
+                            {issue.type === 'invalid_region' ? '🌍 Invalid Region' :
+                             issue.type === 'invalid_account_id' ? '🔢 Invalid Account ID' :
+                             issue.type === 'invalid_resource_name' ? '📦 Invalid Resource Name' :
+                             issue.type === 'invalid_arn' ? '🔗 Invalid ARN Format' :
+                             '⚠️ Input Issue'}
+                          </h4>
+                        </div>
+                        
+                        <div className="bg-slate-950/50 rounded-lg p-3 mb-3">
+                          <div className="text-xs text-slate-500 mb-1">You provided:</div>
+                          <code className="text-sm text-red-300 font-mono">{issue.found}</code>
+                        </div>
+                        
+                        <p className="text-slate-300 text-sm mb-3 leading-relaxed">
+                          <span className="font-semibold text-orange-300">Problem:</span> {issue.problem}
+                        </p>
+                        
+                        <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-3">
+                          <div className="flex items-start space-x-2">
+                            <Sparkles className="w-4 h-4 text-green-400 mt-0.5 flex-shrink-0" />
+                            <div>
+                              <div className="text-xs text-green-400 font-semibold mb-1">Suggestion:</div>
+                              <p className="text-slate-200 text-sm">{issue.suggestion}</p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
 
             {/* Agent's Question - SEPARATE BOX */}
             <div className="bg-slate-900/50 backdrop-blur-xl border border-purple-500/20 rounded-2xl p-8 mb-6">
@@ -646,7 +695,7 @@ const GeneratePolicy: React.FC = () => {
                       <div className="space-y-3">
                         {details['Permission'] && (
                           <div className="bg-slate-900/50 rounded-lg p-3">
-                            <div className="text-xs text-purple-300 font-semibold mb-1">Permission</div>
+                            <div className="text-xs text-slate-500 mb-1">Permission</div>
                             <div className="text-sm text-slate-200 font-mono break-all">{details['Permission']}</div>
                           </div>
                         )}

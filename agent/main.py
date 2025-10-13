@@ -5,6 +5,7 @@ from pydantic import BaseModel
 from typing import Optional, List, Dict
 from policy_agent import PolicyAgent
 from validator_agent import ValidatorAgent
+from input_validator import validate_user_input_with_ai, should_validate_input
 import uuid
 import json
 import re
@@ -68,18 +69,66 @@ async def log_requests(request: Request, call_next):
 
 @app.post("/generate")
 async def generate(request: GenerationRequest):
-    """Generate IAM policy - keep existing implementation"""
+    """Generate IAM policy - with dynamic AI input validation"""
     try:
         conversation_id = request.conversation_id or str(uuid.uuid4())
         if conversation_id not in conversations:
             conversations[conversation_id] = []
         
+        # Store user message
         user_message = {
             "role": "user",
             "content": request.description,
             "timestamp": str(uuid.uuid4())
         }
         conversations[conversation_id].append(user_message)
+        
+        # ============================================
+        # DYNAMIC AI VALIDATION (No Hardcoded Rules!)
+        # ============================================
+        if not request.is_followup and should_validate_input(request.description):
+            logging.info("🔍 Performing dynamic AI validation on user input...")
+            
+            validation_result = validate_user_input_with_ai(request.description)
+            
+            if not validation_result['valid']:
+                logging.warning(f"⚠️ Validation issues found: {len(validation_result['issues'])} issues")
+                
+                # Use the AI-generated user-friendly message
+                validation_message = validation_result['message']
+                
+                # Store validation message as assistant response
+                assistant_message = {
+                    "role": "assistant",
+                    "content": validation_message,
+                    "timestamp": str(uuid.uuid4())
+                }
+                conversations[conversation_id].append(assistant_message)
+                
+                return {
+                    "conversation_id": conversation_id,
+                    "final_answer": validation_message,
+                    "message_count": len(conversations[conversation_id]),
+                    "policy": None,
+                    "explanation": "",
+                    "security_score": 0,
+                    "security_notes": [],
+                    "security_features": [],
+                    "score_explanation": "",
+                    "is_question": True,
+                    "validation_issues": validation_result['issues'],  # Include issues for frontend
+                    "conversation_history": [
+                        {"role": "user", "content": request.description, "timestamp": user_message["timestamp"]},
+                        {"role": "assistant", "content": validation_message, "timestamp": assistant_message["timestamp"]}
+                    ],
+                    "refinement_suggestions": []
+                }
+            else:
+                logging.info("✅ Input validation passed - proceeding to policy generation")
+        
+        # ============================================
+        # Continue with existing resource name check
+        # ============================================
         
         # Check if user specified specific resource names
         has_specific_resources = bool(re.search(r'(bucket|table|function|queue|topic)\s+(?:named|called)?\s*["\']?[\w-]+["\']?', request.description, re.IGNORECASE))
