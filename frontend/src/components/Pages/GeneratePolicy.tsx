@@ -521,6 +521,75 @@ const GeneratePolicy: React.FC = () => {
                 </div>
               </div>
 
+              {/* Trust Policy Box */}
+              {response.trust_policy && (
+                <div>
+                  <h3 className="text-white text-xl font-semibold mb-4 flex items-center space-x-2">
+                    <span>🤝 Trust Policy</span>
+                  </h3>
+                  <div className="bg-slate-900 border border-green-500/20 rounded-2xl overflow-hidden">
+                    <div className="flex items-center justify-between px-6 py-4 border-b border-green-500/20 bg-slate-800/50">
+                      <div className="flex items-center space-x-3">
+                        <div className="flex items-center space-x-2">
+                          <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+                          <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
+                          <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                        </div>
+                        <span className="text-sm text-slate-400">trust-policy.json</span>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <button 
+                          onClick={async () => {
+                            await navigator.clipboard.writeText(JSON.stringify(response.trust_policy, null, 2));
+                          }}
+                          className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm text-white transition-all flex items-center space-x-2"
+                        >
+                          <Copy className="w-4 h-4" />
+                          <span>Copy</span>
+                        </button>
+                        <button 
+                          onClick={() => {
+                            const blob = new Blob([JSON.stringify(response.trust_policy, null, 2)], { type: 'application/json' });
+                            const url = URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.href = url;
+                            a.download = 'trust-policy.json';
+                            document.body.appendChild(a);
+                            a.click();
+                            document.body.removeChild(a);
+                            URL.revokeObjectURL(url);
+                          }}
+                          className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg text-sm text-white transition-all flex items-center space-x-2"
+                        >
+                          <Download className="w-4 h-4" />
+                          <span>Download</span>
+                        </button>
+                      </div>
+                    </div>
+                    <div className="p-6 overflow-x-auto max-h-[400px]">
+                      <pre className="text-sm text-slate-300 font-mono leading-relaxed">
+                        {JSON.stringify(response.trust_policy, null, 2)}
+                      </pre>
+                    </div>
+                  </div>
+                  
+                  {/* Info box explaining trust policy */}
+                  <div className="mt-4 bg-green-500/10 border border-green-500/30 rounded-xl p-4">
+                    <div className="flex items-start space-x-3">
+                      <Info className="w-5 h-5 text-green-400 mt-0.5 flex-shrink-0" />
+                      <div>
+                        <div className="text-sm font-semibold text-green-300 mb-1">About Trust Policy</div>
+                        <p className="text-sm text-slate-300">
+                          The Trust Policy defines <strong>WHO</strong> can assume this IAM role. Without it, 
+                          nobody (not even AWS services) can use the permissions policy above. Both policies 
+                          work together to create a complete, functional IAM role.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Refine Policy Input */}
               <div className="bg-slate-900/50 backdrop-blur-xl border border-purple-500/20 rounded-2xl p-6">
                 <label className="block text-white font-medium mb-3">Refine Policy</label>

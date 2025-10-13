@@ -5,7 +5,6 @@ from pydantic import BaseModel
 from typing import Optional, List, Dict
 from policy_agent import PolicyAgent
 from validator_agent import ValidatorAgent
-from input_validator import validate_user_input_with_ai, should_validate_input
 import uuid
 import json
 import re
@@ -69,7 +68,7 @@ async def log_requests(request: Request, call_next):
 
 @app.post("/generate")
 async def generate(request: GenerationRequest):
-    """Generate IAM policy - with dynamic AI input validation"""
+    """Generate IAM policy - agent handles validation internally"""
     try:
         conversation_id = request.conversation_id or str(uuid.uuid4())
         if conversation_id not in conversations:
@@ -82,53 +81,6 @@ async def generate(request: GenerationRequest):
             "timestamp": str(uuid.uuid4())
         }
         conversations[conversation_id].append(user_message)
-        
-        # ============================================
-        # DYNAMIC AI VALIDATION (No Hardcoded Rules!)
-        # ============================================
-        if not request.is_followup and should_validate_input(request.description):
-            logging.info("🔍 Performing dynamic AI validation on user input...")
-            
-            validation_result = validate_user_input_with_ai(request.description)
-            
-            if not validation_result['valid']:
-                logging.warning(f"⚠️ Validation issues found: {len(validation_result['issues'])} issues")
-                
-                # Use the AI-generated user-friendly message
-                validation_message = validation_result['message']
-                
-                # Store validation message as assistant response
-                assistant_message = {
-                    "role": "assistant",
-                    "content": validation_message,
-                    "timestamp": str(uuid.uuid4())
-                }
-                conversations[conversation_id].append(assistant_message)
-                
-                return {
-                    "conversation_id": conversation_id,
-                    "final_answer": validation_message,
-                    "message_count": len(conversations[conversation_id]),
-                    "policy": None,
-                    "explanation": "",
-                    "security_score": 0,
-                    "security_notes": [],
-                    "security_features": [],
-                    "score_explanation": "",
-                    "is_question": True,
-                    "validation_issues": validation_result['issues'],  # Include issues for frontend
-                    "conversation_history": [
-                        {"role": "user", "content": request.description, "timestamp": user_message["timestamp"]},
-                        {"role": "assistant", "content": validation_message, "timestamp": assistant_message["timestamp"]}
-                    ],
-                    "refinement_suggestions": []
-                }
-            else:
-                logging.info("✅ Input validation passed - proceeding to policy generation")
-        
-        # ============================================
-        # Continue with existing resource name check
-        # ============================================
         
         # Check if user specified specific resource names
         has_specific_resources = bool(re.search(r'(bucket|table|function|queue|topic)\s+(?:named|called)?\s*["\']?[\w-]+["\']?', request.description, re.IGNORECASE))
@@ -156,6 +108,7 @@ Or I can use {{{{ACCOUNT_ID}}}} and {{{{REGION}}}} placeholders that you can rep
                 "final_answer": question_response,
                 "message_count": len(conversations[conversation_id]),
                 "policy": None,
+                "trust_policy": None,
                 "explanation": "",
                 "security_score": 0,
                 "security_notes": [],
@@ -195,6 +148,7 @@ Or I can use {{{{ACCOUNT_ID}}}} and {{{{REGION}}}} placeholders that you can rep
             conversations[conversation_id].append(assistant_message)
             
             policy = None
+            trust_policy = None
             explanation = final_message
             security_score = 0
             security_notes = []
@@ -204,40 +158,63 @@ Or I can use {{{{ACCOUNT_ID}}}} and {{{{REGION}}}} placeholders that you can rep
             
             logging.info(f"📝 Parsing agent response (length: {len(final_message)} chars)")
             
-            # Try to extract JSON policy from the response
-            json_str = None
-            
-            # Pattern 1: Markdown code block with json tag
-            markdown_match = re.search(r'```json\s*([\s\S]*?)```', final_message, re.IGNORECASE)
-            if markdown_match:
-                json_str = markdown_match.group(1).strip()
-                logging.info(f"🔍 Found JSON in markdown code block")
-            
-            if not json_str:
-                # Pattern 2: Any markdown code block containing Version and Statement
-                markdown_match = re.search(r'```\s*([\s\S]*?Version[\s\S]*?Statement[\s\S]*?)```', final_message, re.IGNORECASE)
-                if markdown_match:
-                    json_str = markdown_match.group(1).strip()
-                    logging.info(f"🔍 Found JSON in code block")
-            
-            if not json_str:
-                # Pattern 3: Raw JSON in text
-                json_match = re.search(r'\{[\s\S]*?"Version"\s*:\s*"[^"]*"[\s\S]*?"Statement"\s*:[\s\S]*?\][\s\S]*?\}', final_message)
-                if json_match:
-                    json_str = json_match.group(0)
-                    logging.info(f"🔍 Found raw JSON structure")
-            
-            if json_str:
-                logging.info(f"📄 Extracted JSON ({len(json_str)} chars)")
+            # Extract both Permissions Policy and Trust Policy
+            # Pattern 1: Extract Permissions Policy (labeled with 🔐)
+            permissions_match = re.search(r'##\s*🔐\s*Permissions Policy[\s\S]*?```json\s*([\s\S]*?)```', final_message, re.IGNORECASE)
+            if permissions_match:
                 try:
-                    policy = json.loads(json_str)
+                    policy = json.loads(permissions_match.group(1).strip())
                     is_question = False
-                    logging.info("✅ Successfully extracted and parsed policy JSON")
+                    logging.info("✅ Found and parsed Permissions Policy")
                     logging.info(f"   Policy has {len(policy.get('Statement', []))} statements")
                 except json.JSONDecodeError as e:
-                    logging.warning(f"❌ JSON parse error: {str(e)}")
-            else:
-                logging.warning("❌ No JSON structure found")
+                    logging.warning(f"❌ Permissions Policy JSON parse error: {str(e)}")
+            
+            # Pattern 2: Extract Trust Policy (labeled with 🤝)
+            trust_match = re.search(r'##\s*🤝\s*Trust Policy[\s\S]*?```json\s*([\s\S]*?)```', final_message, re.IGNORECASE)
+            if trust_match:
+                try:
+                    trust_policy = json.loads(trust_match.group(1).strip())
+                    logging.info("✅ Found and parsed Trust Policy")
+                except json.JSONDecodeError as e:
+                    logging.warning(f"❌ Trust Policy JSON parse error: {str(e)}")
+            
+            # Fallback: Try old extraction method if labeled policies not found
+            if not policy:
+                logging.info("🔍 Labeled policies not found, trying fallback extraction...")
+                json_str = None
+                
+                # Pattern 1: Markdown code block with json tag
+                markdown_match = re.search(r'```json\s*([\s\S]*?)```', final_message, re.IGNORECASE)
+                if markdown_match:
+                    json_str = markdown_match.group(1).strip()
+                    logging.info(f"🔍 Found JSON in markdown code block")
+                
+                if not json_str:
+                    # Pattern 2: Any markdown code block containing Version and Statement
+                    markdown_match = re.search(r'```\s*([\s\S]*?Version[\s\S]*?Statement[\s\S]*?)```', final_message, re.IGNORECASE)
+                    if markdown_match:
+                        json_str = markdown_match.group(1).strip()
+                        logging.info(f"🔍 Found JSON in code block")
+                
+                if not json_str:
+                    # Pattern 3: Raw JSON in text
+                    json_match = re.search(r'\{[\s\S]*?"Version"\s*:\s*"[^"]*"[\s\S]*?"Statement"\s*:[\s\S]*?\][\s\S]*?\}', final_message)
+                    if json_match:
+                        json_str = json_match.group(0)
+                        logging.info(f"🔍 Found raw JSON structure")
+                
+                if json_str:
+                    logging.info(f"📄 Extracted JSON ({len(json_str)} chars)")
+                    try:
+                        policy = json.loads(json_str)
+                        is_question = False
+                        logging.info("✅ Successfully extracted and parsed policy JSON")
+                        logging.info(f"   Policy has {len(policy.get('Statement', []))} statements")
+                    except json.JSONDecodeError as e:
+                        logging.warning(f"❌ JSON parse error: {str(e)}")
+                else:
+                    logging.warning("❌ No JSON structure found")
             
             # Extract security score
             score_match = re.search(r'Security Score[:\s]+(\d+)', final_message, re.IGNORECASE)
@@ -352,6 +329,7 @@ Or I can use {{{{ACCOUNT_ID}}}} and {{{{REGION}}}} placeholders that you can rep
                 "final_answer": final_message,
                 "message_count": len(conversations[conversation_id]),
                 "policy": policy,
+                "trust_policy": trust_policy,
                 "explanation": explanation,
                 "security_score": security_score,
                 "security_notes": security_notes,
@@ -365,6 +343,7 @@ Or I can use {{{{ACCOUNT_ID}}}} and {{{{REGION}}}} placeholders that you can rep
             logging.info(f"📤 RESPONSE SUMMARY:")
             logging.info(f"   ├─ is_question: {is_question}")
             logging.info(f"   ├─ has_policy: {policy is not None}")
+            logging.info(f"   ├─ has_trust_policy: {trust_policy is not None}")
             logging.info(f"   ├─ security_score: {security_score}")
             logging.info(f"   ├─ security_notes: {len(security_notes)} items")
             logging.info(f"   ├─ security_features: {len(security_features)} items")

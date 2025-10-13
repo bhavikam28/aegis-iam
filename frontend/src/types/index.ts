@@ -44,7 +44,8 @@ export interface GeneratePolicyRequest {
 }
 
 export interface GeneratePolicyResponse {
-  policy: any;
+  policy: any;  // Permissions policy
+  trust_policy?: any;  // NEW: Trust policy
   explanation: string;
   security_notes: string[];
   security_features?: string[];
@@ -59,14 +60,15 @@ export interface GeneratePolicyResponse {
   conversation_id?: string;
   refinement_suggestions?: string[];
   conversation_history?: ChatMessage[];
-  is_question?: boolean; // NEW: indicates agent is asking for more info
-  validation_issues?: Array<{  // NEW: input validation errors
+  is_question?: boolean;
+  validation_issues?: Array<{
     type: string;
     found: string;
     problem: string;
     suggestion: string;
   }>;
 }
+
 
 export interface ValidatePolicyRequest {
   policy_json?: string;
