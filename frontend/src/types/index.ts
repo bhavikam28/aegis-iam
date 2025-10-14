@@ -1,32 +1,4 @@
-export interface IAMPolicy {
-  Version: string;
-  Statement: IAMStatement[];
-}
-
-export interface IAMStatement {
-  Sid?: string;
-  Effect: 'Allow' | 'Deny';
-  Action: string | string[];
-  Resource: string | string[];
-  Condition?: Record<string, any>;
-  Principal?: string | Record<string, any>;
-}
-
-export interface SecurityFinding {
-  id: string;
-  severity: 'Critical' | 'High' | 'Medium' | 'Low';
-  type: 'OverPrivileged' | 'Compliance' | 'Security' | 'BestPractice';
-  title: string;
-  description: string;
-  recommendation: string;
-  affectedStatement?: number;
-}
-
-export interface ComplianceFramework {
-  name: string;
-  status: 'Compliant' | 'NonCompliant' | 'Partial';
-  gaps: string[];
-}
+// frontend/src/types/index.ts
 
 export interface ChatMessage {
   role: 'user' | 'assistant';
@@ -34,13 +6,11 @@ export interface ChatMessage {
   timestamp: string;
 }
 
-export interface GeneratePolicyRequest {
-  description: string;
-  restrictive?: boolean;
-  compliance?: string;
-  service?: string;
-  conversation_id?: string;
-  is_followup?: boolean;
+export interface ValidationIssue {
+  type: string;
+  found: string;
+  problem: string;
+  suggestion: string;
 }
 
 export interface GeneratePolicyResponse {
@@ -48,7 +18,7 @@ export interface GeneratePolicyResponse {
   final_answer: string;
   message_count: number;
   policy: any;
-  trust_policy?: any;  // ADD THIS LINE - Trust policy for IAM roles
+  trust_policy?: any;  // ← CRITICAL: Trust policy for IAM roles
   explanation: string;
   security_notes: string[];
   security_features?: string[];
@@ -63,71 +33,26 @@ export interface GeneratePolicyResponse {
   refinement_suggestions?: string[];
   conversation_history?: ChatMessage[];
   is_question?: boolean;
-  validation_issues?: Array<{
-    type: string;
-    found: string;
-    problem: string;
-    suggestion: string;
-  }>;
+  validation_issues?: ValidationIssue[];
 }
 
-
-export interface ValidatePolicyRequest {
-  policy_json?: string;
-  role_arn?: string;
-  aws_credentials?: {
-    access_key: string;
-    secret_key: string;
-    region?: string;
-  };
-  compliance_frameworks?: string[];
+export interface PolicyGenerationRequest {
+  description: string;
+  restrictive: boolean;
+  compliance: string;
+  conversation_id?: string;
 }
 
-export interface AuditSummary {
-  total_roles: number;
-  roles_analyzed: number;
-  total_policies: number;
-  total_findings: number;
-  critical_findings: number;
-  high_findings: number;
-  medium_findings: number;
-  low_findings: number;
-}
-
-export interface ValidatePolicyResponse {
-  findings: SecurityFinding[];
+export interface ValidationResponse {
+  success: boolean;
   risk_score: number;
-  security_issues: string[];
-  recommendations: string[];
+  findings: any[];
   compliance_status: Record<string, any>;
+  recommendations: string[];
   quick_wins: string[];
-  audit_summary?: AuditSummary | null;
+  audit_summary?: any;
   top_risks?: any[];
-  agent_reasoning?: string; // NEW: Agent's thinking process and decision-making
-}
-
-export interface AnalyzeHistoryRequest {
-  role_arn: string;
-  date_range: string;
-}
-
-export interface AnalyzeHistoryResponse {
-  optimized_policy: IAMPolicy;
-  usage_summary: {
-    total_permissions: number;
-    used_permissions: number;
-    unused_permissions: number;
-    usage_percentage: number;
-  };
-  security_improvements: string[];
-  implementation_steps: string[];
-  risk_reduction: number;
-}
-
-export interface JobStatus {
-  id: string;
-  status: 'pending' | 'running' | 'completed' | 'failed';
-  progress: number;
-  estimated_completion: string;
-  message: string;
+  raw_response: string;
+  mcp_enabled: boolean;
+  error?: string;
 }

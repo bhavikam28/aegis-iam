@@ -235,33 +235,57 @@ Or I can use {{{{ACCOUNT_ID}}}} and {{{{REGION}}}} placeholders that you can rep
             if score_match:
                 security_score = int(score_match.group(1))
             
-            # Extract security notes
-            notes_section = re.search(
-                r'###?\s*Security Notes?:(.*?)(?=###?\s*Security Features?:|###?\s*Score Explanation:|###?\s*Refinement Suggestions?:|$)', 
-                final_message, 
-                re.DOTALL | re.IGNORECASE
-            )
-            if notes_section:
-                notes_text = notes_section.group(1)
-                security_notes = [
-                    line.strip('- ').strip() 
-                    for line in notes_text.split('\n') 
-                    if line.strip() and (line.strip().startswith('-') or line.strip().startswith('•'))
-                ]
-            
-            # Extract security features
+            # Extract security features - IMPROVED
             features_section = re.search(
-                r'###?\s*Security Features?:(.*?)(?=###?\s*Security Notes?:|###?\s*Score Explanation:|###?\s*Refinement Suggestions?:|$)', 
+                r'###?\s*Security Features?:\s*(.*?)(?=###?\s*Security Notes?:|###?\s*Refinement|$)', 
                 final_message, 
                 re.DOTALL | re.IGNORECASE
             )
             if features_section:
                 features_text = features_section.group(1)
-                security_features = [
-                    line.strip('- ').strip() 
-                    for line in features_text.split('\n') 
-                    if line.strip() and (line.strip().startswith('-') or line.strip().startswith('•'))
-                ]
+                security_features = []
+                for line in features_text.split('\n'):
+                    line = line.strip()
+                    # Match lines with ✅ or just starting with -
+                    if line.startswith('- ✅') or line.startswith('✅'):
+                        feature = line.replace('- ✅', '').replace('✅', '').strip()
+                        if feature:
+                            security_features.append(feature)
+                    elif line.startswith('-') and len(line) > 2:
+                        feature = line[1:].strip()
+                        if feature and not feature.startswith('#'):
+                            security_features.append(feature)
+                logging.info(f"✅ Extracted {len(security_features)} security features")
+            else:
+                logging.warning("❌ No Security Features section found")
+            
+            # Extract security notes - IMPROVED
+            notes_section = re.search(
+                r'###?\s*Security Notes?:\s*(.*?)(?=###?\s*Refinement|###?\s*Why you need|$)', 
+                final_message, 
+                re.DOTALL | re.IGNORECASE
+            )
+            if notes_section:
+                notes_text = notes_section.group(1)
+                security_notes = []
+                for line in notes_text.split('\n'):
+                    line = line.strip()
+                    # Match lines with ⚠️, ✅, or just starting with -
+                    if line.startswith('- ⚠️') or line.startswith('⚠️'):
+                        note = line.replace('- ⚠️', '').replace('⚠️', '').strip()
+                        if note:
+                            security_notes.append(note)
+                    elif line.startswith('- ✅') or line.startswith('✅'):
+                        note = line.replace('- ✅', '').replace('✅', '').strip()
+                        if note:
+                            security_notes.append(note)
+                    elif line.startswith('-') and len(line) > 2:
+                        note = line[1:].strip()
+                        if note and not note.startswith('#'):
+                            security_notes.append(note)
+                logging.info(f"✅ Extracted {len(security_notes)} security notes")
+            else:
+                logging.warning("❌ No Security Notes section found")
             
             # Extract score explanation
             score_exp_section = re.search(

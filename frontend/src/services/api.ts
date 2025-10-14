@@ -1,13 +1,42 @@
 import { 
-  GeneratePolicyRequest, 
-  GeneratePolicyResponse, 
-  ValidatePolicyRequest, 
-  ValidatePolicyResponse, 
-  AnalyzeHistoryRequest, 
-  AnalyzeHistoryResponse,
-  JobStatus,
+  GeneratePolicyResponse,
+  PolicyGenerationRequest,
+  ValidationResponse,
   ChatMessage
 } from '../types';
+
+// Missing types - define them here
+export interface ValidatePolicyRequest {
+  policy_json?: string;
+  role_arn?: string;
+  compliance_frameworks?: string[];
+}
+
+export interface AnalyzeHistoryRequest {
+  role_arn: string;
+  date_range: string;
+}
+
+export interface AnalyzeHistoryResponse {
+  optimized_policy: any;
+  usage_summary: {
+    total_permissions: number;
+    used_permissions: number;
+    unused_permissions: number;
+    usage_percentage: number;
+  };
+  security_improvements: string[];
+  implementation_steps: string[];
+  risk_reduction: number;
+}
+
+export interface JobStatus {
+  id: string;
+  status: 'pending' | 'running' | 'completed' | 'failed';
+  progress: number;
+  estimated_completion: string;
+  message: string;
+}
 
 // API URL - uses environment variable on Vercel, localhost for local development
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
@@ -34,6 +63,7 @@ export interface ConversationalResponse {
   security_features?: string[];
   conversation_history: ChatMessage[];
   policy?: any;
+  trust_policy?: any;
   explanation?: string;
   is_question?: boolean;
 }
@@ -68,7 +98,11 @@ export const generatePolicy = async (
 
   if (backendResponse.is_question || !backendResponse.policy) {
     return {
+      conversation_id: backendResponse.conversation_id,
+      final_answer: messageContent,
+      message_count: backendResponse.message_count || 1,
       policy: null,
+      trust_policy: null,
       explanation: messageContent,
       security_score: 0,
       security_notes: [],
@@ -80,7 +114,6 @@ export const generatePolicy = async (
         actions: ["Requesting AWS Account ID, Region, or other details"],
         reflection: "Cannot generate policy without complete information"
       },
-      conversation_id: backendResponse.conversation_id,
       refinement_suggestions: [],
       conversation_history: backendResponse.conversation_history || [],
       is_question: true
@@ -88,7 +121,11 @@ export const generatePolicy = async (
   }
 
   return {
+    conversation_id: backendResponse.conversation_id,
+    final_answer: messageContent,
+    message_count: backendResponse.message_count || 1,
     policy: backendResponse.policy,
+    trust_policy: backendResponse.trust_policy,
     explanation: backendResponse.explanation || "Policy generated successfully.",
     security_score: backendResponse.security_score || 0,
     security_notes: backendResponse.security_notes || [],
@@ -100,7 +137,6 @@ export const generatePolicy = async (
       actions: ["Policy created with least privilege principles"],
       reflection: "Policy follows AWS security best practices"
     },
-    conversation_id: backendResponse.conversation_id,
     refinement_suggestions: backendResponse.refinement_suggestions || [],
     conversation_history: backendResponse.conversation_history || []
   };
@@ -145,7 +181,7 @@ export const clearConversation = async (conversationId: string) => {
 // VALIDATION API (MCP-ENABLED)
 // ============================================
 
-export const validatePolicy = async (request: ValidatePolicyRequest): Promise<ValidatePolicyResponse> => {
+export const validatePolicy = async (request: ValidatePolicyRequest): Promise<ValidationResponse> => {
   // Determine mode based on what's provided
   const mode = request.policy_json || request.role_arn ? 'quick' : 'audit';
   
@@ -231,7 +267,7 @@ export interface AuditResponse {
 
 export const performAutonomousAudit = async (
   request: AuditRequest = {}
-): Promise<ValidatePolicyResponse> => {
+): Promise<ValidationResponse> => {
   const response = await fetch(`${API_URL}/audit`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -289,7 +325,7 @@ export interface AuditProgressEvent {
 export const performStreamingAudit = (
   request: AuditRequest = {},
   onProgress: (event: AuditProgressEvent) => void
-): Promise<ValidatePolicyResponse> => {
+): Promise<ValidationResponse> => {
   return new Promise((resolve, reject) => {
     const frameworks = request.compliance_frameworks || ['pci_dss', 'hipaa', 'sox', 'gdpr', 'cis'];
     const url = `${API_URL}/audit/stream?compliance_frameworks=${frameworks.join(',')}`;
