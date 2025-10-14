@@ -13,6 +13,46 @@ import asyncio
 
 logging.basicConfig(level=logging.INFO)
 
+def extract_score_breakdown(text: str) -> dict:
+    """
+    Extract score breakdown (positive and improvements) from Bedrock response.
+    Returns dict with 'positive' and 'improvements' arrays.
+    """
+    breakdown = {"positive": [], "improvements": []}
+    
+    try:
+        # Extract Positive items
+        positive_match = re.search(
+            r'✅\s*\*\*Positive:\*\*\s*([\s\S]*?)(?=⚠️|###|$)',
+            text,
+            re.DOTALL
+        )
+        if positive_match:
+            positive_text = positive_match.group(1)
+            breakdown["positive"] = [
+                line.strip('- ').strip()
+                for line in positive_text.split('\n')
+                if line.strip() and line.strip().startswith('-')
+            ]
+        
+        # Extract Improvements
+        improvements_match = re.search(
+            r'⚠️\s*\*\*Could Improve:\*\*\s*([\s\S]*?)(?=###|$)',
+            text,
+            re.DOTALL
+        )
+        if improvements_match:
+            improvements_text = improvements_match.group(1)
+            breakdown["improvements"] = [
+                line.strip('- ').strip()
+                for line in improvements_text.split('\n')
+                if line.strip() and line.strip().startswith('-')
+            ]
+    except Exception as e:
+        logging.error(f"Error extracting score breakdown: {e}")
+    
+    return breakdown
+
 app = FastAPI(title="Aegis IAM Agent - MCP Enabled")
 app.add_middleware(
     CORSMiddleware,
@@ -70,7 +110,14 @@ async def log_requests(request: Request, call_next):
 async def generate(request: GenerationRequest):
     """Generate IAM policy - agent handles validation internally"""
     try:
+        logging.info(f"🚀 GENERATE ENDPOINT CALLED")
+        logging.info(f"   ├─ Description: {request.description[:100]}...")
+        logging.info(f"   ├─ Service: {request.service}")
+        logging.info(f"   ├─ Is followup: {request.is_followup}")
+        
         conversation_id = request.conversation_id or str(uuid.uuid4())
+        logging.info(f"   └─ Conversation ID: {conversation_id}")
+        
         if conversation_id not in conversations:
             conversations[conversation_id] = []
         
@@ -84,8 +131,10 @@ async def generate(request: GenerationRequest):
         
         # Check if user specified specific resource names
         has_specific_resources = bool(re.search(r'(bucket|table|function|queue|topic)\s+(?:named|called)?\s*["\']?[\w-]+["\']?', request.description, re.IGNORECASE))
+        logging.info(f"🔍 Resource check: has_specific_resources={has_specific_resources}, is_followup={request.is_followup}")
 
         if has_specific_resources and not request.is_followup:
+            logging.info(f"❓ Triggering question response for resource details")
             # Force a question response
             question_response = f"""Hi! I'd be happy to help create a secure IAM policy.
 
@@ -103,6 +152,7 @@ Or I can use {{{{ACCOUNT_ID}}}} and {{{{REGION}}}} placeholders that you can rep
             }
             conversations[conversation_id].append(assistant_message)
             
+            logging.info(f"✅ Returning question response to frontend")
             return {
                 "conversation_id": conversation_id,
                 "final_answer": question_response,
@@ -113,6 +163,7 @@ Or I can use {{{{ACCOUNT_ID}}}} and {{{{REGION}}}} placeholders that you can rep
                 "security_score": 0,
                 "security_notes": [],
                 "security_features": [],
+                "score_breakdown": {},
                 "score_explanation": "",
                 "is_question": True,
                 "conversation_history": [
@@ -161,7 +212,7 @@ Or I can use {{{{ACCOUNT_ID}}}} and {{{{REGION}}}} placeholders that you can rep
             # Extract BOTH Permissions Policy and Trust Policy
             # Pattern 1: Extract labeled Permissions Policy
             permissions_match = re.search(
-                r'##\s*🔐\s*Permissions\s+Policy[\s\S]*?```json\s*([\s\S]*?)```', 
+                r'##\s*(?:🔐\s*)?Permissions\s+Policy[\s\S]*?```json\s*([\s\S]*?)```', 
                 final_message, 
                 re.IGNORECASE
             )
@@ -176,7 +227,7 @@ Or I can use {{{{ACCOUNT_ID}}}} and {{{{REGION}}}} placeholders that you can rep
             
             # Pattern 2: Extract labeled Trust Policy
             trust_match = re.search(
-                r'##\s*🤝\s*Trust\s+Policy[\s\S]*?```json\s*([\s\S]*?)```', 
+                r'##\s*(?:🤝\s*)?Trust\s+Policy[\s\S]*?```json\s*([\s\S]*?)```', 
                 final_message, 
                 re.IGNORECASE
             )
@@ -310,6 +361,10 @@ Or I can use {{{{ACCOUNT_ID}}}} and {{{{REGION}}}} placeholders that you can rep
                 explanation = ""
                 logging.warning("❌ No Policy Explanation section found")
             
+            # Extract score breakdown
+            score_breakdown = extract_score_breakdown(final_message)
+            logging.info(f"✅ Extracted score breakdown: {len(score_breakdown['positive'])} positive, {len(score_breakdown['improvements'])} improvements")
+            
             # Build conversation history - clean up agent responses
             conversation_history = []
             for msg in conversations[conversation_id]:
@@ -372,6 +427,7 @@ Or I can use {{{{ACCOUNT_ID}}}} and {{{{REGION}}}} placeholders that you can rep
                 "security_score": security_score,
                 "security_notes": security_notes,
                 "security_features": security_features,
+                "score_breakdown": score_breakdown,
                 "score_explanation": score_explanation,
                 "is_question": is_question,
                 "conversation_history": conversation_history,
@@ -385,6 +441,7 @@ Or I can use {{{{ACCOUNT_ID}}}} and {{{{REGION}}}} placeholders that you can rep
             logging.info(f"   ├─ security_score: {security_score}")
             logging.info(f"   ├─ security_notes: {len(security_notes)} items")
             logging.info(f"   ├─ security_features: {len(security_features)} items")
+            logging.info(f"   ├─ score_breakdown: {len(score_breakdown['positive'])} positive, {len(score_breakdown['improvements'])} improvements")
             logging.info(f"   ├─ refinement_suggestions: {len(refinement_suggestions)} items")
             logging.info(f"   └─ conversation_history: {len(conversation_history)} messages")
             

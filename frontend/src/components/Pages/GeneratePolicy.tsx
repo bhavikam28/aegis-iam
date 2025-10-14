@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Shield, Send, RefreshCw, User, Bot, MessageSquare, Lock, ArrowRight, CheckCircle, ChevronDown, ChevronUp, AlertCircle, Download, Copy, Sparkles, Info, AlertTriangle } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Shield, Send, RefreshCw, User, Bot, MessageSquare, Lock, ArrowRight, CheckCircle, AlertCircle, Download, Copy, Sparkles, Info, X, Minimize2 } from 'lucide-react';
 import { generatePolicy, sendFollowUp } from '../../services/api';
 import { GeneratePolicyResponse, ChatMessage } from '../../types';
 
@@ -13,9 +13,11 @@ const GeneratePolicy: React.FC = () => {
   const [followUpMessage, setFollowUpMessage] = useState('');
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [isChatExpanded, setIsChatExpanded] = useState(true);
   const [copied, setCopied] = useState(false);
   const [showInitialForm, setShowInitialForm] = useState(true);
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [isChatMinimized, setIsChatMinimized] = useState(false);
+  const chatEndRef = useRef<HTMLDivElement>(null);
 
   const complianceFrameworks = [
     { value: 'general', label: 'General Security' },
@@ -32,6 +34,12 @@ const GeneratePolicy: React.FC = () => {
     }
   }, [response]);
 
+  useEffect(() => {
+    if (chatEndRef.current) {
+      chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [chatHistory]);
+
   const handleCopyPolicy = async () => {
     if (response?.policy) {
       await navigator.clipboard.writeText(JSON.stringify(response.policy, null, 2));
@@ -46,7 +54,7 @@ const GeneratePolicy: React.FC = () => {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'secure-iam-policy.json';
+      a.download = 'permissions-policy.json';
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -83,6 +91,7 @@ const GeneratePolicy: React.FC = () => {
       });
       setResponse(result);
       setConversationId(result.conversation_id || null);
+      setIsChatOpen(true);
     } catch (err) {
       console.error("Error generating policy:", err);
       setError(err instanceof Error ? err.message : 'Failed to generate policy');
@@ -119,17 +128,57 @@ const GeneratePolicy: React.FC = () => {
     setDescription('');
     setError(null);
     setShowInitialForm(true);
+    setIsChatOpen(false);
   };
 
-  // Check if we have a complete policy (not just asking questions)
   const hasPolicy = response?.policy !== null && 
                     response?.policy !== undefined && 
                     typeof response?.policy === 'object' &&
                     Object.keys(response?.policy || {}).length > 0 &&
                     response?.is_question !== true;
 
-  // Get score - from multiple possible locations
   const securityScore = response?.security_score || 0;
+
+  // Helper to get icon based on service
+  const getServiceIcon = (title: string) => {
+    const lower = title.toLowerCase();
+    if (lower.includes('s3') || lower.includes('bucket')) return '🪣';
+    if (lower.includes('dynamo')) return '🗄️';
+    if (lower.includes('cloudwatch') || lower.includes('log')) return '📊';
+    if (lower.includes('lambda')) return '⚡';
+    if (lower.includes('ec2')) return '💻';
+    if (lower.includes('rds')) return '🗃️';
+    return '🔒';
+  };
+
+  // Parse explanation into structured format
+  const parseExplanation = (explanation: string) => {
+    if (!explanation || explanation.trim() === '') return [];
+    
+    const sections = explanation
+      .split(/(?=^\d+\.\s+)/m)
+      .filter(section => section.trim());
+    
+    return sections.map(section => {
+      const match = section.match(/^(\d+)\.\s+(.+?)(?:\n|$)([\s\S]*)/);
+      if (!match) return null;
+      
+      const [, num, title, content] = match;
+      const details: { [key: string]: string } = {};
+      const lines = content.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+      
+      lines.forEach(line => {
+        const colonIndex = line.indexOf(':');
+        if (colonIndex > 0 && colonIndex < 30) {
+          const key = line.substring(0, colonIndex).replace(/^-\s*/, '').trim();
+          const value = line.substring(colonIndex + 1).trim();
+          details[key] = value;
+        }
+      });
+      
+      return { num, title: title.trim(), details };
+    }).filter((item): item is { num: string; title: string; details: { [key: string]: string } } => item !== null);
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
@@ -235,7 +284,7 @@ const GeneratePolicy: React.FC = () => {
         </div>
       )}
 
-      {/* Professional Loading State */}
+      {/* Loading State */}
       {!showInitialForm && loading && (
         <div className="relative overflow-hidden min-h-screen flex items-center justify-center">
           <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-purple-500/10 rounded-full blur-3xl animate-pulse"></div>
@@ -269,93 +318,36 @@ const GeneratePolicy: React.FC = () => {
         </div>
       )}
 
-      {/* CLEAN Information Request Page */}
+      {/* More Information Needed Page */}
       {!showInitialForm && !loading && response && response.is_question && (
         <div className="relative overflow-hidden min-h-screen">
-          <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-purple-500/10 rounded-full blur-3xl"></div>
-          <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-pink-500/8 rounded-full blur-3xl"></div>
+          <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-orange-500/10 rounded-full blur-3xl"></div>
+          <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-yellow-500/8 rounded-full blur-3xl"></div>
           
           <div className="relative max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
             <div className="text-center mb-12">
-              <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-purple-500/20 to-pink-500/20 rounded-2xl mb-6 border border-purple-500/30">
-                <Bot className="w-10 h-10 text-purple-400" />
+              <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-orange-500/20 to-yellow-500/20 rounded-2xl mb-6 border border-orange-500/30">
+                <AlertCircle className="w-10 h-10 text-orange-400" />
               </div>
               
               <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">
-                {response.validation_issues && response.validation_issues.length > 0 
-                  ? "Let's Fix These Issues" 
-                  : "Just a Few More Details"}
+                Just a Few More Details
               </h2>
               
               <p className="text-lg text-slate-400">
-                {response.validation_issues && response.validation_issues.length > 0
-                  ? "I found some invalid information in your request"
-                  : "To generate the most secure policy, I need some additional information"}
+                To generate the most secure policy, I need some additional information
               </p>
             </div>
 
-            {/* Validation Issues - If present */}
-            {response.validation_issues && response.validation_issues.length > 0 && (
-              <div className="mb-6 space-y-4">
-                {response.validation_issues.map((issue, idx) => (
-                  <div key={idx} className="bg-gradient-to-br from-orange-500/10 to-red-500/10 border border-orange-500/30 rounded-2xl p-6">
-                    <div className="flex items-start space-x-4">
-                      <div className="w-12 h-12 bg-orange-500/20 rounded-xl flex items-center justify-center flex-shrink-0 border border-orange-500/30">
-                        <AlertTriangle className="w-6 h-6 text-orange-400" />
-                      </div>
-                      <div className="flex-1">
-                        <div className="flex items-center space-x-2 mb-2">
-                          <h4 className="text-orange-300 font-bold">
-                            {issue.type === 'invalid_region' ? '🌍 Invalid Region' :
-                             issue.type === 'invalid_account_id' ? '🔢 Invalid Account ID' :
-                             issue.type === 'invalid_resource_name' ? '📦 Invalid Resource Name' :
-                             issue.type === 'invalid_arn' ? '🔗 Invalid ARN Format' :
-                             '⚠️ Input Issue'}
-                          </h4>
-                        </div>
-                        
-                        <div className="bg-slate-950/50 rounded-lg p-3 mb-3">
-                          <div className="text-xs text-slate-500 mb-1">You provided:</div>
-                          <code className="text-sm text-red-300 font-mono">{issue.found}</code>
-                        </div>
-                        
-                        <p className="text-slate-300 text-sm mb-3 leading-relaxed">
-                          <span className="font-semibold text-orange-300">Problem:</span> {issue.problem}
-                        </p>
-                        
-                        <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-3">
-                          <div className="flex items-start space-x-2">
-                            <Sparkles className="w-4 h-4 text-green-400 mt-0.5 flex-shrink-0" />
-                            <div>
-                              <div className="text-xs text-green-400 font-semibold mb-1">Suggestion:</div>
-                              <p className="text-slate-200 text-sm">{issue.suggestion}</p>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Agent's Question - SEPARATE BOX */}
-            <div className="bg-slate-900/50 backdrop-blur-xl border border-purple-500/20 rounded-2xl p-8 mb-6">
-              <div className="flex items-start space-x-4 mb-4">
-                <div className="w-12 h-12 bg-purple-500/20 rounded-xl flex items-center justify-center flex-shrink-0 border border-purple-500/30">
-                  <Bot className="w-6 h-6 text-purple-400" />
-                </div>
-                <div className="flex-1">
-                  <h3 className="text-white font-semibold mb-2">Aegis AI</h3>
-                  <div className="text-slate-300 leading-relaxed whitespace-pre-wrap">
-                    {cleanMarkdown(response.explanation)}
-                  </div>
-                </div>
+            {/* Agent's Question */}
+            <div className="bg-slate-900/50 backdrop-blur-xl border border-orange-500/20 rounded-2xl p-8 mb-6">
+              <div className="text-slate-300 leading-relaxed whitespace-pre-wrap">
+                {cleanMarkdown(response.explanation || response.final_answer)}
               </div>
             </div>
 
-            {/* Response Form - SEPARATE BOX */}
-            <div className="bg-slate-900/50 backdrop-blur-xl border border-purple-500/20 rounded-2xl p-8 mb-6">
+            {/* Response Form */}
+            <div className="bg-slate-900/50 backdrop-blur-xl border border-orange-500/20 rounded-2xl p-8 mb-6">
               <form onSubmit={handleFollowUp}>
                 <label className="block text-white font-medium mb-4">
                   Your Response
@@ -364,13 +356,13 @@ const GeneratePolicy: React.FC = () => {
                   value={followUpMessage}
                   onChange={(e) => setFollowUpMessage(e.target.value)}
                   placeholder="Provide the requested information..."
-                  className="w-full h-32 px-6 py-4 bg-slate-800/50 border border-slate-700/50 rounded-xl text-white placeholder-slate-500 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 focus:outline-none resize-none mb-4"
+                  className="w-full h-32 px-6 py-4 bg-slate-800/50 border border-slate-700/50 rounded-xl text-white placeholder-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 focus:outline-none resize-none mb-4"
                   disabled={loading}
                 />
                 <button
                   type="submit"
                   disabled={loading || !followUpMessage.trim()}
-                  className="w-full bg-gradient-to-r from-orange-600 via-pink-500 to-purple-600 hover:from-orange-700 hover:via-pink-600 hover:to-purple-700 text-white py-4 px-6 rounded-xl font-semibold disabled:opacity-50 transition-all shadow-lg shadow-purple-500/25 hover:shadow-xl hover:shadow-purple-500/40 flex items-center justify-center space-x-2 sm:space-x-3 group"
+                  className="w-full bg-gradient-to-r from-orange-600 via-pink-500 to-purple-600 hover:from-orange-700 hover:via-pink-600 hover:to-purple-700 text-white py-4 px-6 rounded-xl font-semibold disabled:opacity-50 transition-all shadow-lg shadow-orange-500/25 hover:shadow-xl hover:shadow-orange-500/40 flex items-center justify-center space-x-2 sm:space-x-3"
                 >
                   {loading ? (
                     <>
@@ -387,12 +379,12 @@ const GeneratePolicy: React.FC = () => {
               </form>
             </div>
 
-            {/* Quick Tips - SEPARATE BOX */}
-            <div className="bg-purple-500/10 backdrop-blur-xl border border-purple-500/30 rounded-2xl p-6 mb-6">
+            {/* Quick Tips */}
+            <div className="bg-orange-500/10 backdrop-blur-xl border border-orange-500/30 rounded-2xl p-6 mb-6">
               <div className="flex items-start space-x-3">
-                <Sparkles className="w-5 h-5 text-purple-400" />
+                <Sparkles className="w-5 h-5 text-orange-400 mt-0.5" />
                 <div>
-                  <h4 className="text-purple-300 font-semibold mb-2">Quick Tips</h4>
+                  <h4 className="text-orange-300 font-semibold mb-2">Quick Tips</h4>
                   <ul className="space-y-1 text-slate-400 text-sm">
                     <li>• Be as specific as possible with AWS Account IDs and regions</li>
                     <li>• If you don't have the information right now, I can use placeholders</li>
@@ -402,7 +394,7 @@ const GeneratePolicy: React.FC = () => {
               </div>
             </div>
 
-            {/* Start Over Button - SEPARATE BOX */}
+            {/* Start Over Button */}
             <div className="bg-slate-900/50 backdrop-blur-xl border border-slate-700/50 rounded-2xl overflow-hidden">
               <button
                 onClick={handleNewConversation}
@@ -416,16 +408,16 @@ const GeneratePolicy: React.FC = () => {
         </div>
       )}
 
-      {/* PREMIUM Results with Separate Boxes */}
-      {!showInitialForm && !loading && response && !response.is_question && hasPolicy && (
+      {/* Results Display */}
+      {!showInitialForm && response && hasPolicy && (
         <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-12">
           <div className="flex items-center justify-between mb-12">
             <div>
               <h2 className="text-3xl font-bold text-white mb-2">
-                Policy Generated Successfully
+                Policies Generated Successfully
               </h2>
               <p className="text-slate-400">
-                Review your secure IAM policy below
+                Review your secure IAM policies below
               </p>
             </div>
             <button
@@ -438,7 +430,7 @@ const GeneratePolicy: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-            {/* Security Score - SEPARATE BOX (Full Width) */}
+            {/* Security Score - Full Width */}
             <div className="lg:col-span-12">
               <div className="bg-gradient-to-br from-slate-900/50 to-slate-800/50 backdrop-blur-xl border border-purple-500/20 rounded-2xl p-8">
                 <div className="flex items-center justify-between mb-6">
@@ -458,7 +450,7 @@ const GeneratePolicy: React.FC = () => {
                   </div>
                 </div>
                 
-                <div className="w-full bg-slate-800 rounded-full h-4">
+                <div className="w-full bg-slate-800 rounded-full h-4 mb-6">
                   <div
                     className={`h-4 rounded-full transition-all duration-1000 ${
                       securityScore >= 90 ? 'bg-gradient-to-r from-green-500 to-green-400' :
@@ -469,15 +461,48 @@ const GeneratePolicy: React.FC = () => {
                     style={{ width: `${securityScore}%` }}
                   ></div>
                 </div>
+
+                {/* Score Breakdown */}
+                {response.score_breakdown && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-4">
+                      <h4 className="text-green-400 font-semibold mb-2 flex items-center space-x-2">
+                        <CheckCircle className="w-4 h-4" />
+                        <span>What's Good</span>
+                      </h4>
+                      <ul className="space-y-1 text-sm text-slate-300">
+                        {response.score_breakdown.positive?.map((item, idx) => (
+                          <li key={idx}>• {item}</li>
+                        ))}
+                      </ul>
+                    </div>
+                    <div className="bg-orange-500/10 border border-orange-500/30 rounded-xl p-4">
+                      <h4 className="text-orange-400 font-semibold mb-2 flex items-center space-x-2">
+                        <AlertCircle className="w-4 h-4" />
+                        <span>Could Improve</span>
+                      </h4>
+                      <ul className="space-y-1 text-sm text-slate-300">
+                        {response.score_breakdown.improvements?.map((item, idx) => (
+                          <li key={idx}>• {item}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
-            {/* LEFT COLUMN - Main Content */}
-            <div className="lg:col-span-8 space-y-6">
-              {/* IAM Policy Box */}
+            {/* LEFT COLUMN */}
+            <div className="lg:col-span-8 space-y-8">
+              {/* PERMISSIONS POLICY */}
               <div>
-                <h3 className="text-white text-xl font-semibold mb-4">IAM Policy</h3>
-                <div className="bg-slate-900 border border-purple-500/20 rounded-2xl overflow-hidden">
+                <h3 className="text-white text-2xl font-semibold mb-4 flex items-center space-x-2">
+                  <Shield className="w-6 h-6 text-purple-400" />
+                  <span>Permissions Policy</span>
+                </h3>
+
+                {/* Policy JSON */}
+                <div className="bg-slate-900 border border-purple-500/20 rounded-2xl overflow-hidden mb-4">
                   <div className="flex items-center justify-between px-6 py-4 border-b border-purple-500/20 bg-slate-800/50">
                     <div className="flex items-center space-x-3">
                       <div className="flex items-center space-x-2">
@@ -485,7 +510,7 @@ const GeneratePolicy: React.FC = () => {
                         <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
                         <div className="w-3 h-3 bg-green-500 rounded-full"></div>
                       </div>
-                      <span className="text-sm text-slate-400">secure-iam-policy.json</span>
+                      <span className="text-sm text-slate-400">permissions-policy.json</span>
                     </div>
                     <div className="flex items-center space-x-2">
                       <button 
@@ -519,15 +544,79 @@ const GeneratePolicy: React.FC = () => {
                     </pre>
                   </div>
                 </div>
+
+                {/* Info Box - Permissions */}
+                <div className="bg-purple-500/10 border border-purple-500/30 rounded-xl p-4 mb-6">
+                  <div className="flex items-start space-x-3">
+                    <Info className="w-5 h-5 text-purple-400 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <div className="text-sm font-semibold text-purple-300 mb-1">About Permissions Policy</div>
+                      <p className="text-sm text-slate-300">
+                        The Permissions Policy defines <strong>WHAT</strong> actions this IAM role can perform on AWS resources. 
+                        It specifies the exact services, actions, and resources that are allowed or denied.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* What This Policy Does - Permissions */}
+                {response.explanation && (
+                  <div className="bg-slate-900/50 backdrop-blur-xl border border-purple-500/20 rounded-2xl p-6">
+                    <h4 className="text-white text-xl font-bold mb-4 flex items-center space-x-2">
+                      <Shield className="w-5 h-5 text-purple-400" />
+                      <span>What These Permissions Do</span>
+                    </h4>
+                    <p className="text-slate-400 mb-6 text-sm">Breakdown of each permission statement</p>
+                    
+                    <div className="grid grid-cols-1 gap-4">
+                      {parseExplanation(response.explanation).map((section: any, index) => (
+                        <div key={index} className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 rounded-xl p-5 border border-slate-700/50">
+                          <div className="flex items-start space-x-3 mb-3">
+                            <div className="text-3xl">{getServiceIcon(section.title)}</div>
+                            <div className="flex-1">
+                              <div className="text-xs font-bold text-purple-400 mb-1">STATEMENT {section.num}</div>
+                              <h5 className="text-white font-bold text-base">{section.title}</h5>
+                            </div>
+                          </div>
+                          
+                          <div className="space-y-2">
+                            {section.details.Permission && (
+                              <div className="bg-slate-900/50 rounded-lg p-3">
+                                <div className="text-xs text-slate-500 mb-1">Actions</div>
+                                <div className="text-xs text-slate-200 font-mono">{section.details.Permission}</div>
+                              </div>
+                            )}
+                            
+                            {section.details.Purpose && (
+                              <div className="text-sm text-slate-300">
+                                <span className="font-semibold text-slate-400">Purpose:</span> {section.details.Purpose}
+                              </div>
+                            )}
+                            
+                            {section.details.Security && (
+                              <div className="flex items-start space-x-2 bg-green-500/5 border border-green-500/20 rounded-lg p-2">
+                                <CheckCircle className="w-3.5 h-3.5 text-green-400 mt-0.5 flex-shrink-0" />
+                                <div className="text-xs text-green-300">{section.details.Security}</div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
-              {/* Trust Policy Box */}
+              {/* TRUST POLICY */}
               {response.trust_policy && (
                 <div>
-                  <h3 className="text-white text-xl font-semibold mb-4 flex items-center space-x-2">
-                    <span>🤝 Trust Policy</span>
+                  <h3 className="text-white text-2xl font-semibold mb-4 flex items-center space-x-2">
+                    <CheckCircle className="w-6 h-6 text-green-400" />
+                    <span>Trust Policy</span>
                   </h3>
-                  <div className="bg-slate-900 border border-green-500/20 rounded-2xl overflow-hidden">
+
+                  {/* Trust Policy JSON */}
+                  <div className="bg-slate-900 border border-green-500/20 rounded-2xl overflow-hidden mb-4">
                     <div className="flex items-center justify-between px-6 py-4 border-b border-green-500/20 bg-slate-800/50">
                       <div className="flex items-center space-x-3">
                         <div className="flex items-center space-x-2">
@@ -572,9 +661,9 @@ const GeneratePolicy: React.FC = () => {
                       </pre>
                     </div>
                   </div>
-                  
-                  {/* Info box explaining trust policy */}
-                  <div className="mt-4 bg-green-500/10 border border-green-500/30 rounded-xl p-4">
+
+                  {/* Info Box - Trust Policy */}
+                  <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-4 mb-6">
                     <div className="flex items-start space-x-3">
                       <Info className="w-5 h-5 text-green-400 mt-0.5 flex-shrink-0" />
                       <div>
@@ -587,32 +676,50 @@ const GeneratePolicy: React.FC = () => {
                       </div>
                     </div>
                   </div>
+
+                  {/* What This Policy Does - Trust */}
+                  {response.trust_explanation && (
+                    <div className="bg-slate-900/50 backdrop-blur-xl border border-green-500/20 rounded-2xl p-6">
+                      <h4 className="text-white text-xl font-bold mb-4 flex items-center space-x-2">
+                        <CheckCircle className="w-5 h-5 text-green-400" />
+                        <span>What This Trust Policy Does</span>
+                      </h4>
+                      <p className="text-slate-400 mb-6 text-sm">Who can assume this role and under what conditions</p>
+                      
+                      <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 rounded-xl p-5 border border-slate-700/50">
+                        <div className="space-y-4">
+                          <div>
+                            <div className="text-xs text-slate-500 mb-2">Trusted Entity</div>
+                            <div className="bg-slate-900/50 rounded-lg p-3">
+                              <div className="text-sm text-slate-200 font-mono">
+                                {response.trust_policy.Statement?.[0]?.Principal?.Service || 
+                                 JSON.stringify(response.trust_policy.Statement?.[0]?.Principal)}
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <div>
+                            <div className="text-xs text-slate-500 mb-2">What It Means</div>
+                            <p className="text-sm text-slate-300">
+                              {response.trust_explanation || 
+                               "This policy allows the specified AWS service to assume this role and use the permissions defined in the permissions policy."}
+                            </p>
+                          </div>
+                          
+                          <div className="flex items-start space-x-2 bg-green-500/5 border border-green-500/20 rounded-lg p-3">
+                            <CheckCircle className="w-4 h-4 text-green-400 mt-0.5 flex-shrink-0" />
+                            <div className="text-xs text-green-300">
+                              Follows AWS security best practices by explicitly defining trusted principals
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
-              {/* Refine Policy Input */}
-              <div className="bg-slate-900/50 backdrop-blur-xl border border-purple-500/20 rounded-2xl p-6">
-                <label className="block text-white font-medium mb-3">Refine Policy</label>
-                <form onSubmit={handleFollowUp} className="flex space-x-3">
-                  <input
-                    type="text"
-                    value={followUpMessage}
-                    onChange={(e) => setFollowUpMessage(e.target.value)}
-                    placeholder="Add restrictions, conditions, or modifications..."
-                    className="flex-1 px-4 py-3 bg-slate-800/50 border border-slate-700/50 rounded-xl text-white placeholder-slate-500 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 focus:outline-none"
-                    disabled={loading}
-                  />
-                  <button
-                    type="submit"
-                    disabled={loading || !followUpMessage.trim()}
-                    className="px-5 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-xl disabled:opacity-50 transition-all shadow-lg shadow-purple-500/25"
-                  >
-                    <Send className="w-5 h-5" />
-                  </button>
-                </form>
-              </div>
-
-              {/* Suggested Refinements */}
+              {/* Suggested Refinements - LIMITED TO 5 */}
               {response.refinement_suggestions && response.refinement_suggestions.length > 0 && (
                 <div className="bg-gradient-to-br from-purple-500/10 to-pink-500/10 backdrop-blur-xl border border-purple-500/30 rounded-2xl p-6">
                   <div className="flex items-center space-x-2 mb-4">
@@ -620,10 +727,14 @@ const GeneratePolicy: React.FC = () => {
                     <h4 className="text-white font-semibold">Suggested Refinements</h4>
                   </div>
                   <div className="grid grid-cols-1 gap-3">
-                    {response.refinement_suggestions.map((suggestion, index) => (
+                    {response.refinement_suggestions.slice(0, 5).map((suggestion, index) => (
                       <button
                         key={index}
-                        onClick={() => setFollowUpMessage(suggestion)}
+                        onClick={() => {
+                          setFollowUpMessage(suggestion);
+                          setIsChatOpen(true);
+                          setIsChatMinimized(false);
+                        }}
                         className="group px-4 py-3 bg-slate-800/50 hover:bg-purple-500/20 border border-purple-500/30 hover:border-purple-500/50 rounded-xl text-sm text-slate-300 hover:text-white transition-all flex items-center justify-between text-left"
                       >
                         <div className="flex items-center space-x-3">
@@ -679,213 +790,175 @@ const GeneratePolicy: React.FC = () => {
               )}
             </div>
           </div>
+        </div>
+      )}
 
-          {/* Policy Explanation - IMPROVED VISUAL VERSION - FULL WIDTH */}
-          <div className="mt-8 bg-slate-900/50 backdrop-blur-xl border border-purple-500/20 rounded-2xl p-8">
-            <h4 className="text-white text-2xl font-bold mb-2 flex items-center space-x-2">
-              <Shield className="w-6 h-6 text-purple-400" />
-              <span>What This Policy Does</span>
-            </h4>
-            <p className="text-slate-400 mb-8">Quick overview of each permission granted</p>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {(() => {
-                if (!response.explanation || response.explanation.trim() === '') {
-                  return (
-                    <div className="col-span-2 text-slate-400 text-center py-8">
-                      No detailed explanation available
-                    </div>
-                  );
-                }
-
-                const sections = response.explanation
-                  .split(/(?=^\d+\.\s+)/m)
-                  .filter(section => section.trim());
-                
-                if (sections.length === 0) {
-                  return (
-                    <div className="col-span-2 text-slate-400 text-center py-8">
-                      Unable to parse explanation
-                    </div>
-                  );
-                }
-
-                // Helper function to get icon based on title
-                const getIcon = (title: string) => {
-                  const lowerTitle = title.toLowerCase();
-                  if (lowerTitle.includes('s3') || lowerTitle.includes('bucket')) {
-                    return '🪣';
-                  }
-                  if (lowerTitle.includes('dynamo')) {
-                    return '🗄️';
-                  }
-                  if (lowerTitle.includes('cloudwatch') || lowerTitle.includes('log')) {
-                    return '📊';
-                  }
-                  if (lowerTitle.includes('lambda')) {
-                    return '⚡';
-                  }
-                  return '🔒';
-                };
-
-                return sections.map((section, index) => {
-                  const match = section.match(/^(\d+)\.\s+(.+?)(?:\n|$)([\s\S]*)/);
-                  if (!match) return null;
-                  
-                  const [, num, title, content] = match;
-                  
-                  // Parse content into key-value pairs
-                  const details: { [key: string]: string } = {};
-                  const lines = content.split('\n').map(line => line.trim()).filter(line => line.length > 0);
-                  
-                  lines.forEach(line => {
-                    const colonIndex = line.indexOf(':');
-                    if (colonIndex > 0 && colonIndex < 30) {
-                      const key = line.substring(0, colonIndex).replace(/^-\s*/, '').trim();
-                      const value = line.substring(colonIndex + 1).trim();
-                      details[key] = value;
-                    }
-                  });
-                  
-                  return (
-                    <div key={index} className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 rounded-2xl p-6 border border-slate-700/50 hover:border-purple-500/30 transition-all group">
-                      {/* Header */}
-                      <div className="flex items-start space-x-4 mb-4">
-                        <div className="text-4xl">{getIcon(title)}</div>
-                        <div className="flex-1">
-                          <div className="flex items-center space-x-2 mb-1">
-                            <span className="text-xs font-bold text-purple-400">STATEMENT {num}</span>
-                          </div>
-                          <h5 className="text-white font-bold text-lg leading-tight">{title.trim()}</h5>
-                        </div>
-                      </div>
-                      
-                      {/* Key Details */}
-                      <div className="space-y-3">
-                        {details['Permission'] && (
-                          <div className="bg-slate-900/50 rounded-lg p-3">
-                            <div className="text-xs text-slate-500 mb-1">Permission</div>
-                            <div className="text-sm text-slate-200 font-mono break-all">{details['Permission']}</div>
-                          </div>
-                        )}
-                        
-                        {details['Purpose'] && (
-                          <div>
-                            <div className="text-xs text-slate-400 font-semibold mb-1">What it does</div>
-                            <div className="text-sm text-slate-300">{details['Purpose']}</div>
-                          </div>
-                        )}
-                        
-                        {details['Security'] && (
-                          <div className="flex items-start space-x-2 bg-green-500/5 border border-green-500/20 rounded-lg p-3">
-                            <CheckCircle className="w-4 h-4 text-green-400 mt-0.5 flex-shrink-0" />
-                            <div className="text-xs text-green-300">{details['Security']}</div>
-                          </div>
-                        )}
-                        
-                        {details['Why this ARN'] && (
-                          <div className="text-xs text-slate-500 italic">
-                            💡 {details['Why this ARN']}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                }).filter(Boolean);
-              })()}
-            </div>
-            
-            {/* Quick Summary */}
-            <div className="mt-6 bg-purple-500/5 border border-purple-500/20 rounded-xl p-4 flex items-start space-x-3">
-              <Info className="w-5 h-5 text-purple-400 mt-0.5 flex-shrink-0" />
-              <div className="flex-1">
-                <div className="text-sm font-semibold text-purple-300 mb-1">Summary</div>
-                <div className="text-sm text-slate-300">
-                  This policy grants secure access with minimum necessary permissions. All actions are scoped to specific resources following AWS best practices.
+      {/* FLOATING CHAT PANEL */}
+      {!showInitialForm && response && conversationId && hasPolicy && (
+        <div className={`fixed ${isChatMinimized ? 'bottom-4 right-4' : 'bottom-4 right-4'} z-50 transition-all duration-300`}>
+          {isChatMinimized ? (
+            <button
+              onClick={() => setIsChatMinimized(false)}
+              className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white p-4 rounded-full shadow-2xl shadow-purple-500/50 flex items-center space-x-2 group"
+            >
+              <MessageSquare className="w-6 h-6" />
+              <span className="max-w-0 overflow-hidden group-hover:max-w-xs transition-all duration-300 whitespace-nowrap">
+                Refine Policy
+              </span>
+            </button>
+          ) : (
+            <div className="w-96 h-[600px] bg-slate-900/95 backdrop-blur-xl border border-purple-500/30 rounded-2xl shadow-2xl shadow-purple-500/20 flex flex-col">
+              {/* Chat Header */}
+              <div className="px-6 py-4 border-b border-purple-500/20 bg-gradient-to-r from-purple-900/50 to-pink-900/50 rounded-t-2xl flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl flex items-center justify-center">
+                    <Bot className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="text-white font-semibold text-sm">Aegis AI Assistant</h3>
+                    <p className="text-xs text-slate-400">Refine your policies</p>
+                  </div>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={() => setIsChatMinimized(true)}
+                    className="p-2 hover:bg-white/10 rounded-lg transition-all"
+                    title="Minimize"
+                  >
+                    <Minimize2 className="w-4 h-4 text-slate-400" />
+                  </button>
+                  <button
+                    onClick={() => setIsChatOpen(false)}
+                    className="p-2 hover:bg-white/10 rounded-lg transition-all"
+                    title="Close"
+                  >
+                    <X className="w-4 h-4 text-slate-400" />
+                  </button>
                 </div>
               </div>
-            </div>
-          </div>
 
-          {/* Conversation History - FULL WIDTH BELOW GRID */}
-          {chatHistory && chatHistory.length > 0 && (
-            <div className="mt-8 bg-slate-900/50 backdrop-blur-xl border border-slate-700/50 rounded-2xl overflow-hidden">
-              <button
-                onClick={() => setIsChatExpanded(!isChatExpanded)}
-                className="w-full px-6 py-4 flex items-center justify-between hover:bg-slate-800/50 transition-all"
-              >
-                <div className="flex items-center space-x-3">
-                  <MessageSquare className="w-5 h-5 text-purple-400" />
-                  <span className="text-white font-semibold text-sm">Conversation ({chatHistory.length} messages)</span>
+              {/* Chat Messages */}
+              <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                {/* Welcome Message */}
+                <div className="flex justify-start">
+                  <div className="max-w-[85%] bg-slate-800/80 border border-slate-700/50 rounded-2xl rounded-tl-sm p-4">
+                    <div className="flex items-center space-x-2 mb-2">
+                      <Bot className="w-4 h-4 text-purple-400" />
+                      <span className="text-xs font-semibold text-purple-300">Aegis AI</span>
+                    </div>
+                    <p className="text-sm text-slate-200 leading-relaxed">
+                      👋 Hi! I can help you refine your policies. Try asking me to:
+                    </p>
+                    <ul className="mt-2 space-y-1 text-xs text-slate-300">
+                      <li>• Add MFA or IP restrictions</li>
+                      <li>• Narrow resource access</li>
+                      <li>• Add compliance requirements</li>
+                      <li>• Explain specific permissions</li>
+                    </ul>
+                  </div>
                 </div>
-                {isChatExpanded ? (
-                  <ChevronUp className="w-5 h-5 text-slate-400" />
-                ) : (
-                  <ChevronDown className="w-5 h-5 text-slate-400" />
-                )}
-              </button>
-              
-              {isChatExpanded && (
-                <div className="px-6 py-6 space-y-4 max-h-[600px] overflow-y-auto border-t border-slate-700/50 bg-slate-800/20">
-                  {chatHistory.map((msg, index) => (
-                    <div key={index} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                      <div className={`flex items-start space-x-3 ${msg.content.startsWith('```json') ? 'w-full' : 'max-w-[70%]'} ${msg.role === 'user' ? 'flex-row-reverse space-x-reverse' : ''}`}>
-                        <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
-                          msg.role === 'user' 
-                            ? 'bg-gradient-to-br from-orange-500/20 to-pink-500/20 border border-orange-500/30' 
-                            : 'bg-gradient-to-br from-purple-500/20 to-pink-500/20 border border-purple-500/30'
-                        }`}>
-                          {msg.role === 'user' ? (
-                            <User className="w-5 h-5 text-orange-400" />
-                          ) : (
-                            <Bot className="w-5 h-5 text-purple-400" />
-                          )}
-                        </div>
-                        
-                        <div className={`flex-1 rounded-2xl px-5 py-4 ${
-                          msg.role === 'user'
-                            ? 'bg-gradient-to-br from-orange-600/20 to-pink-600/20 border border-orange-500/30'
-                            : 'bg-slate-800/80 border border-slate-700/50'
-                        }`}>
-                          <div className="flex items-center space-x-2 mb-2">
-                            <span className={`text-xs font-semibold ${
-                              msg.role === 'user' ? 'text-orange-300' : 'text-purple-300'
-                            }`}>
-                              {msg.role === 'user' ? 'You' : 'Aegis AI'}
-                            </span>
-                            <span className="text-xs text-slate-500">•</span>
-                            <span className="text-xs text-slate-500">now</span>
-                          </div>
-                          {/* Check if content is JSON code block */}
-                          {msg.content.startsWith('```json') ? (
-                            <div className="bg-slate-900/70 rounded-xl p-4 overflow-x-auto border border-slate-700/50">
-                              <pre className="text-[10px] text-slate-300 font-mono leading-relaxed whitespace-pre">
-                                {(() => {
-                                  try {
-                                    const jsonStr = msg.content.replace(/```json\n?/, '').replace(/\n?```$/, '').trim();
-                                    const parsed = JSON.parse(jsonStr);
-                                    return JSON.stringify(parsed, null, 2);
-                                  } catch (e) {
-                                    // If parsing fails, show as-is
-                                    return msg.content.replace(/```json\n?/, '').replace(/\n?```$/, '').trim();
-                                  }
-                                })()}
-                              </pre>
-                            </div>
-                          ) : (
-                            <p className="text-sm text-slate-200 leading-relaxed whitespace-pre-wrap break-words">
-                              {msg.content}
-                            </p>
-                          )}
-                        </div>
+
+                {/* Chat History */}
+                {chatHistory.map((msg, index) => (
+                  <div key={index} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                    <div className={`max-w-[85%] rounded-2xl p-4 ${
+                      msg.role === 'user'
+                        ? 'bg-gradient-to-br from-purple-600 to-pink-600 rounded-tr-sm'
+                        : 'bg-slate-800/80 border border-slate-700/50 rounded-tl-sm'
+                    }`}>
+                      <div className="flex items-center space-x-2 mb-2">
+                        {msg.role === 'user' ? (
+                          <>
+                            <User className="w-4 h-4 text-purple-200" />
+                            <span className="text-xs font-semibold text-purple-100">You</span>
+                          </>
+                        ) : (
+                          <>
+                            <Bot className="w-4 h-4 text-purple-400" />
+                            <span className="text-xs font-semibold text-purple-300">Aegis AI</span>
+                          </>
+                        )}
+                      </div>
+                      <div className="text-sm text-slate-50 leading-relaxed whitespace-pre-wrap">
+                        {/* Check if message contains JSON */}
+                        {msg.content.includes('{') && msg.content.includes('}') ? (
+                          <pre className="text-xs font-mono bg-slate-900/50 rounded p-2 overflow-x-auto">
+                            {msg.content}
+                          </pre>
+                        ) : (
+                          cleanMarkdown(msg.content)
+                        )}
                       </div>
                     </div>
-                  ))}
-                </div>
-              )}
+                  </div>
+                ))}
+
+                {/* Loading Indicator */}
+                {loading && (
+                  <div className="flex justify-start">
+                    <div className="bg-slate-800/80 border border-slate-700/50 rounded-2xl rounded-tl-sm p-4">
+                      <div className="flex items-center space-x-2">
+                        <div className="flex space-x-1">
+                          <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                          <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                          <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                        </div>
+                        <span className="text-xs text-slate-400">Thinking...</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div ref={chatEndRef} />
+              </div>
+
+              {/* Chat Input */}
+              <div className="p-4 border-t border-purple-500/20 bg-slate-900/50">
+                <form onSubmit={handleFollowUp} className="flex items-end space-x-2">
+                  <div className="flex-1">
+                    <textarea
+                      value={followUpMessage}
+                      onChange={(e) => setFollowUpMessage(e.target.value)}
+                      placeholder="Ask me to refine the policy..."
+                      className="w-full px-4 py-3 bg-slate-800/50 border border-slate-700/50 rounded-xl text-white text-sm placeholder-slate-500 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 focus:outline-none resize-none"
+                      rows={2}
+                      disabled={loading}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault();
+                          handleFollowUp(e);
+                        }
+                      }}
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={loading || !followUpMessage.trim()}
+                    className="px-4 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 rounded-xl disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-purple-500/25"
+                  >
+                    <Send className="w-5 h-5 text-white" />
+                  </button>
+                </form>
+                <p className="text-xs text-slate-500 mt-2">
+                  Press Enter to send, Shift+Enter for new line
+                </p>
+              </div>
             </div>
           )}
         </div>
+      )}
+
+      {/* Floating Chat Toggle Button (when closed) */}
+      {!showInitialForm && response && conversationId && !isChatOpen && hasPolicy && (
+        <button
+          onClick={() => {
+            setIsChatOpen(true);
+            setIsChatMinimized(false);
+          }}
+          className="fixed bottom-6 right-6 w-16 h-16 bg-gradient-to-br from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white rounded-full shadow-2xl shadow-purple-500/50 flex items-center justify-center z-50 hover:scale-110 transition-transform"
+        >
+          <MessageSquare className="w-7 h-7" />
+        </button>
       )}
     </div>
   );
