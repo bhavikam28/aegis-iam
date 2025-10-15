@@ -1,4 +1,4 @@
-﻿from fastapi import FastAPI, Request, HTTPException
+﻿from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -10,6 +10,7 @@ import json
 import re
 import logging
 import asyncio
+from policy_scorer import calculate_policy_scores, generate_score_breakdown, generate_security_recommendations
 
 logging.basicConfig(level=logging.INFO)
 
@@ -21,60 +22,153 @@ def extract_score_breakdown(text: str) -> dict:
     }
     
     try:
-        # Extract Permissions Policy breakdown
-        perm_section = re.search(
-            r'##\s*Permissions Policy Security Analysis[\s\S]*?✅\s*\*\*Positive:\*\*\s*([\s\S]*?)(?=⚠️|##|$)',
-            text, re.DOTALL
+        # Extract Permissions Policy breakdown - IMPROVED REGEX
+        perm_analysis = re.search(
+            r'##\s*Permissions Policy Security Analysis([\s\S]*?)(?=##\s*Trust Policy Security Analysis|##\s*📊|$)',
+            text, 
+            re.DOTALL | re.IGNORECASE
         )
-        if perm_section:
-            pos_text = perm_section.group(1)
-            breakdown["permissions"]["positive"] = [
-                line.strip('- ').strip()
-                for line in pos_text.split('\n')
-                if line.strip() and line.strip().startswith('-')
-            ]
         
-        perm_improve = re.search(
-            r'Permissions Policy Security Analysis[\s\S]*?⚠️\s*\*\*Could Improve:\*\*\s*([\s\S]*?)(?=##|$)',
-            text, re.DOTALL
-        )
-        if perm_improve:
-            imp_text = perm_improve.group(1)
-            breakdown["permissions"]["improvements"] = [
-                line.strip('- ').strip()
-                for line in imp_text.split('\n')
-                if line.strip() and line.strip().startswith('-')
-            ]
+        if perm_analysis:
+            analysis_text = perm_analysis.group(1)
+            
+            # Extract Positive items
+            positive_match = re.search(
+                r'✅\s*\*\*Positive:\*\*([\s\S]*?)(?=⚠️|##|$)',
+                analysis_text,
+                re.DOTALL
+            )
+            if positive_match:
+                positive_text = positive_match.group(1)
+                breakdown["permissions"]["positive"] = [
+                    line.strip('- ').strip('• ').strip()
+                    for line in positive_text.split('\n')
+                    if line.strip() and (line.strip().startswith('-') or line.strip().startswith('•'))
+                ]
+            
+            # Extract Could Improve items
+            improve_match = re.search(
+                r'⚠️\s*\*\*Could Improve:\*\*([\s\S]*?)(?=##|$)',
+                analysis_text,
+                re.DOTALL
+            )
+            if improve_match:
+                improve_text = improve_match.group(1)
+                breakdown["permissions"]["improvements"] = [
+                    line.strip('- ').strip('• ').strip()
+                    for line in improve_text.split('\n')
+                    if line.strip() and (line.strip().startswith('-') or line.strip().startswith('•'))
+                ]
         
-        # Extract Trust Policy breakdown
-        trust_section = re.search(
-            r'##\s*Trust Policy Security Analysis[\s\S]*?✅\s*\*\*Positive:\*\*\s*([\s\S]*?)(?=⚠️|##|$)',
-            text, re.DOTALL
+        # Extract Trust Policy breakdown - IMPROVED REGEX
+        trust_analysis = re.search(
+            r'##\s*Trust Policy Security Analysis([\s\S]*?)(?=##\s*📊|##\s*Overall|$)',
+            text,
+            re.DOTALL | re.IGNORECASE
         )
-        if trust_section:
-            pos_text = trust_section.group(1)
-            breakdown["trust"]["positive"] = [
-                line.strip('- ').strip()
-                for line in pos_text.split('\n')
-                if line.strip() and line.strip().startswith('-')
-            ]
         
-        trust_improve = re.search(
-            r'Trust Policy Security Analysis[\s\S]*?⚠️\s*\*\*Could Improve:\*\*\s*([\s\S]*?)(?=##|$)',
-            text, re.DOTALL
-        )
-        if trust_improve:
-            imp_text = trust_improve.group(1)
-            breakdown["trust"]["improvements"] = [
-                line.strip('- ').strip()
-                for line in imp_text.split('\n')
-                if line.strip() and line.strip().startswith('-')
-            ]
+        if trust_analysis:
+            analysis_text = trust_analysis.group(1)
+            
+            # Extract Positive items
+            positive_match = re.search(
+                r'✅\s*\*\*Positive:\*\*([\s\S]*?)(?=⚠️|##|$)',
+                analysis_text,
+                re.DOTALL
+            )
+            if positive_match:
+                positive_text = positive_match.group(1)
+                breakdown["trust"]["positive"] = [
+                    line.strip('- ').strip('• ').strip()
+                    for line in positive_text.split('\n')
+                    if line.strip() and (line.strip().startswith('-') or line.strip().startswith('•'))
+                ]
+            
+            # Extract Could Improve items
+            improve_match = re.search(
+                r'⚠️\s*\*\*Could Improve:\*\*([\s\S]*?)(?=##|$)',
+                analysis_text,
+                re.DOTALL
+            )
+            if improve_match:
+                improve_text = improve_match.group(1)
+                breakdown["trust"]["improvements"] = [
+                    line.strip('- ').strip('• ').strip()
+                    for line in improve_text.split('\n')
+                    if line.strip() and (line.strip().startswith('-') or line.strip().startswith('•'))
+                ]
+        
+        logging.info(f"✅ Score breakdown extracted:")
+        logging.info(f"   Permissions Positive: {len(breakdown['permissions']['positive'])} items")
+        logging.info(f"   Permissions Improvements: {len(breakdown['permissions']['improvements'])} items")
+        logging.info(f"   Trust Positive: {len(breakdown['trust']['positive'])} items")
+        logging.info(f"   Trust Improvements: {len(breakdown['trust']['improvements'])} items")
             
     except Exception as e:
-        logging.error(f"Error extracting score breakdown: {e}")
+        logging.error(f"❌ Error extracting score breakdown: {e}")
     
     return breakdown
+
+def fix_s3_statement_separation(policy: dict) -> dict:
+    """
+    Validate and fix S3 statement separation.
+    If bucket and object ARNs are in same statement, split into two.
+    """
+    if not policy or 'Statement' not in policy:
+        return policy
+    
+    fixed_statements = []
+    
+    for statement in policy['Statement']:
+        resources = statement.get('Resource', [])
+        if isinstance(resources, str):
+            resources = [resources]
+        
+        actions = statement.get('Action', [])
+        if isinstance(actions, str):
+            actions = [actions]
+        
+        # Check if this statement has both bucket and object S3 ARNs
+        has_bucket_arn = any('arn:aws:s3:::' in r and not r.endswith('/*') for r in resources)
+        has_object_arn = any('arn:aws:s3:::' in r and r.endswith('/*') for r in resources)
+        
+        if has_bucket_arn and has_object_arn:
+            logging.warning("⚠️ Found S3 statement with mixed bucket/object ARNs - splitting...")
+            
+            # Split into two statements
+            bucket_resources = [r for r in resources if 'arn:aws:s3:::' in r and not r.endswith('/*')]
+            object_resources = [r for r in resources if 'arn:aws:s3:::' in r and r.endswith('/*')]
+            
+            # Bucket statement
+            if bucket_resources:
+                bucket_statement = {
+                    "Sid": (statement.get('Sid', 'S3Access') + 'ListBucket').replace('Access', ''),
+                    "Effect": statement.get('Effect', 'Allow'),
+                    "Action": "s3:ListBucket",
+                    "Resource": bucket_resources[0] if len(bucket_resources) == 1 else bucket_resources
+                }
+                fixed_statements.append(bucket_statement)
+                logging.info(f"✅ Created separate bucket statement: {bucket_statement['Sid']}")
+            
+            # Object statement
+            if object_resources:
+                object_actions = [a for a in actions if a != "s3:ListBucket"]
+                if not object_actions:
+                    object_actions = ["s3:GetObject"]  # Default if no other actions
+                object_statement = {
+                    "Sid": (statement.get('Sid', 'S3Access') + 'Objects').replace('Access', ''),
+                    "Effect": statement.get('Effect', 'Allow'),
+                    "Action": object_actions[0] if len(object_actions) == 1 else object_actions,
+                    "Resource": object_resources[0] if len(object_resources) == 1 else object_resources
+                }
+                fixed_statements.append(object_statement)
+                logging.info(f"✅ Created separate object statement: {object_statement['Sid']}")
+        else:
+            # No mixing, keep as is
+            fixed_statements.append(statement)
+    
+    policy['Statement'] = fixed_statements
+    return policy
 
 app = FastAPI(title="Aegis IAM Agent - MCP Enabled")
 app.add_middleware(
@@ -205,7 +299,7 @@ Or I can use {{{{ACCOUNT_ID}}}} and {{{{REGION}}}} placeholders that you can rep
             prompt = f"Previous conversation:\n{context}\n\nNow, {request.description}"
         
         async with asyncio.timeout(30):
-            logging.info(f"Calling agent with prompt: {prompt[:100]}...")
+            logging.info(f"🤖 Calling agent with prompt: {prompt[:100]}...")
             agent_result = aegis_agent.run(user_request=prompt, service=request.service)
             
             final_message = str(agent_result.message)
@@ -220,6 +314,12 @@ Or I can use {{{{ACCOUNT_ID}}}} and {{{{REGION}}}} placeholders that you can rep
                 "timestamp": str(uuid.uuid4())
             }
             conversations[conversation_id].append(assistant_message)
+            
+            # DEBUG: Log what Bedrock returned
+            logging.info("=" * 80)
+            logging.info("🔍 BEDROCK RAW RESPONSE (first 2000 chars):")
+            logging.info(final_message[:2000])
+            logging.info("=" * 80)
             
             policy = None
             trust_policy = None
@@ -281,85 +381,117 @@ Or I can use {{{{ACCOUNT_ID}}}} and {{{{REGION}}}} placeholders that you can rep
                     except json.JSONDecodeError:
                         logging.warning("❌ Failed to parse second JSON block")
             
-            # Extract SEPARATE security scores
-            perm_score_match = re.search(r'Permissions Policy Security Score[:\s]+(\d+)', final_message, re.IGNORECASE)
+            # Initialize score variables
+            permissions_score = 0
+            trust_score = 0
+            overall_score = 0
+            
+            # Extract SEPARATE security scores - Try regex first, fallback to calculator
+            perm_score_match = re.search(
+                r'Permissions Policy Security Score[:\s]+(\d+)(?:/100)?',
+                final_message,
+                re.IGNORECASE
+            )
             if perm_score_match:
                 permissions_score = int(perm_score_match.group(1))
                 logging.info(f"✅ Permissions Score: {permissions_score}")
+            else:
+                logging.warning(f"⚠️ Could not extract permissions score from response")
             
-            trust_score_match = re.search(r'Trust Policy Security Score[:\s]+(\d+)', final_message, re.IGNORECASE)
+            trust_score_match = re.search(
+                r'Trust Policy Security Score[:\s]+(\d+)(?:/100)?',
+                final_message,
+                re.IGNORECASE
+            )
             if trust_score_match:
                 trust_score = int(trust_score_match.group(1))
                 logging.info(f"✅ Trust Score: {trust_score}")
+            else:
+                logging.warning(f"⚠️ Could not extract trust score from response")
             
-            overall_score_match = re.search(r'Overall Security Score[:\s]+(\d+)', final_message, re.IGNORECASE)
+            overall_score_match = re.search(
+                r'Overall Security Score[:\s]+(\d+)(?:/100)?',
+                final_message,
+                re.IGNORECASE
+            )
             if overall_score_match:
                 overall_score = int(overall_score_match.group(1))
                 logging.info(f"✅ Overall Score: {overall_score}")
+            else:
+                # Calculate if not found
+                if permissions_score > 0 and trust_score > 0:
+                    overall_score = int((permissions_score * 0.7) + (trust_score * 0.3))
+                    logging.info(f"✅ Calculated Overall Score: {overall_score}")
             
+            # FALLBACK: Use policy_scorer if Bedrock didn't provide scores
+            if permissions_score == 0 or trust_score == 0:
+                logging.warning(f"⚠️ Using fallback scorer (permissions={permissions_score}, trust={trust_score})")
+                permissions_score, trust_score, overall_score = calculate_policy_scores(policy, trust_policy)
+                logging.info(f"✅ Calculated fallback scores: permissions={permissions_score}, trust={trust_score}, overall={overall_score}")
+
             # Extract SEPARATE security features for permissions policy
             perm_features_section = re.search(
-                r'##\s*Permissions Policy Security Features[:\s]*(.*?)(?=##|$)', 
+                r'##?\s*(?:🔧\s*)?(?:Permissions Policy )?Security Features([\s\S]*?)(?=##|###|$)', 
                 final_message, 
                 re.DOTALL | re.IGNORECASE
             )
             if perm_features_section:
                 features_text = perm_features_section.group(1)
                 security_features["permissions"] = [
-                    line.replace('- ✅', '').replace('✅', '').replace('-', '').strip()
+                    line.strip('- ').strip('• ').strip('✅ ').strip()
                     for line in features_text.split('\n')
-                    if line.strip() and (line.strip().startswith('-') or '✅' in line)
+                    if line.strip() and (line.strip().startswith('-') or line.strip().startswith('•') or line.strip().startswith('✅'))
                 ]
                 logging.info(f"✅ Extracted {len(security_features['permissions'])} permissions features")
             
             # Extract SEPARATE security features for trust policy
             trust_features_section = re.search(
-                r'##\s*Trust Policy Security Features[:\s]*(.*?)(?=##|$)', 
+                r'##?\s*(?:🔧\s*)?(?:Trust Policy )?Security Features([\s\S]*?)(?=##|$)', 
                 final_message, 
                 re.DOTALL | re.IGNORECASE
             )
             if trust_features_section:
                 features_text = trust_features_section.group(1)
                 security_features["trust"] = [
-                    line.replace('- ✅', '').replace('✅', '').replace('-', '').strip()
+                    line.strip('- ').strip('• ').strip('✅ ').strip()
                     for line in features_text.split('\n')
-                    if line.strip() and (line.strip().startswith('-') or '✅' in line)
+                    if line.strip() and (line.strip().startswith('-') or line.strip().startswith('•') or line.strip().startswith('✅'))
                 ]
                 logging.info(f"✅ Extracted {len(security_features['trust'])} trust features")
             
             # Extract SEPARATE security considerations for permissions policy
             perm_notes_section = re.search(
-                r'##\s*Permissions Policy Considerations[:\s]*(.*?)(?=##|$)', 
+                r'##?\s*(?:⚠️\s*)?(?:Permissions Policy )?Considerations([\s\S]*?)(?=##|$)', 
                 final_message, 
                 re.DOTALL | re.IGNORECASE
             )
             if perm_notes_section:
                 notes_text = perm_notes_section.group(1)
                 security_notes["permissions"] = [
-                    line.replace('- ⚠️', '').replace('⚠️', '').replace('- ✅', '').replace('✅', '').replace('-', '').strip()
+                    line.strip('- ').strip('• ').strip()
                     for line in notes_text.split('\n')
-                    if line.strip() and line.strip().startswith('-')
+                    if line.strip() and (line.strip().startswith('-') or line.strip().startswith('•'))
                 ]
                 logging.info(f"✅ Extracted {len(security_notes['permissions'])} permissions considerations")
             
             # Extract SEPARATE security considerations for trust policy
             trust_notes_section = re.search(
-                r'##\s*Trust Policy Considerations[:\s]*(.*?)(?=##|$)', 
+                r'##?\s*(?:⚠️\s*)?(?:Trust Policy )?Considerations([\s\S]*?)(?=##|$)', 
                 final_message, 
                 re.DOTALL | re.IGNORECASE
             )
             if trust_notes_section:
                 notes_text = trust_notes_section.group(1)
                 security_notes["trust"] = [
-                    line.replace('- ⚠️', '').replace('⚠️', '').replace('- ✅', '').replace('✅', '').replace('-', '').strip()
+                    line.strip('- ').strip('• ').strip()
                     for line in notes_text.split('\n')
-                    if line.strip() and line.strip().startswith('-')
+                    if line.strip() and (line.strip().startswith('-') or line.strip().startswith('•'))
                 ]
                 logging.info(f"✅ Extracted {len(security_notes['trust'])} trust considerations")
             
             # Extract policy explanations
             perm_exp_match = re.search(
-                r'##\s*Permissions Policy Explanation[:\s]*\n(.*?)(?=##|$)', 
+                r'##?\s*(?:📖\s*)?(?:Permissions Policy )?Explanation([\s\S]*?)(?=##|$)', 
                 final_message, 
                 re.DOTALL | re.IGNORECASE
             )
@@ -368,7 +500,7 @@ Or I can use {{{{ACCOUNT_ID}}}} and {{{{REGION}}}} placeholders that you can rep
                 logging.info(f"✅ Extracted permissions explanation: {len(explanation)} chars")
             
             trust_exp_match = re.search(
-                r'##\s*Trust Policy Explanation[:\s]*\n(.*?)(?=##|$)', 
+                r'##?\s*(?:📖\s*)?(?:Trust Policy )?Explanation([\s\S]*?)(?=##|$)', 
                 final_message, 
                 re.DOTALL | re.IGNORECASE
             )
@@ -378,13 +510,22 @@ Or I can use {{{{ACCOUNT_ID}}}} and {{{{REGION}}}} placeholders that you can rep
             
             # Extract score breakdown (separate for permissions and trust)
             score_breakdown = extract_score_breakdown(final_message)
-            logging.info(f"✅ Extracted score breakdown")
+            logging.info(f"✅ Score breakdown extraction complete")
+            
+            # FALLBACK: Use policy_scorer if Bedrock didn't provide breakdown
+            if not score_breakdown["permissions"]["positive"] and not score_breakdown["permissions"]["improvements"]:
+                score_breakdown = generate_score_breakdown(policy, trust_policy, permissions_score, trust_score)
+                logging.info(f"✅ Generated fallback score breakdown")
+            
+            # FIX S3 STATEMENT SEPARATION - Do this BEFORE building response
+            if policy:
+                policy = fix_s3_statement_separation(policy)
             
             # Extract SEPARATE refinement suggestions
             refinement_suggestions = {"permissions": [], "trust": []}
             
             perm_suggestions_match = re.search(
-                r'##\s*Permissions Policy Refinement Suggestions[:\s]*\n(.*?)(?=##|$)', 
+                r'##?\s*(?:💡\s*)?(?:Permissions Policy )?Refinement Suggestions([\s\S]*?)(?=##|$)', 
                 final_message, 
                 re.DOTALL | re.IGNORECASE
             )
@@ -395,7 +536,7 @@ Or I can use {{{{ACCOUNT_ID}}}} and {{{{REGION}}}} placeholders that you can rep
                 logging.info(f"✅ Extracted {len(refinement_suggestions['permissions'])} permissions refinement suggestions")
             
             trust_suggestions_match = re.search(
-                r'##\s*Trust Policy Refinement Suggestions[:\s]*\n(.*?)(?=##|$)', 
+                r'##?\s*(?:💡\s*)?(?:Trust Policy )?Refinement Suggestions([\s\S]*?)(?=##|$)', 
                 final_message, 
                 re.DOTALL | re.IGNORECASE
             )
@@ -460,8 +601,10 @@ Or I can use {{{{ACCOUNT_ID}}}} and {{{{REGION}}}} placeholders that you can rep
             logging.info(f"   ├─ permissions_score: {permissions_score}")
             logging.info(f"   ├─ trust_score: {trust_score}")
             logging.info(f"   ├─ overall_score: {overall_score}")
-            logging.info(f"   ├─ permissions_notes: {len(security_notes['permissions'])} items")
-            logging.info(f"   ├─ trust_notes: {len(security_notes['trust'])} items")
+            logging.info(f"   ├─ score_breakdown[permissions][positive]: {len(score_breakdown['permissions']['positive'])}")
+            logging.info(f"   ├─ score_breakdown[permissions][improvements]: {len(score_breakdown['permissions']['improvements'])}")
+            logging.info(f"   ├─ score_breakdown[trust][positive]: {len(score_breakdown['trust']['positive'])}")
+            logging.info(f"   ├─ score_breakdown[trust][improvements]: {len(score_breakdown['trust']['improvements'])}")
             logging.info(f"   ├─ permissions_features: {len(security_features['permissions'])} items")
             logging.info(f"   ├─ trust_features: {len(security_features['trust'])} items")
             logging.info(f"   ├─ permissions_suggestions: {len(refinement_suggestions['permissions'])} items")

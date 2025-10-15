@@ -3,6 +3,195 @@ import { Shield, Send, RefreshCw, User, Bot, MessageSquare, Lock, ArrowRight, Ch
 import { generatePolicy, sendFollowUp } from '../../services/api';
 import { GeneratePolicyResponse, ChatMessage } from '../../types';
 
+// ScoreCard Component - Elite security-focused design
+const ScoreCard = ({ title, score, color }: { title: string; score: number; color: string }) => {
+  const getGrade = (score: number) => {
+    if (score >= 90) return { 
+      letter: 'A', 
+      color: 'text-emerald-400', 
+      bg: 'from-emerald-950/40 via-emerald-900/30 to-emerald-950/40', 
+      border: 'border-emerald-500/40',
+      glow: 'shadow-emerald-500/20',
+      label: 'Excellent',
+      labelColor: 'text-emerald-300'
+    };
+    if (score >= 80) return { 
+      letter: 'B', 
+      color: 'text-green-400', 
+      bg: 'from-green-950/40 via-green-900/30 to-green-950/40', 
+      border: 'border-green-500/40',
+      glow: 'shadow-green-500/20',
+      label: 'Good',
+      labelColor: 'text-green-300'
+    };
+    if (score >= 70) return { 
+      letter: 'C', 
+      color: 'text-yellow-400', 
+      bg: 'from-yellow-950/40 via-yellow-900/30 to-yellow-950/40', 
+      border: 'border-yellow-500/40',
+      glow: 'shadow-yellow-500/20',
+      label: 'Fair',
+      labelColor: 'text-yellow-300'
+    };
+    if (score >= 60) return { 
+      letter: 'D', 
+      color: 'text-orange-400', 
+      bg: 'from-orange-950/40 via-orange-900/30 to-orange-950/40', 
+      border: 'border-orange-500/40',
+      glow: 'shadow-orange-500/20',
+      label: 'Needs Work',
+      labelColor: 'text-orange-300'
+    };
+    return { 
+      letter: 'F', 
+      color: 'text-red-400', 
+      bg: 'from-red-950/40 via-red-900/30 to-red-950/40', 
+      border: 'border-red-500/40',
+      glow: 'shadow-red-500/20',
+      label: 'Critical',
+      labelColor: 'text-red-300'
+    };
+  };
+
+  const grade = getGrade(score);
+  
+  return (
+    <div className={`relative bg-gradient-to-br ${grade.bg} backdrop-blur-xl border-2 ${grade.border} rounded-3xl p-8 ${grade.glow} shadow-2xl transition-all duration-500 hover:scale-105 hover:shadow-xl group`}>
+      {/* Animated background glow */}
+      <div className={`absolute inset-0 bg-gradient-to-br ${grade.bg} rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500 blur-xl`}></div>
+      
+      <div className="relative">
+        {/* Title */}
+        <div className="flex items-center justify-between mb-6">
+          <h3 className={`${color} text-base font-bold uppercase tracking-wider`}>{title}</h3>
+          <Shield className={`w-5 h-5 ${color} opacity-60`} />
+        </div>
+        
+        {/* Score Display */}
+        <div className="flex items-end justify-between mb-6">
+          <div className="flex items-baseline space-x-3">
+            <div className={`text-7xl font-black ${grade.color} tracking-tight`}>
+              {score}
+            </div>
+            <div className="text-slate-400 text-2xl font-medium pb-2">/100</div>
+          </div>
+          
+          {/* Grade Badge */}
+          <div className="text-center">
+            <div className={`text-5xl font-black ${grade.color} leading-none mb-1`}>{grade.letter}</div>
+            <div className={`text-xs font-semibold ${grade.labelColor} uppercase tracking-wide`}>{grade.label}</div>
+          </div>
+        </div>
+        
+        {/* Progress Bar */}
+        <div className="relative w-full h-4 bg-slate-900/60 rounded-full overflow-hidden border border-slate-800/50">
+          <div
+            className={`h-full rounded-full transition-all duration-1000 ease-out ${
+              score >= 90 ? 'bg-gradient-to-r from-emerald-500 via-emerald-400 to-green-400' :
+              score >= 80 ? 'bg-gradient-to-r from-green-500 via-green-400 to-lime-400' :
+              score >= 70 ? 'bg-gradient-to-r from-yellow-500 via-yellow-400 to-amber-400' :
+              score >= 60 ? 'bg-gradient-to-r from-orange-500 via-orange-400 to-red-400' :
+              'bg-gradient-to-r from-red-500 via-red-400 to-rose-400'
+            } shadow-lg`}
+            style={{ width: `${score}%` }}
+          >
+            {/* Animated shine effect */}
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-shimmer"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ScoreBreakdown Component - Better breakdown display with strengths and improvements
+const ScoreBreakdown = ({ 
+  title, 
+  positive, 
+  improvements,
+  colorClass 
+}: { 
+  title: string; 
+  positive: string[]; 
+  improvements: string[];
+  colorClass: string;
+}) => {
+  return (
+    <div className={`bg-${colorClass}-500/5 backdrop-blur-xl border border-${colorClass}-500/30 rounded-2xl p-6`}>
+      <h4 className={`text-${colorClass}-300 font-semibold mb-4 flex items-center space-x-2`}>
+        <Shield className="w-5 h-5" />
+        <span>{title}</span>
+      </h4>
+      
+      {positive && positive.length > 0 && (
+        <div className="mb-4">
+          <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-4">
+            <h5 className="text-green-400 font-semibold mb-3 flex items-center space-x-2">
+              <CheckCircle className="w-4 h-4" />
+              <span>Strengths</span>
+            </h5>
+            <ul className="space-y-2">
+              {positive.map((item, idx) => (
+                <li key={idx} className="text-sm text-slate-300 flex items-start space-x-2">
+                  <span className="text-green-400 mt-0.5">✓</span>
+                  <span>{item}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
+      
+      {improvements && improvements.length > 0 && (
+        <div>
+          <div className="bg-orange-500/10 border border-orange-500/30 rounded-xl p-4">
+            <h5 className="text-orange-400 font-semibold mb-3 flex items-center space-x-2">
+              <AlertCircle className="w-4 h-4" />
+              <span>Room for Improvement</span>
+            </h5>
+            <ul className="space-y-2">
+              {improvements.map((item, idx) => (
+                <li key={idx} className="text-sm text-slate-300 flex items-start space-x-2">
+                  <span className="text-orange-400 mt-0.5">!</span>
+                  <span>{item}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// RefinementButton Component - Clickable refinement suggestion
+const RefinementButton = ({ 
+  suggestion, 
+  onClick,
+  icon,
+  colorClass 
+}: { 
+  suggestion: string; 
+  onClick: () => void;
+  icon: React.ReactNode;
+  colorClass: string;
+}) => {
+  return (
+    <button
+      onClick={onClick}
+      className={`group px-4 py-3 bg-slate-800/50 hover:bg-${colorClass}-500/20 border border-${colorClass}-500/30 hover:border-${colorClass}-500/50 rounded-xl text-sm text-slate-300 hover:text-white transition-all flex items-center justify-between text-left w-full`}
+    >
+      <div className="flex items-center space-x-3">
+        <div className={`w-8 h-8 bg-${colorClass}-500/20 rounded-lg flex items-center justify-center flex-shrink-0`}>
+          {icon}
+        </div>
+        <span className="flex-1">{suggestion}</span>
+      </div>
+      <ArrowRight className={`w-4 h-4 text-${colorClass}-400 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0`} />
+    </button>
+  );
+};
+
 const GeneratePolicy: React.FC = () => {
   const [description, setDescription] = useState('');
   const [restrictive, setRestrictive] = useState(true);
@@ -107,6 +296,7 @@ const GeneratePolicy: React.FC = () => {
 
     setLoading(true);
     setError(null);
+    setResponse(null); // Clear response to show loading screen
     
     try {
       const result = await sendFollowUp(followUpMessage, conversationId);
@@ -140,6 +330,16 @@ const GeneratePolicy: React.FC = () => {
   const permissionsScore = response?.permissions_score || 0;
   const trustScore = response?.trust_score || 0;
   const overallScore = response?.overall_score || 0;
+
+  console.log('🔍 DEBUG SCORES:', {
+    permissionsScore,
+    trustScore,
+    overallScore,
+    response_permissions_score: response?.permissions_score,
+    response_trust_score: response?.trust_score,
+    response_overall_score: response?.overall_score,
+    fullResponse: response
+  });
 
   const getServiceIcon = (title: string) => {
     const lower = title.toLowerCase();
@@ -265,7 +465,7 @@ const GeneratePolicy: React.FC = () => {
                   <button
                     type="submit"
                     disabled={loading || !description.trim()}
-                    className="w-full bg-gradient-to-r from-orange-600 via-pink-500 to-purple-600 hover:from-orange-700 hover:via-pink-600 hover:to-purple-700 text-white py-4 sm:py-5 px-6 sm:px-8 rounded-xl sm:rounded-2xl font-semibold text-base sm:text-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-purple-500/25 hover:shadow-xl hover:shadow-purple-500/40 flex items-center justify-center space-x-2 sm:space-x-3 group"
+                    className="w-full bg-gradient-to-r from-orange-600 via-pink-500 to-purple-600 hover:from-orange-700 hover:via-pink-600 hover:to-purple-700 text-white py-4 sm:py-5 px-6 sm:px-8 rounded-xl sm:rounded-2xl font-semibold text-base sm:text-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-purple-500/25 hover:shadow-xl hover:shadow-purple-500/40 flex items-center justify-center space-x-2 group"
                   >
                     <Shield className="w-5 h-5 sm:w-6 sm:h-6" />
                     <span>Generate Secure Policy</span>
@@ -286,32 +486,81 @@ const GeneratePolicy: React.FC = () => {
 
       {/* LOADING STATE */}
       {!showInitialForm && loading && !response && (
-        <div className="relative overflow-hidden min-h-screen flex items-center justify-center">
-          <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-purple-500/10 rounded-full blur-3xl animate-pulse"></div>
-          <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-pink-500/10 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }}></div>
+        <div className="relative overflow-hidden min-h-screen flex items-center justify-center bg-slate-950">
+          {/* Animated background orbs */}
+          <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-purple-500/10 rounded-full blur-3xl animate-pulse"></div>
+          <div className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-pink-500/10 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }}></div>
+          <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[400px] h-[400px] bg-orange-500/5 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '2s' }}></div>
           
-          <div className="relative text-center px-8 max-w-2xl">
-            <div className="inline-flex items-center justify-center w-24 h-24 mb-8 relative">
-              <div className="absolute inset-0 bg-gradient-to-br from-orange-500/20 via-pink-500/20 to-purple-600/20 rounded-full animate-ping"></div>
-              <div className="absolute inset-0 bg-gradient-to-br from-orange-500 via-pink-500 to-purple-600 rounded-full opacity-20 animate-pulse"></div>
-              <Shield className="w-12 h-12 text-purple-400 relative z-10" />
+          <div className="relative text-center px-8 max-w-3xl">
+            {/* Main Icon */}
+            <div className="inline-flex items-center justify-center w-32 h-32 mb-10 relative">
+              {/* Rotating ring */}
+              <div className="absolute inset-0 border-4 border-transparent border-t-purple-500 border-r-pink-500 rounded-full animate-spin"></div>
+              <div className="absolute inset-2 border-4 border-transparent border-t-pink-500 border-r-orange-500 rounded-full animate-spin" style={{ animationDirection: 'reverse', animationDuration: '2s' }}></div>
+              
+              {/* Pulsing background */}
+              <div className="absolute inset-0 bg-gradient-to-br from-purple-500/20 via-pink-500/20 to-orange-500/20 rounded-full animate-ping"></div>
+              <div className="absolute inset-0 bg-gradient-to-br from-purple-500/30 via-pink-500/30 to-orange-500/30 rounded-full animate-pulse"></div>
+              
+              {/* Shield icon */}
+              <Shield className="w-16 h-16 text-purple-400 relative z-10 animate-pulse" />
             </div>
             
-            <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">
+            {/* Main heading */}
+            <h2 className="text-5xl sm:text-6xl font-black text-transparent bg-clip-text bg-gradient-to-r from-purple-400 via-pink-400 to-orange-400 mb-4 animate-pulse leading-tight pb-2">
               Aegis AI Analyzing
             </h2>
             
-            <p className="text-lg sm:text-xl text-slate-300 mb-8 leading-relaxed">
+            {/* Subheading */}
+            <p className="text-xl sm:text-2xl text-slate-300 mb-8 leading-relaxed font-medium max-w-2xl mx-auto">
               Crafting your secure IAM policy with least-privilege principles...
             </p>
             
-            <div className="flex items-center justify-center space-x-2 mb-8">
-              <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '0ms', animationDuration: '1s' }}></div>
-              <div className="w-2 h-2 bg-pink-400 rounded-full animate-bounce" style={{ animationDelay: '200ms', animationDuration: '1s' }}></div>
-              <div className="w-2 h-2 bg-orange-400 rounded-full animate-bounce" style={{ animationDelay: '400ms', animationDuration: '1s' }}></div>
+            {/* Status indicators */}
+            <div className="flex flex-col items-center space-y-4 mb-10">
+              <div className="flex items-center space-x-3 px-6 py-3 bg-slate-800/50 backdrop-blur-xl border border-slate-700/50 rounded-full">
+                <div className="w-2 h-2 bg-purple-400 rounded-full animate-pulse"></div>
+                <span className="text-sm font-semibold text-slate-300">Analyzing AWS services...</span>
+              </div>
+              <div className="flex items-center space-x-3 px-6 py-3 bg-slate-800/50 backdrop-blur-xl border border-slate-700/50 rounded-full">
+                <div className="w-2 h-2 bg-pink-400 rounded-full animate-pulse" style={{ animationDelay: '0.5s' }}></div>
+                <span className="text-sm font-semibold text-slate-300">Calculating security scores...</span>
+              </div>
+              <div className="flex items-center space-x-3 px-6 py-3 bg-slate-800/50 backdrop-blur-xl border border-slate-700/50 rounded-full">
+                <div className="w-2 h-2 bg-orange-400 rounded-full animate-pulse" style={{ animationDelay: '1s' }}></div>
+                <span className="text-sm font-semibold text-slate-300">Generating policies...</span>
+              </div>
+            </div>
+            
+            {/* Animated dots */}
+            <div className="flex items-center justify-center space-x-3 mb-8">
+              <div className="w-3 h-3 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '0ms', animationDuration: '1s' }}></div>
+              <div className="w-3 h-3 bg-pink-400 rounded-full animate-bounce" style={{ animationDelay: '200ms', animationDuration: '1s' }}></div>
+              <div className="w-3 h-3 bg-orange-400 rounded-full animate-bounce" style={{ animationDelay: '400ms', animationDuration: '1s' }}></div>
             </div>
 
-            <div className="text-sm text-slate-500">
+            {/* Security features being analyzed */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 max-w-2xl mx-auto">
+              {['Least Privilege', 'Resource Scoping', 'Action Specificity', 'Trust Boundaries'].map((feature, idx) => (
+                <div 
+                  key={feature}
+                  className="px-4 py-3 bg-slate-800/30 backdrop-blur-xl border border-slate-700/30 rounded-xl"
+                  style={{ 
+                    animation: 'fadeIn 0.5s ease-out',
+                    animationDelay: `${idx * 0.2}s`,
+                    animationFillMode: 'backwards'
+                  }}
+                >
+                  <div className="flex items-center justify-center space-x-2">
+                    <CheckCircle className="w-4 h-4 text-green-400" />
+                    <span className="text-xs font-medium text-slate-300">{feature}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="text-sm text-slate-500 mt-8">
               This may take a few moments...
             </div>
           </div>
@@ -382,7 +631,7 @@ const GeneratePolicy: React.FC = () => {
                 <Sparkles className="w-5 h-5 text-orange-400 mt-0.5" />
                 <div>
                   <h4 className="text-orange-300 font-semibold mb-2">Quick Tips</h4>
-                  <ul className="space-y-1 text-slate-400 text-sm">
+                  <ul className="mt-2 space-y-1 text-xs text-slate-300">
                     <li>• Be as specific as possible with AWS Account IDs and regions</li>
                     <li>• If you don't have the information right now, I can use placeholders</li>
                     <li>• You can always refine the policy after it's generated</li>
@@ -404,705 +653,351 @@ const GeneratePolicy: React.FC = () => {
         </div>
       )}
 
-      {/* RESULTS DISPLAY - CONTINUES IN NEXT PART */}
+      {/* RESULTS DISPLAY */}
       {!showInitialForm && response && hasPolicy && (
-        <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-12">
-          <div className="flex items-center justify-between mb-12">
+        <div className="relative overflow-hidden min-h-screen bg-slate-950">
+          {/* Animated background orbs */}
+          <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-purple-500/5 rounded-full blur-3xl"></div>
+          <div className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-pink-500/5 rounded-full blur-3xl"></div>
+          
+          <div className="relative max-w-[1800px] mx-auto px-4 sm:px-6 lg:px-8 py-12">
+            {/* HEADER */}
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-12 pb-8 border-b border-slate-800/50">
+              <div className="mb-6 sm:mb-0">
+                <div className="flex items-center space-x-4 mb-3">
+                  <div className="relative">
+                    <div className="absolute inset-0 bg-gradient-to-br from-purple-500/20 to-pink-500/20 rounded-2xl blur-xl"></div>
+                    <div className="relative bg-gradient-to-br from-purple-500/10 to-pink-500/10 backdrop-blur-xl border border-purple-500/30 rounded-2xl p-3">
+                      <Shield className="w-8 h-8 text-purple-400" />
+                    </div>
+                  </div>
+                  <div>
+                    <h2 className="text-3xl sm:text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-purple-400 via-pink-400 to-purple-400">
+                      Policies Generated Successfully
+                    </h2>
+                    <div className="flex items-center space-x-2 mt-2">
+                      <div className="flex items-center space-x-1.5 px-3 py-1 bg-emerald-500/10 border border-emerald-500/30 rounded-full">
+                        <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></div>
+                        <span className="text-xs font-semibold text-emerald-400 uppercase tracking-wide">Secure</span>
+                      </div>
+                      <div className="flex items-center space-x-1.5 px-3 py-1 bg-blue-500/10 border border-blue-500/30 rounded-full">
+                        <CheckCircle className="w-3 h-3 text-blue-400" />
+                        <span className="text-xs font-semibold text-blue-400 uppercase tracking-wide">Production Ready</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <p className="text-slate-400 text-base ml-20">
+                  Review your secure IAM policies below. Both permissions and trust policies are ready for deployment.
+                </p>
+              </div>
+              <button
+                onClick={handleNewConversation}
+                className="group relative px-8 py-4 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-semibold rounded-xl transition-all duration-300 shadow-lg shadow-purple-500/25 hover:shadow-purple-500/40 hover:scale-105 flex items-center space-x-3"
+              >
+                <div className="absolute inset-0 bg-gradient-to-r from-purple-400 to-pink-400 rounded-xl opacity-0 group-hover:opacity-20 blur-xl transition-opacity duration-300"></div>
+                <RefreshCw className="w-5 h-5 group-hover:rotate-180 transition-transform duration-500" />
+                <span>New Policy</span>
+              </button>
+            </div>
+
+            {/* SECURITY SCORES - Full Width */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+              <ScoreCard 
+                title="Permissions Policy" 
+                score={permissionsScore} 
+                color="text-purple-400"
+              />
+              <ScoreCard 
+                title="Trust Policy" 
+                score={trustScore} 
+                color="text-green-400"
+              />
+              <ScoreCard 
+                title="Overall Security" 
+                score={overallScore} 
+                color="text-pink-400"
+              />
+            </div>
+
+            {/* SCORE BREAKDOWN - Two Columns */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-12">
+              {/* Permissions Policy Analysis */}
+              <div>
+                <h3 className="text-white text-xl font-semibold mb-4 flex items-center space-x-2">
+                  <Shield className="w-5 h-5 text-purple-400" />
+                  <span>Permissions Policy Analysis</span>
+                </h3>
+                <ScoreBreakdown
+                  title="Strengths"
+                  positive={response.score_breakdown?.permissions?.positive || []}
+                  improvements={[]}
+                  colorClass="green"
+                />
+                <div className="mt-4">
+                  <ScoreBreakdown
+                    title="Room for Improvement"
+                    positive={[]}
+                    improvements={response.score_breakdown?.permissions?.improvements || []}
+                    colorClass="orange"
+                  />
+                </div>
+              </div>
+
+              {/* Trust Policy Analysis */}
+              <div>
+                <h3 className="text-white text-xl font-semibold mb-4 flex items-center space-x-2">
+                  <Lock className="w-5 h-5 text-green-400" />
+                  <span>Trust Policy Analysis</span>
+                </h3>
+                <ScoreBreakdown
+                  title="Strengths"
+                  positive={response.score_breakdown?.trust?.positive || []}
+                  improvements={[]}
+                  colorClass="green"
+                />
+                <div className="mt-4">
+                  <ScoreBreakdown
+                    title="Room for Improvement"
+                    positive={[]}
+                    improvements={response.score_breakdown?.trust?.improvements || []}
+                    colorClass="orange"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* PERMISSIONS POLICY */}
             <div>
-              <h2 className="text-3xl font-bold text-white mb-2">
-                Policies Generated Successfully
-              </h2>
-              <p className="text-slate-400">
-                Review your secure IAM policies below
-              </p>
-            </div>
-            <button
-              onClick={handleNewConversation}
-              className="px-6 py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-xl transition-all border border-slate-700 flex items-center space-x-2"
-            >
-              <RefreshCw className="w-4 h-4" />
-              <span>New Policy</span>
-            </button>
-          </div>
+              <h3 className="text-white text-2xl font-semibold mb-4 flex items-center space-x-2">
+                <Shield className="w-6 h-6 text-purple-400" />
+                <span>Permissions Policy</span>
+              </h3>
 
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-            {/* THREE SEPARATE SCORE CARDS */}
-            <div className="lg:col-span-12 grid grid-cols-1 md:grid-cols-3 gap-6">
-              {/* Permissions Score */}
-              <div className="bg-gradient-to-br from-purple-900/30 to-purple-800/30 backdrop-blur-xl border border-purple-500/20 rounded-2xl p-6">
-                <div className="text-center">
-                  <h3 className="text-purple-300 text-lg font-semibold mb-3">Permissions Policy</h3>
-                  <div className={`text-5xl font-bold mb-2 ${
-                    permissionsScore >= 90 ? 'text-green-400' :
-                    permissionsScore >= 80 ? 'text-yellow-400' :
-                    permissionsScore >= 70 ? 'text-orange-400' : 'text-red-400'
-                  }`}>
-                    {permissionsScore}
+              <div className="bg-slate-900/80 backdrop-blur-xl border-2 border-slate-800/50 rounded-2xl overflow-hidden shadow-2xl">
+                {/* Terminal Header */}
+                <div className="bg-gradient-to-r from-slate-800/90 to-slate-900/90 px-6 py-4 flex items-center justify-between border-b border-slate-700/50">
+                  <div className="flex items-center space-x-3">
+                    <div className="flex space-x-2">
+                      <div className="w-3 h-3 rounded-full bg-red-500/80"></div>
+                      <div className="w-3 h-3 rounded-full bg-yellow-500/80"></div>
+                      <div className="w-3 h-3 rounded-full bg-green-500/80"></div>
+                    </div>
+                    <span className="text-slate-400 text-sm font-mono">permissions-policy.json</span>
                   </div>
-                  <div className="text-slate-400 text-sm mb-4">/ 100</div>
-                  
-                  <div className="w-full bg-slate-800 rounded-full h-3">
-                    <div
-                      className={`h-3 rounded-full transition-all duration-1000 ${
-                        permissionsScore >= 90 ? 'bg-gradient-to-r from-green-500 to-green-400' :
-                        permissionsScore >= 80 ? 'bg-gradient-to-r from-yellow-500 to-yellow-400' :
-                        permissionsScore >= 70 ? 'bg-gradient-to-r from-orange-500 to-pink-500' :
-                        'bg-gradient-to-r from-red-500 to-pink-500'
-                      }`}
-                      style={{ width: `${permissionsScore}%` }}
-                    ></div>
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={handleCopyPolicy}
+                      className="group relative px-4 py-2 bg-slate-800/50 hover:bg-slate-700/50 border border-slate-700/50 hover:border-slate-600/50 rounded-lg transition-all duration-200 flex items-center space-x-2"
+                    >
+                      <Copy className="w-4 h-4 text-slate-400 group-hover:text-purple-400 transition-colors" />
+                      <span className="text-sm font-medium text-slate-300 group-hover:text-white transition-colors">
+                        {copied ? 'Copied!' : 'Copy'}
+                      </span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        const blob = new Blob([JSON.stringify(response.policy, null, 2)], { type: 'application/json' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = 'permissions-policy.json';
+                        a.click();
+                      }}
+                      className="group relative px-4 py-2 bg-purple-600/80 hover:bg-purple-500/80 border border-purple-500/50 hover:border-purple-400/50 rounded-lg transition-all duration-200 flex items-center space-x-2"
+                    >
+                      <Download className="w-4 h-4 text-white transition-transform group-hover:translate-y-0.5" />
+                      <span className="text-sm font-medium text-white">Download</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* JSON Content */}
+                <div className="p-6 overflow-x-auto">
+                  <pre className="text-sm font-mono text-slate-300 leading-relaxed">
+                    {JSON.stringify(response.policy, null, 2)}
+                  </pre>
+                </div>
+              </div>
+
+              <div className="bg-purple-500/10 border border-purple-500/30 rounded-xl p-4 mb-6">
+                <div className="flex items-start space-x-3">
+                  <Info className="w-5 h-5 text-purple-400 mt-0.5" />
+                  <div>
+                    <div className="text-sm font-semibold text-purple-300 mb-1">About Permissions Policy</div>
+                    <p className="text-sm text-slate-300">
+                      The Permissions Policy defines <strong>WHAT</strong> actions this IAM role can perform on AWS resources. 
+                      It specifies the exact services, actions, and resources that are allowed or denied.
+                    </p>
                   </div>
                 </div>
               </div>
 
-              {/* Trust Score */}
-              <div className="bg-gradient-to-br from-green-900/30 to-green-800/30 backdrop-blur-xl border border-green-500/20 rounded-2xl p-6">
-                <div className="text-center">
-                  <h3 className="text-green-300 text-lg font-semibold mb-3">Trust Policy</h3>
-                  <div className={`text-5xl font-bold mb-2 ${
-                    trustScore >= 90 ? 'text-green-400' :
-                    trustScore >= 80 ? 'text-yellow-400' :
-                    trustScore >= 70 ? 'text-orange-400' : 'text-red-400'
-                  }`}>
-                    {trustScore}
-                  </div>
-                  <div className="text-slate-400 text-sm mb-4">/ 100</div>
-                  
-                  <div className="w-full bg-slate-800 rounded-full h-3">
-                    <div
-                      className={`h-3 rounded-full transition-all duration-1000 ${
-                        trustScore >= 90 ? 'bg-gradient-to-r from-green-500 to-green-400' :
-                        trustScore >= 80 ? 'bg-gradient-to-r from-yellow-500 to-yellow-400' :
-                        trustScore >= 70 ? 'bg-gradient-to-r from-orange-500 to-pink-500' :
-                        'bg-gradient-to-r from-red-500 to-pink-500'
-                      }`}
-                      style={{ width: `${trustScore}%` }}
-                    ></div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Overall Score */}
-              <div className="bg-gradient-to-br from-blue-900/30 to-blue-800/30 backdrop-blur-xl border border-blue-500/20 rounded-2xl p-6">
-                <div className="text-center">
-                  <h3 className="text-blue-300 text-lg font-semibold mb-3">Overall Security</h3>
-                  <div className={`text-5xl font-bold mb-2 ${
-                    overallScore >= 90 ? 'text-green-400' :
-                    overallScore >= 80 ? 'text-yellow-400' :
-                    overallScore >= 70 ? 'text-orange-400' : 'text-red-400'
-                  }`}>
-                    {overallScore}
-                  </div>
-                  <div className="text-slate-400 text-sm mb-4">/ 100</div>
-                  
-                  <div className="w-full bg-slate-800 rounded-full h-3">
-                    <div
-                      className={`h-3 rounded-full transition-all duration-1000 ${
-                        overallScore >= 90 ? 'bg-gradient-to-r from-green-500 to-green-400' :
-                        overallScore >= 80 ? 'bg-gradient-to-r from-yellow-500 to-yellow-400' :
-                        overallScore >= 70 ? 'bg-gradient-to-r from-orange-500 to-pink-500' :
-                        'bg-gradient-to-r from-red-500 to-pink-500'
-                      }`}
-                      style={{ width: `${overallScore}%` }}
-                    ></div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* SCORE BREAKDOWN - SPLIT FOR PERMISSIONS AND TRUST */}
-            {response.score_breakdown && (
-              <div className="lg:col-span-12 grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Permissions Breakdown */}
-                <div className="bg-purple-500/5 backdrop-blur-xl border border-purple-500/20 rounded-2xl p-6">
-                  <h4 className="text-purple-300 font-semibold mb-4 flex items-center space-x-2">
-                    <Shield className="w-5 h-5" />
-                    <span>Permissions Policy Analysis</span>
+              {response.explanation && (
+                <div className="bg-slate-900/50 backdrop-blur-xl border border-purple-500/20 rounded-2xl p-6">
+                  <h4 className="text-white text-xl font-bold mb-4 flex items-center space-x-2">
+                    <Shield className="w-5 h-5 text-purple-400" />
+                    <span>What These Permissions Do</span>
                   </h4>
+                  <p className="text-slate-400 mb-6 text-sm">Breakdown of each permission statement</p>
+                  
                   <div className="grid grid-cols-1 gap-4">
-                    <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-4">
-                      <h5 className="text-green-400 font-semibold mb-2 flex items-center space-x-2">
-                        <CheckCircle className="w-4 h-4" />
-                        <span>What's Good</span>
-                      </h5>
-                      <ul className="space-y-1 text-sm text-slate-300">
-                        {response.score_breakdown.permissions?.positive?.map((item, idx) => (
-                          <li key={idx}>• {item}</li>
-                        ))}
-                      </ul>
-                    </div>
-                    <div className="bg-orange-500/10 border border-orange-500/30 rounded-xl p-4">
-                      <h5 className="text-orange-400 font-semibold mb-2 flex items-center space-x-2">
-                        <AlertCircle className="w-4 h-4" />
-                        <span>Could Improve</span>
-                      </h5>
-                      <ul className="space-y-1 text-sm text-slate-300">
-                        {response.score_breakdown.permissions?.improvements?.map((item, idx) => (
-                          <li key={idx}>• {item}</li>
-                        ))}
-                      </ul>
-                    </div>
+                    {parseExplanation(response.explanation).map((section: any, index) => (
+                      <div key={index} className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 rounded-xl p-5 border border-slate-700/50">
+                        <div className="flex items-start space-x-3 mb-3">
+                          <div className="text-3xl">{getServiceIcon(section.title)}</div>
+                          <div className="flex-1">
+                            <div className="text-xs text-slate-500 mb-2">STATEMENT {section.num}</div>
+                            <h5 className="text-white font-bold text-base">{section.title}</h5>
+                          </div>
+                        </div>
+                        
+                        <div className="space-y-2">
+                          {section.details.Permission && (
+                            <div className="bg-slate-900/50 rounded-lg p-3">
+                              <div className="text-sm text-slate-200 font-mono">
+                                {section.details.Permission}
+                              </div>
+                            </div>
+                          )}
+                          
+                          {section.details.Purpose && (
+                            <div className="text-sm text-slate-300">
+                              <span className="font-semibold text-slate-400">Purpose:</span> {section.details.Purpose}
+                            </div>
+                          )}
+                          
+                          {section.details.Security && (
+                            <div className="flex items-start space-x-2 bg-green-500/5 border border-green-500/20 rounded-lg p-2">
+                              <CheckCircle className="w-4 h-4 text-green-400 mt-0.5 flex-shrink-0" />
+                              <div className="text-xs text-green-300">
+                                {section.details.Security}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
+              )}
+            </div>
 
-                {/* Trust Breakdown */}
-                <div className="bg-green-500/5 backdrop-blur-xl border border-green-500/20 rounded-2xl p-6">
-                  <h4 className="text-green-300 font-semibold mb-4 flex items-center space-x-2">
-                    <CheckCircle className="w-5 h-5" />
-                    <span>Trust Policy Analysis</span>
-                  </h4>
-                  <div className="grid grid-cols-1 gap-4">
-                    <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-4">
-                      <h5 className="text-green-400 font-semibold mb-2 flex items-center space-x-2">
-                        <CheckCircle className="w-4 h-4" />
-                        <span>What's Good</span>
-                      </h5>
-                      <ul className="space-y-1 text-sm text-slate-300">
-                        {response.score_breakdown.trust?.positive?.map((item, idx) => (
-                          <li key={idx}>• {item}</li>
-                        ))}
-                      </ul>
-                    </div>
-                    <div className="bg-orange-500/10 border border-orange-500/30 rounded-xl p-4">
-                      <h5 className="text-orange-400 font-semibold mb-2 flex items-center space-x-2">
-                        <AlertCircle className="w-4 h-4" />
-                        <span>Could Improve</span>
-                      </h5>
-                      <ul className="space-y-1 text-sm text-slate-300">
-                        {response.score_breakdown.trust?.improvements?.map((item, idx) => (
-                          <li key={idx}>• {item}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* LEFT COLUMN - POLICIES */}
-            <div className="lg:col-span-8 space-y-8">
-              {/* PERMISSIONS POLICY */}
+            {/* TRUST POLICY */}
+            {response.trust_policy && (
               <div>
                 <h3 className="text-white text-2xl font-semibold mb-4 flex items-center space-x-2">
-                  <Shield className="w-6 h-6 text-purple-400" />
-                  <span>Permissions Policy</span>
+                  <CheckCircle className="w-6 h-6 text-green-400" />
+                  <span>Trust Policy</span>
                 </h3>
 
-                <div className="bg-slate-900 border border-purple-500/20 rounded-2xl overflow-hidden mb-4">
-                  <div className="flex items-center justify-between px-6 py-4 border-b border-purple-500/20 bg-slate-800/50">
+                <div className="bg-slate-900/80 backdrop-blur-xl border-2 border-slate-800/50 rounded-2xl overflow-hidden shadow-2xl">
+                  {/* Terminal Header */}
+                  <div className="bg-gradient-to-r from-slate-800/90 to-slate-900/90 px-6 py-4 flex items-center justify-between border-b border-slate-700/50">
                     <div className="flex items-center space-x-3">
-                      <div className="flex items-center space-x-2">
-                        <div className="w-3 h-3 bg-red-500 rounded-full"></div>
-                        <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
-                        <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                      <div className="flex space-x-2">
+                        <div className="w-3 h-3 rounded-full bg-red-500/80"></div>
+                        <div className="w-3 h-3 rounded-full bg-yellow-500/80"></div>
+                        <div className="w-3 h-3 rounded-full bg-green-500/80"></div>
                       </div>
-                      <span className="text-sm text-slate-400">permissions-policy.json</span>
+                      <span className="text-slate-400 text-sm font-mono">trust-policy.json</span>
                     </div>
                     <div className="flex items-center space-x-2">
-                      <button 
-                        onClick={handleCopyPolicy}
-                        className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm text-white transition-all flex items-center space-x-2"
+                      <button
+                        onClick={() => {
+                          const blob = new Blob([JSON.stringify(response.trust_policy, null, 2)], { type: 'application/json' });
+                          const url = URL.createObjectURL(blob);
+                          const a = document.createElement('a');
+                          a.href = url;
+                          a.download = 'trust-policy.json';
+                          a.click();
+                        }}
+                        className="group relative px-4 py-2 bg-slate-800/50 hover:bg-slate-700/50 border border-slate-700/50 hover:border-slate-600/50 rounded-lg transition-all duration-200 flex items-center space-x-2"
                       >
-                        {copied ? (
-                          <>
-                            <CheckCircle className="w-4 h-4 text-green-400" />
-                            <span>Copied!</span>
-                          </>
-                        ) : (
-                          <>
-                            <Copy className="w-4 h-4" />
-                            <span>Copy</span>
-                          </>
-                        )}
+                        <Copy className="w-4 h-4 text-slate-400 group-hover:text-purple-400 transition-colors" />
+                        <span className="text-sm font-medium text-slate-300 group-hover:text-white transition-colors">Copy</span>
                       </button>
-                      <button 
-                        onClick={handleDownloadPolicy}
-                        className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg text-sm text-white transition-all flex items-center space-x-2"
+                      <button
+                        onClick={() => {
+                          const blob = new Blob([JSON.stringify(response.trust_policy, null, 2)], { type: 'application/json' });
+                          const url = URL.createObjectURL(blob);
+                          const a = document.createElement('a');
+                          a.href = url;
+                          a.download = 'trust-policy.json';
+                          a.click();
+                        }}
+                        className="group relative px-4 py-2 bg-green-600/80 hover:bg-green-500/80 border border-green-500/50 hover:border-green-400/50 rounded-lg transition-all duration-200 flex items-center space-x-2"
                       >
-                        <Download className="w-4 h-4" />
-                        <span>Download</span>
+                        <Download className="w-4 h-4 text-white transition-transform group-hover:translate-y-0.5" />
+                        <span className="text-sm font-medium text-white">Download</span>
                       </button>
                     </div>
                   </div>
-                  <div className="p-6 overflow-x-auto max-h-[500px]">
-                    <pre className="text-sm text-slate-300 font-mono leading-relaxed">
-                      {JSON.stringify(response.policy, null, 2)}
+
+                  {/* JSON Content */}
+                  <div className="p-6 overflow-x-auto">
+                    <pre className="text-sm font-mono text-slate-300 leading-relaxed">
+                      {JSON.stringify(response.trust_policy, null, 2)}
                     </pre>
                   </div>
                 </div>
 
-                <div className="bg-purple-500/10 border border-purple-500/30 rounded-xl p-4 mb-6">
+                <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-4 mb-6">
                   <div className="flex items-start space-x-3">
-                    <Info className="w-5 h-5 text-purple-400 mt-0.5" />
+                    <Info className="w-5 h-5 text-green-400 mt-0.5" />
                     <div>
-                      <div className="text-sm font-semibold text-purple-300 mb-1">About Permissions Policy</div>
+                      <div className="text-sm font-semibold text-green-300 mb-1">About Trust Policy</div>
                       <p className="text-sm text-slate-300">
-                        The Permissions Policy defines <strong>WHAT</strong> actions this IAM role can perform on AWS resources. 
-                        It specifies the exact services, actions, and resources that are allowed or denied.
+                        The Trust Policy defines <strong>WHO</strong> can assume this IAM role. Without it, 
+                        nobody (not even AWS services) can use the permissions policy above. Both policies 
+                        work together to create a complete, functional IAM role.
                       </p>
                     </div>
                   </div>
                 </div>
 
-                {response.explanation && (
-                  <div className="bg-slate-900/50 backdrop-blur-xl border border-purple-500/20 rounded-2xl p-6">
+                {response.trust_explanation && (
+                  <div className="bg-slate-900/50 backdrop-blur-xl border border-green-500/20 rounded-2xl p-6">
                     <h4 className="text-white text-xl font-bold mb-4 flex items-center space-x-2">
-                      <Shield className="w-5 h-5 text-purple-400" />
-                      <span>What These Permissions Do</span>
+                      <CheckCircle className="w-5 h-5 text-green-400" />
+                      <span>What This Trust Policy Does</span>
                     </h4>
-                    <p className="text-slate-400 mb-6 text-sm">Breakdown of each permission statement</p>
+                    <p className="text-slate-400 mb-6 text-sm">Who can assume this role and under what conditions</p>
                     
-                    <div className="grid grid-cols-1 gap-4">
-                      {parseExplanation(response.explanation).map((section: any, index) => (
-                        <div key={index} className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 rounded-xl p-5 border border-slate-700/50">
-                          <div className="flex items-start space-x-3 mb-3">
-                            <div className="text-3xl">{getServiceIcon(section.title)}</div>
-                            <div className="flex-1">
-                              <div className="text-xs font-bold text-purple-400 mb-1">STATEMENT {section.num}</div>
-                              <h5 className="text-white font-bold text-base">{section.title}</h5>
+                    <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 rounded-xl p-5 border border-slate-700/50">
+                      <div className="space-y-4">
+                        <div>
+                          <div className="text-xs text-slate-500 mb-2">Trusted Entity</div>
+                          <div className="bg-slate-900/50 rounded-lg p-3">
+                            <div className="text-sm text-slate-200 font-mono">
+                              {response.trust_policy.Statement?.[0]?.Principal?.Service || 
+                               JSON.stringify(response.trust_policy.Statement?.[0]?.Principal)}
                             </div>
                           </div>
-                          
-                          <div className="space-y-2">
-                            {section.details.Permission && (
-                              <div className="bg-slate-900/50 rounded-lg p-3">
-                                <div className="text-xs text-slate-500 mb-1">Actions</div>
-                                <div className="text-xs text-slate-200 font-mono">{section.details.Permission}</div>
-                              </div>
-                            )}
-                            
-                            {section.details.Purpose && (
-                              <div className="text-sm text-slate-300">
-                                <span className="font-semibold text-slate-400">Purpose:</span> {section.details.Purpose}
-                              </div>
-                            )}
-                            
-                            {section.details.Security && (
-                              <div className="flex items-start space-x-2 bg-green-500/5 border border-green-500/20 rounded-lg p-2">
-                                <CheckCircle className="w-3.5 h-3.5 text-green-400 mt-0.5 flex-shrink-0" />
-                                <div className="text-xs text-green-300">{section.details.Security}</div>
-                              </div>
-                            )}
+                        </div>
+                        
+                        <div>
+                          <div className="text-xs text-slate-500 mb-2">What It Means</div>
+                          <p className="text-sm text-slate-300">
+                            {response.trust_explanation || 
+                             "This policy allows the specified AWS service to assume this role and use the permissions defined in the permissions policy."}
+                          </p>
+                        </div>
+                        
+                        <div className="flex items-start space-x-2 bg-green-500/5 border border-green-500/20 rounded-lg p-3">
+                          <CheckCircle className="w-4 h-4 text-green-400 mt-0.5 flex-shrink-0" />
+                          <div className="text-xs text-green-300">
+                            Follows AWS security best practices by explicitly defining trusted principals
                           </div>
                         </div>
-                      ))}
+                      </div>
                     </div>
                   </div>
                 )}
               </div>
-
-              {/* TRUST POLICY */}
-              {response.trust_policy && (
-                <div>
-                  <h3 className="text-white text-2xl font-semibold mb-4 flex items-center space-x-2">
-                    <CheckCircle className="w-6 h-6 text-green-400" />
-                    <span>Trust Policy</span>
-                  </h3>
-
-                  <div className="bg-slate-900 border border-green-500/20 rounded-2xl overflow-hidden mb-4">
-                    <div className="flex items-center justify-between px-6 py-4 border-b border-green-500/20 bg-slate-800/50">
-                      <div className="flex items-center space-x-3">
-                        <div className="flex items-center space-x-2">
-                          <div className="w-3 h-3 bg-red-500 rounded-full"></div>
-                          <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
-                          <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                        </div>
-                        <span className="text-sm text-slate-400">trust-policy.json</span>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <button 
-                          onClick={async () => {
-                            await navigator.clipboard.writeText(JSON.stringify(response.trust_policy, null, 2));
-                          }}
-                          className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm text-white transition-all flex items-center space-x-2"
-                        >
-                          <Copy className="w-4 h-4" />
-                          <span>Copy</span>
-                        </button>
-                        <button 
-                          onClick={() => {
-                            const blob = new Blob([JSON.stringify(response.trust_policy, null, 2)], { type: 'application/json' });
-                            const url = URL.createObjectURL(blob);
-                            const a = document.createElement('a');
-                            a.href = url;
-                            a.download = 'trust-policy.json';
-                            document.body.appendChild(a);
-                            a.click();
-                            document.body.removeChild(a);
-                            URL.revokeObjectURL(url);
-                          }}
-                          className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg text-sm text-white transition-all flex items-center space-x-2"
-                        >
-                          <Download className="w-4 h-4" />
-                          <span>Download</span>
-                        </button>
-                      </div>
-                    </div>
-                    <div className="p-6 overflow-x-auto max-h-[400px]">
-                      <pre className="text-sm text-slate-300 font-mono leading-relaxed">
-                        {JSON.stringify(response.trust_policy, null, 2)}
-                      </pre>
-                    </div>
-                  </div>
-
-                  <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-4 mb-6">
-                    <div className="flex items-start space-x-3">
-                      <Info className="w-5 h-5 text-green-400 mt-0.5" />
-                      <div>
-                        <div className="text-sm font-semibold text-green-300 mb-1">About Trust Policy</div>
-                        <p className="text-sm text-slate-300">
-                          The Trust Policy defines <strong>WHO</strong> can assume this IAM role. Without it, 
-                          nobody (not even AWS services) can use the permissions policy above. Both policies 
-                          work together to create a complete, functional IAM role.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {response.trust_explanation && (
-                    <div className="bg-slate-900/50 backdrop-blur-xl border border-green-500/20 rounded-2xl p-6">
-                      <h4 className="text-white text-xl font-bold mb-4 flex items-center space-x-2">
-                        <CheckCircle className="w-5 h-5 text-green-400" />
-                        <span>What This Trust Policy Does</span>
-                      </h4>
-                      <p className="text-slate-400 mb-6 text-sm">Who can assume this role and under what conditions</p>
-                      
-                      <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 rounded-xl p-5 border border-slate-700/50">
-                        <div className="space-y-4">
-                          <div>
-                            <div className="text-xs text-slate-500 mb-2">Trusted Entity</div>
-                            <div className="bg-slate-900/50 rounded-lg p-3">
-                              <div className="text-sm text-slate-200 font-mono">
-                                {response.trust_policy.Statement?.[0]?.Principal?.Service || 
-                                 JSON.stringify(response.trust_policy.Statement?.[0]?.Principal)}
-                              </div>
-                            </div>
-                          </div>
-                          
-                          <div>
-                            <div className="text-xs text-slate-500 mb-2">What It Means</div>
-                            <p className="text-sm text-slate-300">
-                              {response.trust_explanation || 
-                               "This policy allows the specified AWS service to assume this role and use the permissions defined in the permissions policy."}
-                            </p>
-                          </div>
-                          
-                          <div className="flex items-start space-x-2 bg-green-500/5 border border-green-500/20 rounded-lg p-3">
-                            <CheckCircle className="w-4 h-4 text-green-400 mt-0.5 flex-shrink-0" />
-                            <div className="text-xs text-green-300">
-                              Follows AWS security best practices by explicitly defining trusted principals
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* SEPARATE REFINEMENT SUGGESTIONS */}
-              <div className="lg:col-span-12">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Permissions Suggestions */}
-                  {response.refinement_suggestions?.permissions && response.refinement_suggestions.permissions.length > 0 && (
-                    <div className="bg-gradient-to-br from-purple-500/10 to-pink-500/10 backdrop-blur-xl border border-purple-500/30 rounded-2xl p-6">
-                      <div className="flex items-center space-x-2 mb-4">
-                        <Sparkles className="w-5 h-5 text-purple-400" />
-                        <h4 className="text-white font-semibold">Permissions Refinements</h4>
-                      </div>
-                      <div className="grid grid-cols-1 gap-3">
-                        {response.refinement_suggestions.permissions.map((suggestion, index) => (
-                          <button
-                            key={index}
-                            onClick={() => {
-                              setFollowUpMessage(suggestion);
-                              setIsChatOpen(true);
-                              setIsChatMinimized(false);
-                            }}
-                            className="group px-4 py-3 bg-slate-800/50 hover:bg-purple-500/20 border border-purple-500/30 hover:border-purple-500/50 rounded-xl text-sm text-slate-300 hover:text-white transition-all flex items-center justify-between text-left"
-                          >
-                            <div className="flex items-center space-x-3">
-                              <div className="w-8 h-8 bg-purple-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
-                                <Sparkles className="w-4 h-4 text-purple-400" />
-                              </div>
-                              <span>{suggestion}</span>
-                            </div>
-                            <ArrowRight className="w-4 h-4 text-purple-400 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Trust Suggestions */}
-                  {response.refinement_suggestions?.trust && response.refinement_suggestions.trust.length > 0 && (
-                    <div className="bg-gradient-to-br from-green-500/10 to-teal-500/10 backdrop-blur-xl border border-green-500/30 rounded-2xl p-6">
-                      <div className="flex items-center space-x-2 mb-4">
-                        <Sparkles className="w-5 h-5 text-green-400" />
-                        <h4 className="text-white font-semibold">Trust Refinements</h4>
-                      </div>
-                      <div className="grid grid-cols-1 gap-3">
-                        {response.refinement_suggestions.trust.map((suggestion, index) => (
-                          <button
-                            key={index}
-                            onClick={() => {
-                              setFollowUpMessage(suggestion);
-                              setIsChatOpen(true);
-                              setIsChatMinimized(false);
-                            }}
-                            className="group px-4 py-3 bg-slate-800/50 hover:bg-green-500/20 border border-green-500/30 hover:border-green-500/50 rounded-xl text-sm text-slate-300 hover:text-white transition-all flex items-center justify-between text-left"
-                          >
-                            <div className="flex items-center space-x-3">
-                              <div className="w-8 h-8 bg-green-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
-                                <Sparkles className="w-4 h-4 text-green-400" />
-                              </div>
-                              <span>{suggestion}</span>
-                            </div>
-                            <ArrowRight className="w-4 h-4 text-green-400 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* RIGHT SIDEBAR */}
-            <div className="lg:col-span-4 space-y-6">
-              {/* Permissions Features */}
-              {response.security_features?.permissions && response.security_features.permissions.length > 0 && (
-                <div className="bg-purple-500/5 backdrop-blur-xl border border-purple-500/30 rounded-2xl p-6">
-                  <h4 className="text-purple-400 text-lg font-semibold mb-4 flex items-center space-x-2">
-                    <CheckCircle className="w-5 h-5" />
-                    <span>Permissions Features</span>
-                  </h4>
-                  <ul className="space-y-3">
-                    {response.security_features.permissions.map((feature, index) => (
-                      <li key={index} className="text-slate-300 text-sm flex items-start space-x-3">
-                        <CheckCircle className="w-4 h-4 text-purple-400 mt-0.5 flex-shrink-0" />
-                        <span>{cleanMarkdown(feature)}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {/* Trust Features */}
-              {response.security_features?.trust && response.security_features.trust.length > 0 && (
-                <div className="bg-green-500/5 backdrop-blur-xl border border-green-500/30 rounded-2xl p-6">
-                  <h4 className="text-green-400 text-lg font-semibold mb-4 flex items-center space-x-2">
-                    <CheckCircle className="w-5 h-5" />
-                    <span>Trust Features</span>
-                  </h4>
-                  <ul className="space-y-3">
-                    {response.security_features.trust.map((feature, index) => (
-                      <li key={index} className="text-slate-300 text-sm flex items-start space-x-3">
-                        <CheckCircle className="w-4 h-4 text-green-400 mt-0.5 flex-shrink-0" />
-                        <span>{cleanMarkdown(feature)}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {/* Permissions Considerations */}
-              {response.security_notes?.permissions && response.security_notes.permissions.length > 0 && (
-                <div className="bg-orange-500/5 backdrop-blur-xl border border-orange-500/30 rounded-2xl p-6">
-                  <h4 className="text-orange-400 text-lg font-semibold mb-4 flex items-center space-x-2">
-                    <AlertCircle className="w-5 h-5" />
-                    <span>Permissions Considerations</span>
-                  </h4>
-                  <ul className="space-y-3">
-                    {response.security_notes.permissions.map((note, index) => (
-                      <li key={index} className="text-slate-300 text-sm flex items-start space-x-3">
-                        <AlertCircle className="w-4 h-4 text-orange-400 mt-0.5 flex-shrink-0" />
-                        <span>{cleanMarkdown(note)}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {/* Trust Considerations */}
-              {response.security_notes?.trust && response.security_notes.trust.length > 0 && (
-                <div className="bg-yellow-500/5 backdrop-blur-xl border border-yellow-500/30 rounded-2xl p-6">
-                  <h4 className="text-yellow-400 text-lg font-semibold mb-4 flex items-center space-x-2">
-                    <AlertCircle className="w-5 h-5" />
-                    <span>Trust Considerations</span>
-                  </h4>
-                  <ul className="space-y-3">
-                    {response.security_notes.trust.map((note, index) => (
-                      <li key={index} className="text-slate-300 text-sm flex items-start space-x-3">
-                        <AlertCircle className="w-4 h-4 text-yellow-400 mt-0.5 flex-shrink-0" />
-                        <span>{cleanMarkdown(note)}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
             </div>
           </div>
         </div>
-      )}
-
-      {/* FLOATING CHAT PANEL */}
-      {!showInitialForm && response && conversationId && hasPolicy && (
-        <div className={`fixed ${isChatMinimized ? 'bottom-4 right-4' : 'bottom-4 right-4'} z-50 transition-all duration-300`}>
-          {isChatMinimized ? (
-            <button
-              onClick={() => setIsChatMinimized(false)}
-              className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white p-4 rounded-full shadow-2xl shadow-purple-500/50 flex items-center space-x-2 group"
-            >
-              <MessageSquare className="w-6 h-6" />
-              <span className="max-w-0 overflow-hidden group-hover:max-w-xs transition-all duration-300 whitespace-nowrap">
-                Refine Policy
-              </span>
-            </button>
-          ) : (
-            <div className="w-96 h-[600px] bg-slate-900/95 backdrop-blur-xl border border-purple-500/30 rounded-2xl shadow-2xl shadow-purple-500/20 flex flex-col">
-              <div className="px-6 py-4 border-b border-purple-500/20 bg-gradient-to-r from-purple-900/50 to-pink-900/50 rounded-t-2xl flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl flex items-center justify-center">
-                    <Bot className="w-5 h-5 text-white" />
-                  </div>
-                  <div>
-                    <h3 className="text-white font-semibold text-sm">Aegis AI Assistant</h3>
-                    <p className="text-xs text-slate-400">Refine your policies</p>
-                  </div>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <button
-                    onClick={() => setIsChatMinimized(true)}
-                    className="p-2 hover:bg-white/10 rounded-lg transition-all"
-                    title="Minimize"
-                  >
-                    <Minimize2 className="w-4 h-4 text-slate-400" />
-                  </button>
-                  <button
-                    onClick={() => setIsChatOpen(false)}
-                    className="p-2 hover:bg-white/10 rounded-lg transition-all"
-                    title="Close"
-                  >
-                    <X className="w-4 h-4 text-slate-400" />
-                  </button>
-                </div>
-              </div>
-
-              <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                <div className="flex justify-start">
-                  <div className="max-w-[85%] bg-slate-800/80 border border-slate-700/50 rounded-2xl rounded-tl-sm p-4">
-                    <div className="flex items-center space-x-2 mb-2">
-                      <Bot className="w-4 h-4 text-purple-400" />
-                      <span className="text-xs font-semibold text-purple-300">Aegis AI</span>
-                    </div>
-                    <p className="text-sm text-slate-200 leading-relaxed">
-                      👋 Hi! I can help you refine your policies. Try asking me to:
-                    </p>
-                    <ul className="mt-2 space-y-1 text-xs text-slate-300">
-                      <li>• Add MFA or IP restrictions</li>
-                      <li>• Narrow resource access</li>
-                      <li>• Add compliance requirements</li>
-                      <li>• Explain specific permissions</li>
-                    </ul>
-                  </div>
-                </div>
-
-                {chatHistory.map((msg, index) => (
-                  <div key={index} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`max-w-[85%] rounded-2xl p-4 ${
-                      msg.role === 'user'
-                        ? 'bg-gradient-to-br from-purple-600 to-pink-600 rounded-tr-sm'
-                        : 'bg-slate-800/80 border border-slate-700/50 rounded-tl-sm'
-                    }`}>
-                      <div className="flex items-center space-x-2 mb-2">
-                        {msg.role === 'user' ? (
-                          <>
-                            <User className="w-4 h-4 text-purple-200" />
-                            <span className="text-xs font-semibold text-purple-100">You</span>
-                          </>
-                        ) : (
-                          <>
-                            <Bot className="w-4 h-4 text-purple-400" />
-                            <span className="text-xs font-semibold text-purple-300">Aegis AI</span>
-                          </>
-                        )}
-                      </div>
-                      <div className="text-sm text-slate-50 leading-relaxed whitespace-pre-wrap">
-                        {msg.content.includes('{') && msg.content.includes('}') ? (
-                          <pre className="text-xs font-mono bg-slate-900/50 rounded p-2 overflow-x-auto">
-                            {msg.content}
-                          </pre>
-                        ) : (
-                          cleanMarkdown(msg.content)
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-
-                {loading && (
-                  <div className="flex justify-start">
-                    <div className="bg-slate-800/80 border border-slate-700/50 rounded-2xl rounded-tl-sm p-4">
-                      <div className="flex items-center space-x-2">
-                        <div className="flex space-x-1">
-                          <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
-                        </div>
-                        <span className="text-xs text-slate-400">Thinking...</span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                <div ref={chatEndRef} />
-              </div>
-
-              <div className="p-4 border-t border-purple-500/20 bg-slate-900/50">
-                <form onSubmit={handleFollowUp} className="flex items-end space-x-2">
-                  <div className="flex-1">
-                    <textarea
-                      value={followUpMessage}
-                      onChange={(e) => setFollowUpMessage(e.target.value)}
-                      placeholder="Ask me to refine the policy..."
-                      className="w-full px-4 py-3 bg-slate-800/50 border border-slate-700/50 rounded-xl text-white text-sm placeholder-slate-500 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 focus:outline-none resize-none"
-                      rows={2}
-                      disabled={loading}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && !e.shiftKey) {
-                          e.preventDefault();
-                          handleFollowUp(e);
-                        }
-                      }}
-                    />
-                  </div>
-                  <button
-                    type="submit"
-                    disabled={loading || !followUpMessage.trim()}
-                    className="px-4 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 rounded-xl disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-purple-500/25"
-                  >
-                    <Send className="w-5 h-5 text-white" />
-                  </button>
-                </form>
-                <p className="text-xs text-slate-500 mt-2">
-                  Press Enter to send, Shift+Enter for new line
-                </p>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Floating Chat Toggle Button */}
-      {!showInitialForm && response && conversationId && !isChatOpen && hasPolicy && (
-        <button
-          onClick={() => {
-            setIsChatOpen(true);
-            setIsChatMinimized(false);
-          }}
-          className="fixed bottom-6 right-6 w-16 h-16 bg-gradient-to-br from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white rounded-full shadow-2xl shadow-purple-500/50 flex items-center justify-center z-50 hover:scale-110 transition-transform"
-        >
-          <MessageSquare className="w-7 h-7" />
-        </button>
       )}
     </div>
   );
