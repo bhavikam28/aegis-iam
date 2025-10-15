@@ -137,9 +137,10 @@ const GeneratePolicy: React.FC = () => {
                     Object.keys(response?.policy || {}).length > 0 &&
                     response?.is_question !== true;
 
-  const securityScore = response?.security_score || 0;
+  const permissionsScore = response?.permissions_score || 0;
+  const trustScore = response?.trust_score || 0;
+  const overallScore = response?.overall_score || 0;
 
-  // Helper to get icon based on service
   const getServiceIcon = (title: string) => {
     const lower = title.toLowerCase();
     if (lower.includes('s3') || lower.includes('bucket')) return '🪣';
@@ -151,7 +152,6 @@ const GeneratePolicy: React.FC = () => {
     return '🔒';
   };
 
-  // Parse explanation into structured format
   const parseExplanation = (explanation: string) => {
     if (!explanation || explanation.trim() === '') return [];
     
@@ -182,7 +182,7 @@ const GeneratePolicy: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
-      {/* Initial Form */}
+      {/* INITIAL FORM */}
       {showInitialForm && !response && (
         <div className="relative overflow-hidden">
           <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-purple-500/10 rounded-full blur-3xl"></div>
@@ -284,8 +284,8 @@ const GeneratePolicy: React.FC = () => {
         </div>
       )}
 
-      {/* Loading State */}
-      {!showInitialForm && loading && (
+      {/* LOADING STATE */}
+      {!showInitialForm && loading && !response && (
         <div className="relative overflow-hidden min-h-screen flex items-center justify-center">
           <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-purple-500/10 rounded-full blur-3xl animate-pulse"></div>
           <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-pink-500/10 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }}></div>
@@ -318,7 +318,7 @@ const GeneratePolicy: React.FC = () => {
         </div>
       )}
 
-      {/* More Information Needed Page */}
+      {/* MORE INFORMATION NEEDED PAGE */}
       {!showInitialForm && !loading && response && response.is_question && (
         <div className="relative overflow-hidden min-h-screen">
           <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-orange-500/10 rounded-full blur-3xl"></div>
@@ -339,14 +339,12 @@ const GeneratePolicy: React.FC = () => {
               </p>
             </div>
 
-            {/* Agent's Question */}
             <div className="bg-slate-900/50 backdrop-blur-xl border border-orange-500/20 rounded-2xl p-8 mb-6">
               <div className="text-slate-300 leading-relaxed whitespace-pre-wrap">
                 {cleanMarkdown(response.explanation || response.final_answer)}
               </div>
             </div>
 
-            {/* Response Form */}
             <div className="bg-slate-900/50 backdrop-blur-xl border border-orange-500/20 rounded-2xl p-8 mb-6">
               <form onSubmit={handleFollowUp}>
                 <label className="block text-white font-medium mb-4">
@@ -362,7 +360,7 @@ const GeneratePolicy: React.FC = () => {
                 <button
                   type="submit"
                   disabled={loading || !followUpMessage.trim()}
-                  className="w-full bg-gradient-to-r from-orange-600 via-pink-500 to-purple-600 hover:from-orange-700 hover:via-pink-600 hover:to-purple-700 text-white py-4 px-6 rounded-xl font-semibold disabled:opacity-50 transition-all shadow-lg shadow-orange-500/25 hover:shadow-xl hover:shadow-orange-500/40 flex items-center justify-center space-x-2 sm:space-x-3"
+                  className="w-full bg-gradient-to-r from-orange-600 via-pink-500 to-purple-600 hover:from-orange-700 hover:via-pink-600 hover:to-purple-700 text-white py-4 px-6 rounded-xl font-semibold disabled:opacity-50 transition-all shadow-lg flex items-center justify-center space-x-2"
                 >
                   {loading ? (
                     <>
@@ -379,8 +377,7 @@ const GeneratePolicy: React.FC = () => {
               </form>
             </div>
 
-            {/* Quick Tips */}
-            <div className="bg-orange-500/10 backdrop-blur-xl border border-orange-500/30 rounded-2xl p-6 mb-6">
+            <div className="bg-orange-500/10 border border-orange-500/30 rounded-2xl p-6 mb-6">
               <div className="flex items-start space-x-3">
                 <Sparkles className="w-5 h-5 text-orange-400 mt-0.5" />
                 <div>
@@ -394,8 +391,7 @@ const GeneratePolicy: React.FC = () => {
               </div>
             </div>
 
-            {/* Start Over Button */}
-            <div className="bg-slate-900/50 backdrop-blur-xl border border-slate-700/50 rounded-2xl overflow-hidden">
+            <div className="bg-slate-900/50 border border-slate-700/50 rounded-2xl overflow-hidden">
               <button
                 onClick={handleNewConversation}
                 className="w-full px-6 py-4 bg-slate-800 hover:bg-slate-700 text-white transition-all flex items-center justify-center space-x-2"
@@ -408,7 +404,7 @@ const GeneratePolicy: React.FC = () => {
         </div>
       )}
 
-      {/* Results Display */}
+      {/* RESULTS DISPLAY - CONTINUES IN NEXT PART */}
       {!showInitialForm && response && hasPolicy && (
         <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-12">
           <div className="flex items-center justify-between mb-12">
@@ -430,69 +426,160 @@ const GeneratePolicy: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-            {/* Security Score - Full Width */}
-            <div className="lg:col-span-12">
-              <div className="bg-gradient-to-br from-slate-900/50 to-slate-800/50 backdrop-blur-xl border border-purple-500/20 rounded-2xl p-8">
-                <div className="flex items-center justify-between mb-6">
-                  <div>
-                    <h3 className="text-white text-2xl font-bold mb-2">Security Score</h3>
-                    <p className="text-slate-400">Based on AWS best practices</p>
+            {/* THREE SEPARATE SCORE CARDS */}
+            <div className="lg:col-span-12 grid grid-cols-1 md:grid-cols-3 gap-6">
+              {/* Permissions Score */}
+              <div className="bg-gradient-to-br from-purple-900/30 to-purple-800/30 backdrop-blur-xl border border-purple-500/20 rounded-2xl p-6">
+                <div className="text-center">
+                  <h3 className="text-purple-300 text-lg font-semibold mb-3">Permissions Policy</h3>
+                  <div className={`text-5xl font-bold mb-2 ${
+                    permissionsScore >= 90 ? 'text-green-400' :
+                    permissionsScore >= 80 ? 'text-yellow-400' :
+                    permissionsScore >= 70 ? 'text-orange-400' : 'text-red-400'
+                  }`}>
+                    {permissionsScore}
                   </div>
-                  <div className="text-center">
-                    <div className={`text-6xl font-bold ${
-                      securityScore >= 90 ? 'text-green-400' :
-                      securityScore >= 80 ? 'text-yellow-400' :
-                      securityScore >= 70 ? 'text-orange-400' : 'text-red-400'
-                    }`}>
-                      {securityScore}
-                    </div>
-                    <div className="text-slate-400 text-sm mt-2">/ 100</div>
+                  <div className="text-slate-400 text-sm mb-4">/ 100</div>
+                  
+                  <div className="w-full bg-slate-800 rounded-full h-3">
+                    <div
+                      className={`h-3 rounded-full transition-all duration-1000 ${
+                        permissionsScore >= 90 ? 'bg-gradient-to-r from-green-500 to-green-400' :
+                        permissionsScore >= 80 ? 'bg-gradient-to-r from-yellow-500 to-yellow-400' :
+                        permissionsScore >= 70 ? 'bg-gradient-to-r from-orange-500 to-pink-500' :
+                        'bg-gradient-to-r from-red-500 to-pink-500'
+                      }`}
+                      style={{ width: `${permissionsScore}%` }}
+                    ></div>
                   </div>
                 </div>
-                
-                <div className="w-full bg-slate-800 rounded-full h-4 mb-6">
-                  <div
-                    className={`h-4 rounded-full transition-all duration-1000 ${
-                      securityScore >= 90 ? 'bg-gradient-to-r from-green-500 to-green-400' :
-                      securityScore >= 80 ? 'bg-gradient-to-r from-yellow-500 to-yellow-400' :
-                      securityScore >= 70 ? 'bg-gradient-to-r from-orange-500 to-pink-500' :
-                      'bg-gradient-to-r from-red-500 to-pink-500'
-                    }`}
-                    style={{ width: `${securityScore}%` }}
-                  ></div>
-                </div>
+              </div>
 
-                {/* Score Breakdown */}
-                {response.score_breakdown && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Trust Score */}
+              <div className="bg-gradient-to-br from-green-900/30 to-green-800/30 backdrop-blur-xl border border-green-500/20 rounded-2xl p-6">
+                <div className="text-center">
+                  <h3 className="text-green-300 text-lg font-semibold mb-3">Trust Policy</h3>
+                  <div className={`text-5xl font-bold mb-2 ${
+                    trustScore >= 90 ? 'text-green-400' :
+                    trustScore >= 80 ? 'text-yellow-400' :
+                    trustScore >= 70 ? 'text-orange-400' : 'text-red-400'
+                  }`}>
+                    {trustScore}
+                  </div>
+                  <div className="text-slate-400 text-sm mb-4">/ 100</div>
+                  
+                  <div className="w-full bg-slate-800 rounded-full h-3">
+                    <div
+                      className={`h-3 rounded-full transition-all duration-1000 ${
+                        trustScore >= 90 ? 'bg-gradient-to-r from-green-500 to-green-400' :
+                        trustScore >= 80 ? 'bg-gradient-to-r from-yellow-500 to-yellow-400' :
+                        trustScore >= 70 ? 'bg-gradient-to-r from-orange-500 to-pink-500' :
+                        'bg-gradient-to-r from-red-500 to-pink-500'
+                      }`}
+                      style={{ width: `${trustScore}%` }}
+                    ></div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Overall Score */}
+              <div className="bg-gradient-to-br from-blue-900/30 to-blue-800/30 backdrop-blur-xl border border-blue-500/20 rounded-2xl p-6">
+                <div className="text-center">
+                  <h3 className="text-blue-300 text-lg font-semibold mb-3">Overall Security</h3>
+                  <div className={`text-5xl font-bold mb-2 ${
+                    overallScore >= 90 ? 'text-green-400' :
+                    overallScore >= 80 ? 'text-yellow-400' :
+                    overallScore >= 70 ? 'text-orange-400' : 'text-red-400'
+                  }`}>
+                    {overallScore}
+                  </div>
+                  <div className="text-slate-400 text-sm mb-4">/ 100</div>
+                  
+                  <div className="w-full bg-slate-800 rounded-full h-3">
+                    <div
+                      className={`h-3 rounded-full transition-all duration-1000 ${
+                        overallScore >= 90 ? 'bg-gradient-to-r from-green-500 to-green-400' :
+                        overallScore >= 80 ? 'bg-gradient-to-r from-yellow-500 to-yellow-400' :
+                        overallScore >= 70 ? 'bg-gradient-to-r from-orange-500 to-pink-500' :
+                        'bg-gradient-to-r from-red-500 to-pink-500'
+                      }`}
+                      style={{ width: `${overallScore}%` }}
+                    ></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* SCORE BREAKDOWN - SPLIT FOR PERMISSIONS AND TRUST */}
+            {response.score_breakdown && (
+              <div className="lg:col-span-12 grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Permissions Breakdown */}
+                <div className="bg-purple-500/5 backdrop-blur-xl border border-purple-500/20 rounded-2xl p-6">
+                  <h4 className="text-purple-300 font-semibold mb-4 flex items-center space-x-2">
+                    <Shield className="w-5 h-5" />
+                    <span>Permissions Policy Analysis</span>
+                  </h4>
+                  <div className="grid grid-cols-1 gap-4">
                     <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-4">
-                      <h4 className="text-green-400 font-semibold mb-2 flex items-center space-x-2">
+                      <h5 className="text-green-400 font-semibold mb-2 flex items-center space-x-2">
                         <CheckCircle className="w-4 h-4" />
                         <span>What's Good</span>
-                      </h4>
+                      </h5>
                       <ul className="space-y-1 text-sm text-slate-300">
-                        {response.score_breakdown.positive?.map((item, idx) => (
+                        {response.score_breakdown.permissions?.positive?.map((item, idx) => (
                           <li key={idx}>• {item}</li>
                         ))}
                       </ul>
                     </div>
                     <div className="bg-orange-500/10 border border-orange-500/30 rounded-xl p-4">
-                      <h4 className="text-orange-400 font-semibold mb-2 flex items-center space-x-2">
+                      <h5 className="text-orange-400 font-semibold mb-2 flex items-center space-x-2">
                         <AlertCircle className="w-4 h-4" />
                         <span>Could Improve</span>
-                      </h4>
+                      </h5>
                       <ul className="space-y-1 text-sm text-slate-300">
-                        {response.score_breakdown.improvements?.map((item, idx) => (
+                        {response.score_breakdown.permissions?.improvements?.map((item, idx) => (
                           <li key={idx}>• {item}</li>
                         ))}
                       </ul>
                     </div>
                   </div>
-                )}
-              </div>
-            </div>
+                </div>
 
-            {/* LEFT COLUMN */}
+                {/* Trust Breakdown */}
+                <div className="bg-green-500/5 backdrop-blur-xl border border-green-500/20 rounded-2xl p-6">
+                  <h4 className="text-green-300 font-semibold mb-4 flex items-center space-x-2">
+                    <CheckCircle className="w-5 h-5" />
+                    <span>Trust Policy Analysis</span>
+                  </h4>
+                  <div className="grid grid-cols-1 gap-4">
+                    <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-4">
+                      <h5 className="text-green-400 font-semibold mb-2 flex items-center space-x-2">
+                        <CheckCircle className="w-4 h-4" />
+                        <span>What's Good</span>
+                      </h5>
+                      <ul className="space-y-1 text-sm text-slate-300">
+                        {response.score_breakdown.trust?.positive?.map((item, idx) => (
+                          <li key={idx}>• {item}</li>
+                        ))}
+                      </ul>
+                    </div>
+                    <div className="bg-orange-500/10 border border-orange-500/30 rounded-xl p-4">
+                      <h5 className="text-orange-400 font-semibold mb-2 flex items-center space-x-2">
+                        <AlertCircle className="w-4 h-4" />
+                        <span>Could Improve</span>
+                      </h5>
+                      <ul className="space-y-1 text-sm text-slate-300">
+                        {response.score_breakdown.trust?.improvements?.map((item, idx) => (
+                          <li key={idx}>• {item}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* LEFT COLUMN - POLICIES */}
             <div className="lg:col-span-8 space-y-8">
               {/* PERMISSIONS POLICY */}
               <div>
@@ -501,7 +588,6 @@ const GeneratePolicy: React.FC = () => {
                   <span>Permissions Policy</span>
                 </h3>
 
-                {/* Policy JSON */}
                 <div className="bg-slate-900 border border-purple-500/20 rounded-2xl overflow-hidden mb-4">
                   <div className="flex items-center justify-between px-6 py-4 border-b border-purple-500/20 bg-slate-800/50">
                     <div className="flex items-center space-x-3">
@@ -545,10 +631,9 @@ const GeneratePolicy: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Info Box - Permissions */}
                 <div className="bg-purple-500/10 border border-purple-500/30 rounded-xl p-4 mb-6">
                   <div className="flex items-start space-x-3">
-                    <Info className="w-5 h-5 text-purple-400 mt-0.5 flex-shrink-0" />
+                    <Info className="w-5 h-5 text-purple-400 mt-0.5" />
                     <div>
                       <div className="text-sm font-semibold text-purple-300 mb-1">About Permissions Policy</div>
                       <p className="text-sm text-slate-300">
@@ -559,7 +644,6 @@ const GeneratePolicy: React.FC = () => {
                   </div>
                 </div>
 
-                {/* What This Policy Does - Permissions */}
                 {response.explanation && (
                   <div className="bg-slate-900/50 backdrop-blur-xl border border-purple-500/20 rounded-2xl p-6">
                     <h4 className="text-white text-xl font-bold mb-4 flex items-center space-x-2">
@@ -615,7 +699,6 @@ const GeneratePolicy: React.FC = () => {
                     <span>Trust Policy</span>
                   </h3>
 
-                  {/* Trust Policy JSON */}
                   <div className="bg-slate-900 border border-green-500/20 rounded-2xl overflow-hidden mb-4">
                     <div className="flex items-center justify-between px-6 py-4 border-b border-green-500/20 bg-slate-800/50">
                       <div className="flex items-center space-x-3">
@@ -662,10 +745,9 @@ const GeneratePolicy: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Info Box - Trust Policy */}
                   <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-4 mb-6">
                     <div className="flex items-start space-x-3">
-                      <Info className="w-5 h-5 text-green-400 mt-0.5 flex-shrink-0" />
+                      <Info className="w-5 h-5 text-green-400 mt-0.5" />
                       <div>
                         <div className="text-sm font-semibold text-green-300 mb-1">About Trust Policy</div>
                         <p className="text-sm text-slate-300">
@@ -677,7 +759,6 @@ const GeneratePolicy: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* What This Policy Does - Trust */}
                   {response.trust_explanation && (
                     <div className="bg-slate-900/50 backdrop-blur-xl border border-green-500/20 rounded-2xl p-6">
                       <h4 className="text-white text-xl font-bold mb-4 flex items-center space-x-2">
@@ -719,49 +800,103 @@ const GeneratePolicy: React.FC = () => {
                 </div>
               )}
 
-              {/* Suggested Refinements - LIMITED TO 5 */}
-              {response.refinement_suggestions && response.refinement_suggestions.length > 0 && (
-                <div className="bg-gradient-to-br from-purple-500/10 to-pink-500/10 backdrop-blur-xl border border-purple-500/30 rounded-2xl p-6">
-                  <div className="flex items-center space-x-2 mb-4">
-                    <Sparkles className="w-5 h-5 text-purple-400" />
-                    <h4 className="text-white font-semibold">Suggested Refinements</h4>
-                  </div>
-                  <div className="grid grid-cols-1 gap-3">
-                    {response.refinement_suggestions.slice(0, 5).map((suggestion, index) => (
-                      <button
-                        key={index}
-                        onClick={() => {
-                          setFollowUpMessage(suggestion);
-                          setIsChatOpen(true);
-                          setIsChatMinimized(false);
-                        }}
-                        className="group px-4 py-3 bg-slate-800/50 hover:bg-purple-500/20 border border-purple-500/30 hover:border-purple-500/50 rounded-xl text-sm text-slate-300 hover:text-white transition-all flex items-center justify-between text-left"
-                      >
-                        <div className="flex items-center space-x-3">
-                          <div className="w-8 h-8 bg-purple-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
-                            <Sparkles className="w-4 h-4 text-purple-400" />
-                          </div>
-                          <span>{suggestion}</span>
-                        </div>
-                        <ArrowRight className="w-4 h-4 text-purple-400 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
-                      </button>
-                    ))}
-                  </div>
+              {/* SEPARATE REFINEMENT SUGGESTIONS */}
+              <div className="lg:col-span-12">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Permissions Suggestions */}
+                  {response.refinement_suggestions?.permissions && response.refinement_suggestions.permissions.length > 0 && (
+                    <div className="bg-gradient-to-br from-purple-500/10 to-pink-500/10 backdrop-blur-xl border border-purple-500/30 rounded-2xl p-6">
+                      <div className="flex items-center space-x-2 mb-4">
+                        <Sparkles className="w-5 h-5 text-purple-400" />
+                        <h4 className="text-white font-semibold">Permissions Refinements</h4>
+                      </div>
+                      <div className="grid grid-cols-1 gap-3">
+                        {response.refinement_suggestions.permissions.map((suggestion, index) => (
+                          <button
+                            key={index}
+                            onClick={() => {
+                              setFollowUpMessage(suggestion);
+                              setIsChatOpen(true);
+                              setIsChatMinimized(false);
+                            }}
+                            className="group px-4 py-3 bg-slate-800/50 hover:bg-purple-500/20 border border-purple-500/30 hover:border-purple-500/50 rounded-xl text-sm text-slate-300 hover:text-white transition-all flex items-center justify-between text-left"
+                          >
+                            <div className="flex items-center space-x-3">
+                              <div className="w-8 h-8 bg-purple-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                                <Sparkles className="w-4 h-4 text-purple-400" />
+                              </div>
+                              <span>{suggestion}</span>
+                            </div>
+                            <ArrowRight className="w-4 h-4 text-purple-400 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Trust Suggestions */}
+                  {response.refinement_suggestions?.trust && response.refinement_suggestions.trust.length > 0 && (
+                    <div className="bg-gradient-to-br from-green-500/10 to-teal-500/10 backdrop-blur-xl border border-green-500/30 rounded-2xl p-6">
+                      <div className="flex items-center space-x-2 mb-4">
+                        <Sparkles className="w-5 h-5 text-green-400" />
+                        <h4 className="text-white font-semibold">Trust Refinements</h4>
+                      </div>
+                      <div className="grid grid-cols-1 gap-3">
+                        {response.refinement_suggestions.trust.map((suggestion, index) => (
+                          <button
+                            key={index}
+                            onClick={() => {
+                              setFollowUpMessage(suggestion);
+                              setIsChatOpen(true);
+                              setIsChatMinimized(false);
+                            }}
+                            className="group px-4 py-3 bg-slate-800/50 hover:bg-green-500/20 border border-green-500/30 hover:border-green-500/50 rounded-xl text-sm text-slate-300 hover:text-white transition-all flex items-center justify-between text-left"
+                          >
+                            <div className="flex items-center space-x-3">
+                              <div className="w-8 h-8 bg-green-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                                <Sparkles className="w-4 h-4 text-green-400" />
+                              </div>
+                              <span>{suggestion}</span>
+                            </div>
+                            <ArrowRight className="w-4 h-4 text-green-400 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
-              )}
+              </div>
             </div>
 
             {/* RIGHT SIDEBAR */}
             <div className="lg:col-span-4 space-y-6">
-              {/* Security Features */}
-              {response.security_features && response.security_features.length > 0 && (
+              {/* Permissions Features */}
+              {response.security_features?.permissions && response.security_features.permissions.length > 0 && (
+                <div className="bg-purple-500/5 backdrop-blur-xl border border-purple-500/30 rounded-2xl p-6">
+                  <h4 className="text-purple-400 text-lg font-semibold mb-4 flex items-center space-x-2">
+                    <CheckCircle className="w-5 h-5" />
+                    <span>Permissions Features</span>
+                  </h4>
+                  <ul className="space-y-3">
+                    {response.security_features.permissions.map((feature, index) => (
+                      <li key={index} className="text-slate-300 text-sm flex items-start space-x-3">
+                        <CheckCircle className="w-4 h-4 text-purple-400 mt-0.5 flex-shrink-0" />
+                        <span>{cleanMarkdown(feature)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Trust Features */}
+              {response.security_features?.trust && response.security_features.trust.length > 0 && (
                 <div className="bg-green-500/5 backdrop-blur-xl border border-green-500/30 rounded-2xl p-6">
                   <h4 className="text-green-400 text-lg font-semibold mb-4 flex items-center space-x-2">
                     <CheckCircle className="w-5 h-5" />
-                    <span>Security Features</span>
+                    <span>Trust Features</span>
                   </h4>
                   <ul className="space-y-3">
-                    {response.security_features.map((feature, index) => (
+                    {response.security_features.trust.map((feature, index) => (
                       <li key={index} className="text-slate-300 text-sm flex items-start space-x-3">
                         <CheckCircle className="w-4 h-4 text-green-400 mt-0.5 flex-shrink-0" />
                         <span>{cleanMarkdown(feature)}</span>
@@ -771,17 +906,35 @@ const GeneratePolicy: React.FC = () => {
                 </div>
               )}
 
-              {/* Security Considerations */}
-              {response.security_notes && response.security_notes.length > 0 && (
+              {/* Permissions Considerations */}
+              {response.security_notes?.permissions && response.security_notes.permissions.length > 0 && (
                 <div className="bg-orange-500/5 backdrop-blur-xl border border-orange-500/30 rounded-2xl p-6">
                   <h4 className="text-orange-400 text-lg font-semibold mb-4 flex items-center space-x-2">
                     <AlertCircle className="w-5 h-5" />
-                    <span>Considerations</span>
+                    <span>Permissions Considerations</span>
                   </h4>
                   <ul className="space-y-3">
-                    {response.security_notes.map((note, index) => (
+                    {response.security_notes.permissions.map((note, index) => (
                       <li key={index} className="text-slate-300 text-sm flex items-start space-x-3">
                         <AlertCircle className="w-4 h-4 text-orange-400 mt-0.5 flex-shrink-0" />
+                        <span>{cleanMarkdown(note)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Trust Considerations */}
+              {response.security_notes?.trust && response.security_notes.trust.length > 0 && (
+                <div className="bg-yellow-500/5 backdrop-blur-xl border border-yellow-500/30 rounded-2xl p-6">
+                  <h4 className="text-yellow-400 text-lg font-semibold mb-4 flex items-center space-x-2">
+                    <AlertCircle className="w-5 h-5" />
+                    <span>Trust Considerations</span>
+                  </h4>
+                  <ul className="space-y-3">
+                    {response.security_notes.trust.map((note, index) => (
+                      <li key={index} className="text-slate-300 text-sm flex items-start space-x-3">
+                        <AlertCircle className="w-4 h-4 text-yellow-400 mt-0.5 flex-shrink-0" />
                         <span>{cleanMarkdown(note)}</span>
                       </li>
                     ))}
@@ -808,7 +961,6 @@ const GeneratePolicy: React.FC = () => {
             </button>
           ) : (
             <div className="w-96 h-[600px] bg-slate-900/95 backdrop-blur-xl border border-purple-500/30 rounded-2xl shadow-2xl shadow-purple-500/20 flex flex-col">
-              {/* Chat Header */}
               <div className="px-6 py-4 border-b border-purple-500/20 bg-gradient-to-r from-purple-900/50 to-pink-900/50 rounded-t-2xl flex items-center justify-between">
                 <div className="flex items-center space-x-3">
                   <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl flex items-center justify-center">
@@ -837,9 +989,7 @@ const GeneratePolicy: React.FC = () => {
                 </div>
               </div>
 
-              {/* Chat Messages */}
               <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                {/* Welcome Message */}
                 <div className="flex justify-start">
                   <div className="max-w-[85%] bg-slate-800/80 border border-slate-700/50 rounded-2xl rounded-tl-sm p-4">
                     <div className="flex items-center space-x-2 mb-2">
@@ -858,7 +1008,6 @@ const GeneratePolicy: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Chat History */}
                 {chatHistory.map((msg, index) => (
                   <div key={index} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                     <div className={`max-w-[85%] rounded-2xl p-4 ${
@@ -880,7 +1029,6 @@ const GeneratePolicy: React.FC = () => {
                         )}
                       </div>
                       <div className="text-sm text-slate-50 leading-relaxed whitespace-pre-wrap">
-                        {/* Check if message contains JSON */}
                         {msg.content.includes('{') && msg.content.includes('}') ? (
                           <pre className="text-xs font-mono bg-slate-900/50 rounded p-2 overflow-x-auto">
                             {msg.content}
@@ -893,14 +1041,11 @@ const GeneratePolicy: React.FC = () => {
                   </div>
                 ))}
 
-                {/* Loading Indicator */}
                 {loading && (
                   <div className="flex justify-start">
                     <div className="bg-slate-800/80 border border-slate-700/50 rounded-2xl rounded-tl-sm p-4">
                       <div className="flex items-center space-x-2">
                         <div className="flex space-x-1">
-                          <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-                          <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
                           <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
                         </div>
                         <span className="text-xs text-slate-400">Thinking...</span>
@@ -912,7 +1057,6 @@ const GeneratePolicy: React.FC = () => {
                 <div ref={chatEndRef} />
               </div>
 
-              {/* Chat Input */}
               <div className="p-4 border-t border-purple-500/20 bg-slate-900/50">
                 <form onSubmit={handleFollowUp} className="flex items-end space-x-2">
                   <div className="flex-1">
@@ -948,7 +1092,7 @@ const GeneratePolicy: React.FC = () => {
         </div>
       )}
 
-      {/* Floating Chat Toggle Button (when closed) */}
+      {/* Floating Chat Toggle Button */}
       {!showInitialForm && response && conversationId && !isChatOpen && hasPolicy && (
         <button
           onClick={() => {

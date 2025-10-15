@@ -1,4 +1,8 @@
-// frontend/src/types/index.ts
+export interface GeneratePolicyRequest {
+  description: string;
+  restrictive: boolean;
+  compliance: string;
+}
 
 export interface ChatMessage {
   role: 'user' | 'assistant';
@@ -6,53 +10,102 @@ export interface ChatMessage {
   timestamp: string;
 }
 
-export interface ValidationIssue {
-  type: string;
-  found: string;
-  problem: string;
-  suggestion: string;
+export interface ScoreBreakdown {
+  permissions?: {
+    positive: string[];
+    improvements: string[];
+  };
+  trust?: {
+    positive: string[];
+    improvements: string[];
+  };
+}
+
+export interface SecurityNotes {
+  permissions?: string[];
+  trust?: string[];
+}
+
+export interface SecurityFeatures {
+  permissions?: string[];
+  trust?: string[];
+}
+
+export interface RefinementSuggestions {
+  permissions?: string[];
+  trust?: string[];
 }
 
 export interface GeneratePolicyResponse {
   conversation_id: string;
   final_answer: string;
   message_count: number;
-  policy: any;
-  trust_policy?: any;  // ← CRITICAL: Trust policy for IAM roles
+  policy: any | null;
+  trust_policy: any | null;
   explanation: string;
-  security_notes: string[];
-  security_features?: string[];
-  security_score: number;
-  score_breakdown?: Record<string, number>;
-  score_explanation?: string;
-  reasoning: {
-    plan: string;
-    actions: string[];
-    reflection: string;
-  };
-  refinement_suggestions?: string[];
-  conversation_history?: ChatMessage[];
-  is_question?: boolean;
-  validation_issues?: ValidationIssue[];
+  trust_explanation?: string;
+  permissions_score: number;
+  trust_score: number;
+  overall_score: number;
+  security_notes: SecurityNotes;
+  security_features: SecurityFeatures;
+  score_breakdown: ScoreBreakdown;
+  is_question: boolean;
+  conversation_history: ChatMessage[];
+  refinement_suggestions: RefinementSuggestions;
 }
 
-export interface PolicyGenerationRequest {
+export interface ValidationRequest {
+  policy_json?: string;
+  role_arn?: string;
+  compliance_frameworks?: string[];
+  mode?: 'quick' | 'audit';
+}
+
+export interface Finding {
+  severity: 'critical' | 'high' | 'medium' | 'low' | 'info';
+  title: string;
   description: string;
-  restrictive: boolean;
-  compliance: string;
-  conversation_id?: string;
+  recommendation?: string;
+  affected_resource?: string;
+}
+
+export interface ComplianceStatus {
+  [framework: string]: {
+    compliant: boolean;
+    score: number;
+    findings: string[];
+  };
+}
+
+export interface AuditSummary {
+  total_roles: number;
+  roles_scanned: number;
+  critical_findings: number;
+  high_findings: number;
+  medium_findings: number;
+  low_findings: number;
+  scan_duration: string;
 }
 
 export interface ValidationResponse {
   success: boolean;
   risk_score: number;
-  findings: any[];
-  compliance_status: Record<string, any>;
+  findings: Finding[];
+  compliance_status: ComplianceStatus;
   recommendations: string[];
   quick_wins: string[];
-  audit_summary?: any;
-  top_risks?: any[];
+  audit_summary?: AuditSummary;
+  top_risks?: Finding[];
   raw_response: string;
   mcp_enabled: boolean;
   error?: string;
+}
+
+export interface AuditRequest {
+  compliance_frameworks?: string[];
+}
+
+export interface AuditResponse extends ValidationResponse {
+  audit_summary: AuditSummary;
 }
