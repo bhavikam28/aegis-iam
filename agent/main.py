@@ -490,23 +490,37 @@ Or I can use {{{{ACCOUNT_ID}}}} and {{{{REGION}}}} placeholders that you can rep
                 logging.info(f"✅ Extracted {len(security_notes['trust'])} trust considerations")
             
             # Extract policy explanations
-            perm_exp_match = re.search(
-                r'##?\s*(?:📖\s*)?(?:Permissions Policy )?Explanation([\s\S]*?)(?=##|$)', 
+            explanation_match = re.search(
+                r'##\s*(?:📋\s*)?(?:Permissions )?Policy Explanation([\s\S]*?)(?=##|$)', 
                 final_message, 
-                re.DOTALL | re.IGNORECASE
+                re.IGNORECASE
             )
-            if perm_exp_match:
-                explanation = perm_exp_match.group(1).strip()
-                logging.info(f"✅ Extracted permissions explanation: {len(explanation)} chars")
+            if explanation_match:
+                explanation = explanation_match.group(1).strip()
+            else:
+                explanation = ""
             
-            trust_exp_match = re.search(
-                r'##?\s*(?:📖\s*)?(?:Trust Policy )?Explanation([\s\S]*?)(?=##|$)', 
+            trust_explanation_match = re.search(
+                r'##\s*(?:📋\s*)?(?:Trust )?Policy Explanation([\s\S]*?)(?=##|$)', 
                 final_message, 
-                re.DOTALL | re.IGNORECASE
+                re.IGNORECASE
             )
-            if trust_exp_match:
-                trust_explanation = trust_exp_match.group(1).strip()
-                logging.info(f"✅ Extracted trust explanation: {len(trust_explanation)} chars")
+            if trust_explanation_match:
+                trust_explanation = trust_explanation_match.group(1).strip()
+            else:
+                # Generate a default explanation if AI didn't provide one
+                if trust_policy:
+                    principal = trust_policy.get('Statement', [{}])[0].get('Principal', {})
+                    if isinstance(principal, dict):
+                        service = principal.get('Service', '')
+                        if service:
+                            trust_explanation = f"This Trust Policy allows {service} to assume this IAM role. The trust policy defines WHO can use the permissions granted by the permissions policy above."
+                        else:
+                            trust_explanation = "This Trust Policy defines which AWS principals (services, users, or accounts) can assume this IAM role and use its permissions."
+                    else:
+                        trust_explanation = "This Trust Policy defines which AWS principals can assume this IAM role."
+                else:
+                    trust_explanation = ""
             
             # Extract score breakdown (separate for permissions and trust)
             score_breakdown = extract_score_breakdown(final_message)

@@ -40,19 +40,41 @@ export interface GeneratePolicyResponse {
   conversation_id: string;
   final_answer: string;
   message_count: number;
-  policy: any | null;
-  trust_policy: any | null;
-  explanation: string;
+  policy: any;
+  trust_policy?: any;
+  explanation?: string;
   trust_explanation?: string;
   permissions_score: number;
   trust_score: number;
   overall_score: number;
-  security_notes: SecurityNotes;
-  security_features: SecurityFeatures;
-  score_breakdown: ScoreBreakdown;
-  is_question: boolean;
-  conversation_history: ChatMessage[];
-  refinement_suggestions: RefinementSuggestions;
+  security_notes: {
+    permissions: string[];
+    trust: string[];
+  };
+  score_breakdown: {
+    permissions: {
+      positive: string[];
+      improvements: string[];
+    };
+    trust: {
+      positive: string[];
+      improvements: string[];
+    };
+  };
+  security_features: {
+    permissions: string[];
+    trust: string[];
+  };
+  refinement_suggestions: {
+    permissions: string[];
+    trust: string[];
+  };
+  conversation_history: Array<{
+    role: string;
+    content: string;
+    timestamp?: string;
+  }>;
+  is_question?: boolean;
 }
 
 export interface ValidationRequest {
