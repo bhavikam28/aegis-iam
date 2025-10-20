@@ -47,29 +47,29 @@ export interface GeneratePolicyResponse {
   permissions_score: number;
   trust_score: number;
   overall_score: number;
-  security_notes: {
-    permissions: string[];
-    trust: string[];
+  security_notes?: {
+    permissions?: string[];
+    trust?: string[];
   };
-  score_breakdown: {
-    permissions: {
-      positive: string[];
-      improvements: string[];
+  score_breakdown?: {
+    permissions?: {
+      positive?: string[];
+      improvements?: string[];
     };
-    trust: {
-      positive: string[];
-      improvements: string[];
+    trust?: {
+      positive?: string[];
+      improvements?: string[];
     };
   };
-  security_features: {
-    permissions: string[];
-    trust: string[];
+  security_features?: {
+    permissions?: string[];
+    trust?: string[];
   };
-  refinement_suggestions: {
-    permissions: string[];
-    trust: string[];
+  refinement_suggestions?: {
+    permissions?: string[];
+    trust?: string[];
   };
-  conversation_history: Array<{
+  conversation_history?: Array<{
     role: string;
     content: string;
     timestamp?: string;

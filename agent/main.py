@@ -491,37 +491,41 @@ Or I can use {{{{ACCOUNT_ID}}}} and {{{{REGION}}}} placeholders that you can rep
             
             # Extract policy explanations
             explanation_match = re.search(
-                r'##\s*(?:📋\s*)?(?:Permissions )?Policy Explanation([\s\S]*?)(?=##|$)', 
-                final_message, 
-                re.IGNORECASE
+                r'###?\s*📝\s*Policy Explanation([\s\S]*?)(?=###|$)',
+                final_message,
+                re.DOTALL | re.IGNORECASE
             )
+            
+            explanation_text = ""
             if explanation_match:
-                explanation = explanation_match.group(1).strip()
-            else:
-                explanation = ""
-            
-            trust_explanation_match = re.search(
-                r'##\s*(?:📋\s*)?(?:Trust )?Policy Explanation([\s\S]*?)(?=##|$)', 
-                final_message, 
-                re.IGNORECASE
-            )
-            if trust_explanation_match:
-                trust_explanation = trust_explanation_match.group(1).strip()
-            else:
-                # Generate a default explanation if AI didn't provide one
-                if trust_policy:
-                    principal = trust_policy.get('Statement', [{}])[0].get('Principal', {})
-                    if isinstance(principal, dict):
-                        service = principal.get('Service', '')
-                        if service:
-                            trust_explanation = f"This Trust Policy allows {service} to assume this IAM role. The trust policy defines WHO can use the permissions granted by the permissions policy above."
-                        else:
-                            trust_explanation = "This Trust Policy defines which AWS principals (services, users, or accounts) can assume this IAM role and use its permissions."
-                    else:
-                        trust_explanation = "This Trust Policy defines which AWS principals can assume this IAM role."
+                explanation_section = explanation_match.group(1)
+                # Extract just the Permissions Policy part
+                perm_explanation_match = re.search(
+                    r'\*\*Permissions Policy:\*\*([\s\S]*?)(?=\*\*Trust Policy:|\*\*Trust Policy\*\*|$)',
+                    explanation_section,
+                    re.DOTALL
+                )
+                if perm_explanation_match:
+                    explanation_text = perm_explanation_match.group(1).strip()
+                    logging.info(f"✅ Extracted permissions explanation ({len(explanation_text)} chars)")
                 else:
-                    trust_explanation = ""
+                    logging.warning("⚠️ Could not extract permissions explanation from Policy Explanation section")
+            else:
+                logging.warning("⚠️ No Policy Explanation section found")
             
+            # Extract trust policy explanation
+            trust_explanation_text = ""
+            if explanation_match:
+                explanation_section = explanation_match.group(1)
+                trust_explanation_match = re.search(
+                    r'\*\*Trust Policy:\*\*([\s\S]*?)$',
+                    explanation_section,
+                    re.DOTALL
+                )
+                if trust_explanation_match:
+                    trust_explanation_text = trust_explanation_match.group(1).strip()
+                    logging.info(f"✅ Extracted trust explanation ({len(trust_explanation_text)} chars)")
+
             # Extract score breakdown (separate for permissions and trust)
             score_breakdown = extract_score_breakdown(final_message)
             logging.info(f"✅ Score breakdown extraction complete")
@@ -538,27 +542,42 @@ Or I can use {{{{ACCOUNT_ID}}}} and {{{{REGION}}}} placeholders that you can rep
             # Extract SEPARATE refinement suggestions
             refinement_suggestions = {"permissions": [], "trust": []}
             
-            perm_suggestions_match = re.search(
-                r'##?\s*(?:💡\s*)?(?:Permissions Policy )?Refinement Suggestions([\s\S]*?)(?=##|$)', 
+            # Look for the main Refinement Suggestions section
+            refinement_section_match = re.search(
+                r'###?\s*(?:✨\s*)?Refinement Suggestions([\s\S]*?)(?=###|$)', 
                 final_message, 
                 re.DOTALL | re.IGNORECASE
             )
-            if perm_suggestions_match:
-                suggestions_text = perm_suggestions_match.group(1)
-                suggestions = re.findall(r'(?:^|\n)\s*[-•*]\s*(.+?)(?=\n|$)', suggestions_text, re.MULTILINE)
-                refinement_suggestions["permissions"] = [s.strip() for s in suggestions if s.strip() and len(s.strip()) > 10]
-                logging.info(f"✅ Extracted {len(refinement_suggestions['permissions'])} permissions refinement suggestions")
             
-            trust_suggestions_match = re.search(
-                r'##?\s*(?:💡\s*)?(?:Trust Policy )?Refinement Suggestions([\s\S]*?)(?=##|$)', 
-                final_message, 
-                re.DOTALL | re.IGNORECASE
-            )
-            if trust_suggestions_match:
-                suggestions_text = trust_suggestions_match.group(1)
-                suggestions = re.findall(r'(?:^|\n)\s*[-•*]\s*(.+?)(?=\n|$)', suggestions_text, re.MULTILINE)
-                refinement_suggestions["trust"] = [s.strip() for s in suggestions if s.strip() and len(s.strip()) > 10]
-                logging.info(f"✅ Extracted {len(refinement_suggestions['trust'])} trust refinement suggestions")
+            if refinement_section_match:
+                refinement_text = refinement_section_match.group(1)
+                logging.info(f"✅ Found Refinement Suggestions section")
+                
+                # Extract Permissions Policy suggestions
+                perm_match = re.search(
+                    r'\*\*Permissions Policy:\*\*([\s\S]*?)(?=\*\*Trust Policy:|\*\*Trust Policy\*\*|$)',
+                    refinement_text,
+                    re.DOTALL
+                )
+                if perm_match:
+                    perm_text = perm_match.group(1)
+                    perm_suggestions = re.findall(r'(?:^|\n)\s*[-•*]\s*(.+?)(?=\n|$)', perm_text, re.MULTILINE)
+                    refinement_suggestions["permissions"] = [s.strip() for s in perm_suggestions if s.strip() and len(s.strip()) > 10]
+                    logging.info(f"✅ Extracted {len(refinement_suggestions['permissions'])} permissions refinement suggestions")
+                
+                # Extract Trust Policy suggestions
+                trust_match = re.search(
+                    r'\*\*Trust Policy:\*\*([\s\S]*?)$',
+                    refinement_text,
+                    re.DOTALL
+                )
+                if trust_match:
+                    trust_text = trust_match.group(1)
+                    trust_suggestions = re.findall(r'(?:^|\n)\s*[-•*]\s*(.+?)(?=\n|$)', trust_text, re.MULTILINE)
+                    refinement_suggestions["trust"] = [s.strip() for s in trust_suggestions if s.strip() and len(s.strip()) > 10]
+                    logging.info(f"✅ Extracted {len(refinement_suggestions['trust'])} trust refinement suggestions")
+            else:
+                logging.warning("⚠️ No Refinement Suggestions section found")
             
             # Build conversation history
             conversation_history = []
@@ -595,8 +614,8 @@ Or I can use {{{{ACCOUNT_ID}}}} and {{{{REGION}}}} placeholders that you can rep
                 "message_count": len(conversations[conversation_id]),
                 "policy": policy,
                 "trust_policy": trust_policy,
-                "explanation": explanation,
-                "trust_explanation": trust_explanation,
+                "explanation": explanation_text,
+                "trust_explanation": trust_explanation_text,
                 "permissions_score": permissions_score,
                 "trust_score": trust_score,
                 "overall_score": overall_score,

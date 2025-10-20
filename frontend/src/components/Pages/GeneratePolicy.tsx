@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Shield, Send, RefreshCw, User, Bot, MessageSquare, Lock, ArrowRight, CheckCircle, AlertCircle, Download, Copy, Sparkles, Info, X, Minimize2, ChevronUp, ChevronDown } from 'lucide-react';
+import { Shield, Send, RefreshCw, User, Bot, MessageSquare, Lock, ArrowRight, CheckCircle, AlertCircle, Download, Copy, Sparkles, Info, X, Minimize2, ChevronUp, ChevronDown, Maximize2 } from 'lucide-react';
 import { generatePolicy, sendFollowUp } from '../../services/api';
 import { GeneratePolicyResponse, ChatMessage } from '../../types';
+import ThemeToggle from '../UI/ThemeToggle';
 
 // ScoreCard Component - Elite security-focused design
 const ScoreCard = ({ title, score, color }: { title: string; score: number; color: string }) => {
@@ -209,6 +210,8 @@ const GeneratePolicy: React.FC = () => {
   const [isChatMinimized, setIsChatMinimized] = useState(false);
   const [showPermissionsBreakdown, setShowPermissionsBreakdown] = useState(false);
   const [showTrustBreakdown, setShowTrustBreakdown] = useState(false);
+  const [isChatbotOpen, setIsChatbotOpen] = useState(false);
+  const [isChatbotExpanded, setIsChatbotExpanded] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   const complianceFrameworks = [
@@ -231,6 +234,23 @@ const GeneratePolicy: React.FC = () => {
       chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [chatHistory]);
+
+  useEffect(() => {
+    if (response) {
+      console.log('🔍 FULL RESPONSE RECEIVED:', response);
+      console.log('📊 Refinement Suggestions:', response.refinement_suggestions);
+      console.log('📝 Explanation:', response.explanation);
+      console.log('📝 Explanation length:', response.explanation?.length);
+      console.log('🔐 Trust Explanation:', response.trust_explanation);
+      
+      // Test parseExplanation
+      if (response.explanation) {
+        const parsed = parseExplanation(response.explanation);
+        console.log('✅ Parsed sections:', parsed);
+        console.log('✅ Number of sections:', parsed.length);
+      }
+    }
+  }, [response]);
 
   const handleCopyPolicy = async () => {
     if (response?.policy) {
@@ -271,6 +291,16 @@ const GeneratePolicy: React.FC = () => {
       .replace(/##/g, '')
       .replace(/json\n/g, '')
       .replace(/```/g, '')
+      .trim();
+  };
+
+  const stripMarkdown = (text: string): string => {
+    if (!text) return '';
+    return text
+      .replace(/\*\*(.+?)\*\*/g, '$1')  // Remove **bold**
+      .replace(/\*(.+?)\*/g, '$1')      // Remove *italics*
+      .replace(/_(.+?)_/g, '$1')        // Remove _underline_
+      .replace(/`(.+?)`/g, '$1')        // Remove `code`
       .trim();
   };
 
@@ -353,26 +383,29 @@ const GeneratePolicy: React.FC = () => {
   });
 
   const getServiceIcon = (title: string) => {
-    const lower = title.toLowerCase();
-    if (lower.includes('s3') || lower.includes('bucket')) return '🪣';
-    if (lower.includes('dynamo')) return '🗄️';
-    if (lower.includes('cloudwatch') || lower.includes('log')) return '📊';
-    if (lower.includes('lambda')) return '⚡';
-    if (lower.includes('ec2')) return '💻';
-    if (lower.includes('rds')) return '🗃️';
+    // Simple, dynamic approach - use Shield icon for all IAM policy statements
+    // This keeps the UI clean and consistent without hardcoding hundreds of services
     return '🔒';
   };
 
   const parseExplanation = (explanation: string) => {
     if (!explanation || explanation.trim() === '') return [];
     
+    console.log('🔍 Parsing explanation:', explanation.substring(0, 200));
+    
+    // Try to split by numbered sections
     const sections = explanation
       .split(/(?=^\d+\.\s+)/m)
       .filter(section => section.trim());
     
+    console.log('📝 Found sections:', sections.length);
+    
     return sections.map(section => {
       const match = section.match(/^(\d+)\.\s+(.+?)(?:\n|$)([\s\S]*)/);
-      if (!match) return null;
+      if (!match) {
+        console.log('⚠️ No match for section:', section.substring(0, 50));
+        return null;
+      }
       
       const [, num, title, content] = match;
       const details: { [key: string]: string } = {};
@@ -380,14 +413,31 @@ const GeneratePolicy: React.FC = () => {
       
       lines.forEach(line => {
         const colonIndex = line.indexOf(':');
-        if (colonIndex > 0 && colonIndex < 30) {
-          const key = line.substring(0, colonIndex).replace(/^-\s*/, '').trim();
+        if (colonIndex > 0 && colonIndex < 50) {
+          // Strip markdown from the key name
+          let key = line.substring(0, colonIndex)
+            .replace(/\*\*/g, '')  // Remove **bold**
+            .replace(/\*/g, '')    // Remove *italics*
+            .replace(/^-\s*/, '')  // Remove leading dash
+            .trim();
+          
           const value = line.substring(colonIndex + 1).trim();
-          details[key] = value;
+          
+          // Only add if we have a valid key and value
+          if (key && value) {
+            details[key] = value;
+          }
         }
       });
       
-      return { num, title: title.trim(), details };
+      // If no details found, treat entire content as Purpose
+      if (Object.keys(details).length === 0 && content.trim()) {
+        details['Purpose'] = content.trim();
+      }
+      
+      console.log('✅ Parsed section:', { num, title, detailsCount: Object.keys(details).length, keys: Object.keys(details) });
+      
+      return { num, title: stripMarkdown(title.trim()), details };
     }).filter((item): item is { num: string; title: string; details: { [key: string]: string } } => item !== null);
   };
 
@@ -440,7 +490,7 @@ const GeneratePolicy: React.FC = () => {
                       <div className="w-10 h-10 sm:w-12 sm:h-12 bg-purple-500/10 rounded-lg sm:rounded-xl flex items-center justify-center flex-shrink-0 border border-purple-500/30">
                         <Lock className="w-5 h-5 sm:w-6 sm:h-6 text-purple-400" />
                       </div>
-                      <div className="flex-1 min-w-0">
+                      <div className="flex-1">
                         <div className="flex items-center space-x-2 sm:space-x-3 mb-1">
                           <input
                             id="restrictive"
@@ -487,10 +537,9 @@ const GeneratePolicy: React.FC = () => {
 
               {error && (
                 <div className="mt-6 bg-red-500/10 border border-red-500/30 rounded-xl sm:rounded-2xl p-4 sm:p-6">
-                  <p className="text-red-400 text-sm sm:text-base">{error}</p>
-                </div>
-              )}
-            </div>
+                <p className="text-red-400 text-sm sm:text-base">{error}</p>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -620,7 +669,7 @@ const GeneratePolicy: React.FC = () => {
                 <button
                   type="submit"
                   disabled={loading || !followUpMessage.trim()}
-                  className="w-full bg-gradient-to-r from-orange-600 via-pink-500 to-purple-600 hover:from-orange-700 hover:via-pink-600 hover:to-purple-700 text-white py-4 px-6 rounded-xl font-semibold disabled:opacity-50 transition-all shadow-lg flex items-center justify-center space-x-2"
+                  className="w-full bg-gradient-to-r from-orange-600 via-pink-500 to-purple-600 hover:from-orange-700 hover:via-pink-600 hover:to-purple-700 text-white py-4 px-6 rounded-xl font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg flex items-center justify-center space-x-2"
                 >
                   {loading ? (
                     <>
@@ -639,7 +688,7 @@ const GeneratePolicy: React.FC = () => {
 
             <div className="bg-orange-500/10 border border-orange-500/30 rounded-2xl p-6 mb-6">
               <div className="flex items-start space-x-3">
-                <Sparkles className="w-5 h-5 text-orange-400 mt-0.5" />
+                <Sparkles className="w-5 h-5 text-orange-400" />
                 <div>
                   <h4 className="text-orange-300 font-semibold mb-2">Quick Tips</h4>
                   <ul className="mt-2 space-y-1 text-xs text-slate-300">
@@ -666,12 +715,12 @@ const GeneratePolicy: React.FC = () => {
 
       {/* RESULTS DISPLAY */}
       {!showInitialForm && response && hasPolicy && (
-        <div className="relative overflow-hidden min-h-screen bg-slate-950">
+        <div className="relative overflow-hidden min-h-screen bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900">
           {/* Animated background orbs */}
-          <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-purple-500/5 rounded-full blur-3xl"></div>
-          <div className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-pink-500/5 rounded-full blur-3xl"></div>
+          <div className="absolute top-0 right-0 w-[800px] h-[800px] bg-purple-500/10 rounded-full blur-3xl"></div>
+          <div className="absolute bottom-0 left-0 w-[800px] h-[800px] bg-pink-500/10 rounded-full blur-3xl"></div>
           
-          <div className="relative max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+          <div className="relative max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
             {/* HEADER */}
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-12 pb-8 border-b border-slate-800/50">
               <div className="mb-6 sm:mb-0">
@@ -702,14 +751,17 @@ const GeneratePolicy: React.FC = () => {
                   Review your secure IAM policies below. Both permissions and trust policies are ready for deployment.
                 </p>
               </div>
-              <button
-                onClick={handleNewConversation}
-                className="group relative px-8 py-4 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-semibold rounded-xl transition-all duration-300 shadow-lg shadow-purple-500/25 hover:shadow-purple-500/40 hover:scale-105 flex items-center space-x-3"
-              >
-                <div className="absolute inset-0 bg-gradient-to-r from-purple-400 to-pink-400 rounded-xl opacity-0 group-hover:opacity-20 blur-xl transition-opacity duration-300"></div>
-                <RefreshCw className="w-5 h-5 group-hover:rotate-180 transition-transform duration-500" />
-                <span>New Policy</span>
-              </button>
+              <div className="flex items-center space-x-3">
+                <button
+                  onClick={handleNewConversation}
+                  className="group relative px-8 py-4 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-semibold rounded-xl transition-all duration-300 shadow-lg shadow-purple-500/25 hover:shadow-purple-500/40 hover:scale-105 flex items-center space-x-3"
+                >
+                  <div className="absolute inset-0 bg-gradient-to-r from-purple-400 to-pink-400 rounded-xl opacity-0 group-hover:opacity-20 blur-xl transition-opacity duration-300"></div>
+                  <RefreshCw className="w-5 h-5 group-hover:rotate-180 transition-transform duration-500" />
+                  <span>New Policy</span>
+                </button>
+                <ThemeToggle />
+              </div>
             </div>
 
             {/* SECURITY SCORES - Only Permissions and Trust */}
@@ -904,131 +956,15 @@ const GeneratePolicy: React.FC = () => {
               </div>
             </div>
 
-            {/* POLICIES SECTION */}
             <div className="space-y-8">
-              {/* PERMISSIONS POLICY */}
-              <div>
+              {/* POLICIES SECTION */}
+              <>
+                {/* PERMISSIONS POLICY */}
+                <div>
                 <h3 className="text-white text-2xl font-semibold mb-4 flex items-center space-x-2">
                   <Shield className="w-6 h-6 text-purple-400" />
                   <span>Permissions Policy</span>
                 </h3>
-
-                <div className="bg-slate-900/80 backdrop-blur-xl border-2 border-slate-800/50 rounded-2xl overflow-hidden shadow-2xl">
-                  {/* Terminal Header */}
-                  <div className="bg-gradient-to-r from-slate-800/90 to-slate-900/90 px-6 py-4 flex items-center justify-between border-b border-slate-700/50">
-                    <div className="flex items-center space-x-3">
-                      <div className="flex space-x-2">
-                        <div className="w-3 h-3 rounded-full bg-red-500/80"></div>
-                        <div className="w-3 h-3 rounded-full bg-yellow-500/80"></div>
-                        <div className="w-3 h-3 rounded-full bg-green-500/80"></div>
-                      </div>
-                      <span className="text-slate-400 text-sm font-mono">permissions-policy.json</span>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <button
-                        onClick={handleCopyPolicy}
-                        className="group relative px-4 py-2 bg-slate-800/50 hover:bg-slate-700/50 border border-slate-700/50 hover:border-slate-600/50 rounded-lg transition-all duration-200 flex items-center space-x-2"
-                      >
-                        <Copy className="w-4 h-4 text-slate-400 group-hover:text-purple-400 transition-colors" />
-                        <span className="text-sm font-medium text-slate-300 group-hover:text-white transition-colors">
-                          {copied ? 'Copied!' : 'Copy'}
-                        </span>
-                      </button>
-                      <button
-                        onClick={() => {
-                          const blob = new Blob([JSON.stringify(response.policy, null, 2)], { type: 'application/json' });
-                          const url = URL.createObjectURL(blob);
-                          const a = document.createElement('a');
-                          a.href = url;
-                          a.download = 'permissions-policy.json';
-                          a.click();
-                        }}
-                        className="group relative px-4 py-2 bg-purple-600/80 hover:bg-purple-500/80 border border-purple-500/50 hover:border-purple-400/50 rounded-lg transition-all duration-200 flex items-center space-x-2"
-                      >
-                        <Download className="w-4 h-4 text-white transition-transform group-hover:translate-y-0.5" />
-                        <span className="text-sm font-medium text-white">Download</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* JSON Content */}
-                  <div className="p-6 overflow-x-auto">
-                    <pre className="text-sm font-mono text-slate-300 leading-relaxed">
-                      {JSON.stringify(response.policy, null, 2)}
-                    </pre>
-                  </div>
-                </div>
-
-                <div className="bg-purple-500/10 border border-purple-500/30 rounded-xl p-4 mb-6">
-                  <div className="flex items-start space-x-3">
-                    <Info className="w-5 h-5 text-purple-400 mt-0.5" />
-                    <div>
-                      <div className="text-sm font-semibold text-purple-300 mb-1">About Permissions Policy</div>
-                      <p className="text-sm text-slate-300">
-                        The Permissions Policy defines <strong>WHAT</strong> actions this IAM role can perform on AWS resources. 
-                        It specifies the exact services, actions, and resources that are allowed or denied.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {response.explanation && (
-                  <div className="bg-slate-900/50 backdrop-blur-xl border border-purple-500/20 rounded-2xl p-6">
-                    <h4 className="text-white text-xl font-bold mb-4 flex items-center space-x-2">
-                      <Shield className="w-5 h-5 text-purple-400" />
-                      <span>What These Permissions Do</span>
-                    </h4>
-                    <p className="text-slate-400 mb-6 text-sm">Breakdown of each permission statement</p>
-                    
-                    <div className="grid grid-cols-1 gap-4">
-                      {parseExplanation(response.explanation).map((section: any, index) => (
-                        <div key={index} className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 rounded-xl p-5 border border-slate-700/50">
-                          <div className="flex items-start space-x-3 mb-3">
-                            <div className="text-3xl">{getServiceIcon(section.title)}</div>
-                            <div className="flex-1">
-                              <div className="text-xs text-slate-500 mb-2">STATEMENT {section.num}</div>
-                              <h5 className="text-white font-bold text-base">{section.title}</h5>
-                            </div>
-                          </div>
-                          
-                          <div className="space-y-2">
-                            {section.details.Permission && (
-                              <div className="bg-slate-900/50 rounded-lg p-3">
-                                <div className="text-sm text-slate-200 font-mono">
-                                  {section.details.Permission}
-                                </div>
-                              </div>
-                            )}
-                            
-                            {section.details.Purpose && (
-                              <div className="text-sm text-slate-300">
-                                <span className="font-semibold text-slate-400">Purpose:</span> {section.details.Purpose}
-                              </div>
-                            )}
-                            
-                            {section.details.Security && (
-                              <div className="flex items-start space-x-2 bg-green-500/5 border border-green-500/20 rounded-lg p-2">
-                                <CheckCircle className="w-4 h-4 text-green-400 mt-0.5 flex-shrink-0" />
-                                <div className="text-xs text-green-300">
-                                  {section.details.Security}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* TRUST POLICY */}
-              {response.trust_policy && (
-                <div>
-                  <h3 className="text-white text-2xl font-semibold mb-4 flex items-center space-x-2">
-                    <CheckCircle className="w-6 h-6 text-green-400" />
-                    <span>Trust Policy</span>
-                  </h3>
 
                   <div className="bg-slate-900/80 backdrop-blur-xl border-2 border-slate-800/50 rounded-2xl overflow-hidden shadow-2xl">
                     {/* Terminal Header */}
@@ -1039,28 +975,28 @@ const GeneratePolicy: React.FC = () => {
                           <div className="w-3 h-3 rounded-full bg-yellow-500/80"></div>
                           <div className="w-3 h-3 rounded-full bg-green-500/80"></div>
                         </div>
-                        <span className="text-slate-400 text-sm font-mono">trust-policy.json</span>
+                        <span className="text-slate-400 text-sm font-mono">permissions-policy.json</span>
                       </div>
                       <div className="flex items-center space-x-2">
                         <button
-                          onClick={handleCopyTrustPolicy}
+                          onClick={handleCopyPolicy}
                           className="group relative px-4 py-2 bg-slate-800/50 hover:bg-slate-700/50 border border-slate-700/50 hover:border-slate-600/50 rounded-lg transition-all duration-200 flex items-center space-x-2"
                         >
-                          <Copy className="w-4 h-4 text-slate-400 group-hover:text-green-400 transition-colors" />
+                          <Copy className="w-4 h-4 text-slate-400 group-hover:text-purple-400 transition-colors" />
                           <span className="text-sm font-medium text-slate-300 group-hover:text-white transition-colors">
-                            {copiedTrust ? 'Copied!' : 'Copy'}
+                            {copied ? 'Copied!' : 'Copy'}
                           </span>
                         </button>
                         <button
                           onClick={() => {
-                            const blob = new Blob([JSON.stringify(response.trust_policy, null, 2)], { type: 'application/json' });
+                            const blob = new Blob([JSON.stringify(response.policy, null, 2)], { type: 'application/json' });
                             const url = URL.createObjectURL(blob);
                             const a = document.createElement('a');
                             a.href = url;
-                            a.download = 'trust-policy.json';
+                            a.download = 'permissions-policy.json';
                             a.click();
                           }}
-                          className="group relative px-4 py-2 bg-green-600/80 hover:bg-green-500/80 border border-green-500/50 hover:border-green-400/50 rounded-lg transition-all duration-200 flex items-center space-x-2"
+                          className="group relative px-4 py-2 bg-purple-600/80 hover:bg-purple-500/80 border border-purple-500/50 hover:border-purple-400/50 rounded-lg transition-all duration-200 flex items-center space-x-2"
                         >
                           <Download className="w-4 h-4 text-white transition-transform group-hover:translate-y-0.5" />
                           <span className="text-sm font-medium text-white">Download</span>
@@ -1069,190 +1005,411 @@ const GeneratePolicy: React.FC = () => {
                     </div>
 
                     {/* JSON Content */}
-                    <div className="p-6 bg-slate-950/50">
-                      <pre className="text-sm text-white font-mono leading-relaxed overflow-x-auto">
-                        {JSON.stringify(response.trust_policy, null, 2)}
+                    <div className="p-6 overflow-x-auto">
+                      <pre className="text-sm font-mono text-slate-300 leading-relaxed">
+                        {JSON.stringify(response.policy, null, 2)}
                       </pre>
                     </div>
                   </div>
 
-                  <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-4 mt-6 mb-6">
+                  <div className="bg-purple-500/10 border border-purple-500/30 rounded-xl p-4 mb-6">
                     <div className="flex items-start space-x-3">
-                      <Info className="w-5 h-5 text-green-400 mt-0.5" />
+                      <Info className="w-5 h-5 text-purple-400 mt-0.5" />
                       <div>
-                        <div className="text-sm font-semibold text-green-300 mb-1">About Trust Policy</div>
+                        <div className="text-sm font-semibold text-purple-300 mb-1">About Permissions Policy</div>
                         <p className="text-sm text-slate-300">
-                          The Trust Policy defines <strong>WHO</strong> can assume this IAM role. Without it, 
-                          nobody (not even AWS services) can use the permissions policy above.
+                          The Permissions Policy defines <strong>WHAT</strong> actions this IAM role can perform on AWS resources. 
+                          It specifies the exact services, actions, and resources that are allowed or denied.
                         </p>
                       </div>
                     </div>
                   </div>
 
-                  {/* Trust Policy Explanation */}
-                  {response.trust_explanation && (
-                    <div className="bg-slate-900/50 backdrop-blur-xl border border-green-500/20 rounded-2xl p-6">
+                  {response.explanation && (
+                    <div className="bg-slate-900/50 backdrop-blur-xl border border-purple-500/20 rounded-2xl p-6">
                       <h4 className="text-white text-xl font-bold mb-4 flex items-center space-x-2">
-                        <Shield className="w-5 h-5 text-green-400" />
-                        <span>What This Trust Policy Does</span>
+                        <Shield className="w-5 h-5 text-purple-400" />
+                        <span>What These Permissions Do</span>
                       </h4>
-                      <p className="text-slate-400 mb-6 text-sm">Who can assume this role and under what conditions</p>
+                      <p className="text-slate-400 mb-6 text-sm">Breakdown of each permission statement</p>
                       
-                      <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 rounded-xl p-5 border border-slate-700/50">
-                        <div className="space-y-4">
-                          {/* Trusted Entity */}
-                          <div>
-                            <div className="text-xs text-slate-500 mb-2 uppercase tracking-wide font-semibold">Trusted Entity</div>
-                            <div className="bg-slate-900/50 rounded-lg p-3 border border-slate-700/30">
-                              <div className="text-sm text-white font-mono">
-                                {response.trust_policy.Statement?.[0]?.Principal?.Service || 
-                                 JSON.stringify(response.trust_policy.Statement?.[0]?.Principal)}
+                      <div className="grid grid-cols-1 gap-4">
+                        {parseExplanation(response.explanation).map((section: any, index) => (
+                          <div key={index} className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 rounded-xl p-5 border border-slate-700/50">
+                            <div className="flex items-start space-x-3 mb-3">
+                              <div className="text-3xl">{getServiceIcon(section.title)}</div>
+                              <div className="flex-1">
+                                <div className="text-xs text-slate-500 mb-2">STATEMENT {section.num}</div>
+                                <h5 className="text-white font-bold text-base">{stripMarkdown(section.title)}</h5>
                               </div>
                             </div>
-                          </div>
-                          
-                          {/* Explanation */}
-                          <div>
-                            <div className="text-xs text-slate-500 mb-2 uppercase tracking-wide font-semibold">What It Means</div>
-                            <div className="space-y-3">
-                              {response.trust_explanation.split('\n\n').map((section, idx) => {
-                                const lines = section.split('\n');
-                                const title = lines[0];
-                                const details = lines.slice(1);
-                                
-                                return (
-                                  <div key={idx} className="bg-slate-900/50 rounded-lg p-4 border border-slate-700/30">
-                                    {title && (
-                                      <h5 className="text-white font-semibold text-sm mb-2">{title}</h5>
-                                    )}
-                                    {details.map((detail, dIdx) => (
-                                      detail.trim() && (
-                                        <p key={dIdx} className="text-sm text-slate-300 leading-relaxed mb-1">
-                                          {detail.trim()}
-                                        </p>
-                                      )
-                                    ))}
+                            
+                            <div className="space-y-2">
+                              {section.details.Permission && (
+                                <div className="bg-slate-900/50 rounded-lg p-3">
+                                  <div className="text-sm text-white font-mono">
+                                    {section.details.Permission}
                                   </div>
-                                );
-                              })}
+                                </div>
+                              )}
+                              
+                              {section.details.Purpose && (
+                                <div className="text-sm text-slate-300">
+                                  <span className="font-semibold text-slate-400">Purpose:</span> {stripMarkdown(section.details.Purpose)}
+                                </div>
+                              )}
+                              
+                              {section.details.Security && (
+                                <div className="flex items-start space-x-2 bg-green-500/5 border border-green-500/20 rounded-lg p-2">
+                                  <CheckCircle className="w-4 h-4 text-green-400 mt-0.5 flex-shrink-0" />
+                                  <div className="text-xs text-green-300">
+                                    {section.details.Security}
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           </div>
-                          
-                          {/* Security Note */}
-                          <div className="flex items-start space-x-2 bg-green-500/5 border border-green-500/20 rounded-lg p-3">
-                            <CheckCircle className="w-4 h-4 text-green-400 mt-0.5 flex-shrink-0" />
-                            <div className="text-xs text-green-300">
-                              Follows AWS security best practices by explicitly defining trusted principals
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* TRUST POLICY */}
+                {response.trust_policy && (
+                  <div>
+                    <h3 className="text-white text-2xl font-semibold mb-4 flex items-center space-x-2">
+                      <CheckCircle className="w-6 h-6 text-green-400" />
+                      <span>Trust Policy</span>
+                    </h3>
+
+                    <div className="bg-slate-900/80 backdrop-blur-xl border-2 border-slate-800/50 rounded-2xl overflow-hidden shadow-2xl">
+                      {/* Terminal Header */}
+                      <div className="bg-gradient-to-r from-slate-800/90 to-slate-900/90 px-6 py-4 flex items-center justify-between border-b border-slate-700/50">
+                        <div className="flex items-center space-x-3">
+                          <div className="flex space-x-2">
+                            <div className="w-3 h-3 rounded-full bg-red-500/80"></div>
+                            <div className="w-3 h-3 rounded-full bg-yellow-500/80"></div>
+                            <div className="w-3 h-3 rounded-full bg-green-500/80"></div>
+                          </div>
+                          <span className="text-slate-400 text-sm font-mono">trust-policy.json</span>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <button
+                            onClick={handleCopyTrustPolicy}
+                            className="group relative px-4 py-2 bg-slate-800/50 hover:bg-slate-700/50 border border-slate-700/50 hover:border-slate-600/50 rounded-lg transition-all duration-200 flex items-center space-x-2"
+                          >
+                            <Copy className="w-4 h-4 text-slate-400 group-hover:text-green-400 transition-colors" />
+                            <span className="text-sm font-medium text-slate-300 group-hover:text-white transition-colors">
+                              {copiedTrust ? 'Copied!' : 'Copy'}
+                            </span>
+                          </button>
+                          <button
+                            onClick={() => {
+                              const blob = new Blob([JSON.stringify(response.trust_policy, null, 2)], { type: 'application/json' });
+                              const url = URL.createObjectURL(blob);
+                              const a = document.createElement('a');
+                              a.href = url;
+                              a.download = 'trust-policy.json';
+                              a.click();
+                            }}
+                            className="group relative px-4 py-2 bg-green-600/80 hover:bg-green-500/80 border border-green-500/50 hover:border-green-400/50 rounded-lg transition-all duration-200 flex items-center space-x-2"
+                          >
+                            <Download className="w-4 h-4 text-white transition-transform group-hover:translate-y-0.5" />
+                            <span className="text-sm font-medium text-white">Download</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* JSON Content */}
+                      <div className="p-6 bg-slate-950/50">
+                        <pre className="text-sm text-white font-mono leading-relaxed overflow-x-auto">
+                          {JSON.stringify(response.trust_policy, null, 2)}
+                        </pre>
+                      </div>
+                    </div>
+
+                    <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-4 mt-6 mb-6">
+                      <div className="flex items-start space-x-3">
+                        <Info className="w-5 h-5 text-green-400 mt-0.5" />
+                        <div>
+                          <div className="text-sm font-semibold text-green-300 mb-1">About Trust Policy</div>
+                          <p className="text-sm text-slate-300">
+                            The Trust Policy defines <strong>WHO</strong> can assume this IAM role. Without it, 
+                            nobody (not even AWS services) can use the permissions policy above.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Trust Policy Explanation */}
+                    {response.trust_explanation && (
+                      <div className="bg-slate-900/50 backdrop-blur-xl border border-green-500/20 rounded-2xl p-6">
+                        <h4 className="text-white text-xl font-bold mb-4 flex items-center space-x-2">
+                          <Shield className="w-5 h-5 text-green-400" />
+                          <span>What This Trust Policy Does</span>
+                        </h4>
+                        <p className="text-slate-400 mb-6 text-sm">Who can assume this role and under what conditions</p>
+                        
+                        <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 rounded-xl p-5 border border-slate-700/50">
+                          <div className="space-y-4">
+                            {/* Trusted Entity */}
+                            <div>
+                              <div className="text-xs text-slate-500 mb-2 uppercase tracking-wide font-semibold">Trusted Entity</div>
+                              <div className="bg-slate-900/50 rounded-lg p-3 border border-slate-700/30">
+                                <div className="text-sm text-white font-mono">
+                                  {response.trust_policy.Statement?.[0]?.Principal?.Service || 
+                                   JSON.stringify(response.trust_policy.Statement?.[0]?.Principal)}
+                                </div>
+                              </div>
+                            </div>
+                            
+                            {/* Explanation */}
+                            <div>
+                              <div className="text-xs text-slate-500 mb-2 uppercase tracking-wide font-semibold">What It Means</div>
+                              <div className="space-y-3">
+                                {response.trust_explanation.split('\n\n').map((section, idx) => {
+                                  const lines = section.split('\n');
+                                  const title = lines[0];
+                                  const details = lines.slice(1);
+                                  
+                                  return (
+                                    <div key={idx} className="bg-slate-900/50 rounded-lg p-4 border border-slate-700/30">
+                                      {title && (
+                                        <h5 className="text-white font-semibold text-sm mb-2">{title}</h5>
+                                      )}
+                                      {details.map((detail, dIdx) => (
+                                        detail.trim() && (
+                                          <p key={dIdx} className="text-sm text-slate-300 leading-relaxed mb-1">
+                                            {detail.trim()}
+                                          </p>
+                                        )
+                                      ))}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                            
+                            {/* Security Note */}
+                            <div className="flex items-start space-x-2 bg-green-500/5 border border-green-500/20 rounded-lg p-3">
+                              <CheckCircle className="w-4 h-4 text-green-400 mt-0.5 flex-shrink-0" />
+                              <div className="text-xs text-green-300">
+                                Follows AWS security best practices by explicitly defining trusted principals
+                              </div>
                             </div>
                           </div>
                         </div>
                       </div>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
-              )}
-            </div>
+              </>
 
-            {/* REFINEMENT SUGGESTIONS */}
-            {(response?.refinement_suggestions?.permissions?.length > 0 || 
-              response?.refinement_suggestions?.trust?.length > 0) && (
-              <div className="bg-purple-500/10 backdrop-blur-xl border border-purple-500/30 rounded-2xl p-6 mb-8">
-                <h4 className="text-purple-400 text-lg font-semibold mb-4 flex items-center space-x-2">
-                  <Sparkles className="w-5 h-5" />
-                  <span>Suggested Refinements</span>
+              {/* REFINEMENT SUGGESTIONS */}
+              {(response?.refinement_suggestions?.permissions?.length > 0 || 
+                response?.refinement_suggestions?.trust?.length > 0) && (
+                  <div className="bg-purple-500/10 backdrop-blur-xl border border-purple-500/30 rounded-2xl p-6 mb-8">
+                    <h4 className="text-purple-400 text-lg font-semibold mb-4 flex items-center space-x-2">
+                      <Sparkles className="w-5 h-5" />
+                      <span>Suggested Refinements</span>
+                    </h4>
+                    <p className="text-slate-400 text-sm mb-4">
+                      Click any suggestion to open the chatbot
+                    </p>
+                    
+                    <div className="space-y-4">
+                      {response.refinement_suggestions.permissions && response.refinement_suggestions.permissions.length > 0 && (
+                        <div>
+                          <div className="text-xs text-slate-500 mb-2 uppercase tracking-wide font-semibold">Permissions Policy</div>
+                          <div className="flex flex-wrap gap-2">
+                            {response.refinement_suggestions.permissions.map((suggestion, idx) => (
+                              <button
+                                key={idx}
+                                onClick={() => {
+                                  setFollowUpMessage(suggestion);
+                                  setIsChatbotOpen(true);
+                                }}
+                                className="group px-4 py-2 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/40 hover:border-purple-500/60 rounded-lg text-sm text-purple-300 hover:text-white transition-all flex items-center space-x-2"
+                              >
+                                <Sparkles className="w-3 h-3" />
+                                <span>{suggestion}</span>
+                                <ArrowRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {response.refinement_suggestions.trust && response.refinement_suggestions.trust.length > 0 && (
+                        <div>
+                          <div className="text-xs text-slate-500 mb-2 uppercase tracking-wide font-semibold">Trust Policy</div>
+                          <div className="flex flex-wrap gap-2">
+                            {response.refinement_suggestions.trust.map((suggestion, idx) => (
+                              <button
+                                key={idx}
+                                onClick={() => {
+                                  setFollowUpMessage(suggestion);
+                                  setIsChatbotOpen(true);
+                                }}
+                                className="group px-4 py-2 bg-green-500/20 hover:bg-green-500/30 border border-green-500/40 hover:border-green-500/60 rounded-lg text-sm text-green-300 hover:text-white transition-all flex items-center space-x-2"
+                              >
+                                <Sparkles className="w-3 h-3" />
+                                <span>{suggestion}</span>
+                                <ArrowRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+              {/* REFINE POLICY FORM */}
+              <div className="bg-slate-900/50 backdrop-blur-xl border border-purple-500/20 rounded-2xl p-6">
+                <h4 className="text-white text-xl font-bold mb-4 flex items-center space-x-2">
+                  <MessageSquare className="w-5 h-5 text-purple-400" />
+                  <span>Refine Your Policy</span>
                 </h4>
                 <p className="text-slate-400 text-sm mb-4">
-                  Click any suggestion to refine your policy
+                  Ask questions or request changes to improve your policy
                 </p>
                 
-                <div className="space-y-4">
-                  {response.refinement_suggestions.permissions && response.refinement_suggestions.permissions.length > 0 && (
-                    <div>
-                      <div className="text-xs text-slate-500 mb-2 uppercase tracking-wide font-semibold">Permissions Policy</div>
-                      <div className="flex flex-wrap gap-2">
-                        {response.refinement_suggestions.permissions.map((suggestion, idx) => (
-                          <button
-                            key={idx}
-                            onClick={() => {
-                              setFollowUpMessage(suggestion);
-                              // Scroll to the follow-up input
-                              window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
-                            }}
-                            className="group px-4 py-2 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/40 hover:border-purple-500/60 rounded-lg text-sm text-purple-300 hover:text-white transition-all flex items-center space-x-2"
-                          >
-                            <Sparkles className="w-3 h-3" />
-                            <span>{suggestion}</span>
-                            <ArrowRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                <form onSubmit={handleFollowUp} className="space-y-4">
+                  <textarea
+                    value={followUpMessage}
+                    onChange={(e) => setFollowUpMessage(e.target.value)}
+                    placeholder="Example: Add MFA requirement for sensitive operations..."
+                    className="w-full h-24 px-4 py-3 bg-slate-800/50 border border-slate-700/50 rounded-xl text-white placeholder-slate-500 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 focus:outline-none resize-none transition-all"
+                    disabled={loading}
+                  />
                   
-                  {response.refinement_suggestions.trust && response.refinement_suggestions.trust.length > 0 && (
-                    <div>
-                      <div className="text-xs text-slate-500 mb-2 uppercase tracking-wide font-semibold">Trust Policy</div>
-                      <div className="flex flex-wrap gap-2">
-                        {response.refinement_suggestions.trust.map((suggestion, idx) => (
-                          <button
-                            key={idx}
-                            onClick={() => {
-                              setFollowUpMessage(suggestion);
-                              window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
-                            }}
-                            className="group px-4 py-2 bg-green-500/20 hover:bg-green-500/30 border border-green-500/40 hover:border-green-500/60 rounded-lg text-sm text-green-300 hover:text-white transition-all flex items-center space-x-2"
-                          >
-                            <Sparkles className="w-3 h-3" />
-                            <span>{suggestion}</span>
-                            <ArrowRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
+                  <button
+                    type="submit"
+                    disabled={loading || !followUpMessage.trim()}
+                    className="w-full bg-gradient-to-r from-purple-600 via-pink-500 to-orange-600 hover:from-purple-500 hover:via-pink-400 hover:to-orange-500 text-white py-3 px-6 rounded-xl font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-purple-500/25 hover:shadow-xl hover:shadow-purple-500/40 flex items-center justify-center space-x-2"
+                  >
+                    {loading ? (
+                      <>
+                        <RefreshCw className="w-5 h-5 animate-spin" />
+                        <span>Processing...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Send className="w-5 h-5" />
+                        <span>Refine Policy</span>
+                      </>
+                    )}
+                  </button>
+                </form>
               </div>
-            )}
-
-            {/* REFINE POLICY FORM */}
-            <div className="bg-slate-900/50 backdrop-blur-xl border border-purple-500/20 rounded-2xl p-6">
-              <h4 className="text-white text-xl font-bold mb-4 flex items-center space-x-2">
-                <MessageSquare className="w-5 h-5 text-purple-400" />
-                <span>Refine Your Policy</span>
-              </h4>
-              <p className="text-slate-400 text-sm mb-4">
-                Ask questions or request changes to improve your policy
-              </p>
-              
-              <form onSubmit={handleFollowUp} className="space-y-4">
-                <textarea
-                  value={followUpMessage}
-                  onChange={(e) => setFollowUpMessage(e.target.value)}
-                  placeholder="Example: Add MFA requirement for sensitive operations..."
-                  className="w-full h-24 px-4 py-3 bg-slate-800/50 border border-slate-700/50 rounded-xl text-white placeholder-slate-500 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 focus:outline-none resize-none transition-all"
-                  disabled={loading}
-                />
-                
-                <button
-                  type="submit"
-                  disabled={loading || !followUpMessage.trim()}
-                  className="w-full bg-gradient-to-r from-purple-600 via-pink-500 to-orange-600 hover:from-purple-500 hover:via-pink-400 hover:to-orange-500 text-white py-3 px-6 rounded-xl font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-purple-500/25 hover:shadow-xl hover:shadow-purple-500/40 flex items-center justify-center space-x-2"
-                >
-                  {loading ? (
-                    <>
-                      <RefreshCw className="w-5 h-5 animate-spin" />
-                      <span>Processing...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Send className="w-5 h-5" />
-                      <span>Refine Policy</span>
-                    </>
-                  )}
-                </button>
-              </form>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* FLOATING CHATBOT WIDGET - Fixed Position Outside Main Flow */}
+      {!showInitialForm && response && hasPolicy && (
+        <div className="fixed bottom-6 right-6 z-50">
+                {/* Chatbot Button - When Closed */}
+                {!isChatbotOpen && (
+                  <button
+                    onClick={() => setIsChatbotOpen(true)}
+                    className="group relative w-16 h-16 bg-gradient-to-br from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 rounded-full shadow-2xl shadow-purple-500/50 hover:shadow-purple-500/70 transition-all duration-300 hover:scale-110 flex items-center justify-center"
+                  >
+                    <Bot className="w-8 h-8 text-white" />
+                    <div className="absolute -top-1 -right-1 w-4 h-4 bg-green-400 rounded-full border-2 border-slate-950 animate-pulse"></div>
+                  </button>
+                )}
+
+                {/* Chatbot Window - When Open */}
+                {isChatbotOpen && (
+                  <div className={`${isChatbotExpanded ? 'w-[90vw] h-[90vh]' : 'w-96 h-[600px]'} bg-slate-900/95 backdrop-blur-xl border border-slate-700/50 rounded-2xl shadow-2xl flex flex-col overflow-hidden transition-all duration-300`}>
+                    {/* Chat Header */}
+                    <div className="p-4 bg-gradient-to-r from-purple-600/20 to-pink-600/20 border-b border-slate-700/50 flex items-center justify-between">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center">
+                          <Bot className="w-5 h-5 text-white" />
+                        </div>
+                        <div>
+                          <h3 className="text-white font-semibold text-sm">Aegis AI Agent</h3>
+                          <p className="text-xs text-slate-400">Ask me anything about your policies</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <button
+                          onClick={() => setIsChatbotExpanded(!isChatbotExpanded)}
+                          className="text-slate-400 hover:text-white transition-colors p-1 hover:bg-slate-800/50 rounded"
+                          title={isChatbotExpanded ? "Minimize" : "Expand"}
+                        >
+                          {isChatbotExpanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+                        </button>
+                        <button
+                          onClick={() => setIsChatbotOpen(false)}
+                          className="text-slate-400 hover:text-white transition-colors"
+                        >
+                          <X className="w-5 h-5" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Chat Messages */}
+                    <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                      {chatHistory.map((msg, idx) => (
+                        <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                          <div className={`max-w-[85%] ${
+                            msg.role === 'user' 
+                              ? 'bg-gradient-to-br from-purple-500/20 to-pink-500/20 border border-purple-500/30' 
+                              : 'bg-slate-800/50 border border-slate-700/50'
+                          } rounded-2xl p-3`}>
+                            <div className="flex items-start space-x-2">
+                              {msg.role === 'assistant' && (
+                                <Bot className="w-4 h-4 text-purple-400 mt-0.5 flex-shrink-0" />
+                              )}
+                              <div className="flex-1">
+                                <p className="text-sm text-slate-200 leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                      <div ref={chatEndRef} />
+                    </div>
+
+                    {/* Chat Input */}
+                    <div className="p-4 border-t border-slate-700/50 bg-slate-900/50">
+                      <form onSubmit={handleFollowUp} className="space-y-2">
+                        <textarea
+                          value={followUpMessage}
+                          onChange={(e) => setFollowUpMessage(e.target.value)}
+                          placeholder="Ask me to refine the policy, explain something, or answer questions..."
+                          className="w-full h-20 px-3 py-2 bg-slate-800/50 border border-slate-700/50 rounded-xl text-white text-sm placeholder-slate-500 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 focus:outline-none resize-none transition-all"
+                          disabled={loading}
+                        />
+                        
+                        <button
+                          type="submit"
+                          disabled={loading || !followUpMessage.trim()}
+                          className="w-full bg-gradient-to-r from-purple-600 via-pink-500 to-orange-600 hover:from-purple-500 hover:via-pink-400 hover:to-orange-500 text-white py-2.5 px-4 rounded-xl font-semibold text-sm disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg flex items-center justify-center space-x-2"
+                        >
+                          {loading ? (
+                            <>
+                              <RefreshCw className="w-4 h-4 animate-spin" />
+                              <span>Processing...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Send className="w-4 h-4" />
+                              <span>Send Message</span>
+                            </>
+                          )}
+                        </button>
+                      </form>
+                    </div>
+                  </div>
+                )}
+               </div>
         </div>
       )}
     </div>
