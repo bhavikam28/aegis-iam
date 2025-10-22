@@ -489,42 +489,31 @@ Or I can use {{{{ACCOUNT_ID}}}} and {{{{REGION}}}} placeholders that you can rep
                 ]
                 logging.info(f"✅ Extracted {len(security_notes['trust'])} trust considerations")
             
-            # Extract policy explanations
+            # Extract permissions policy explanation (new format)
+            explanation_text = ""
             explanation_match = re.search(
-                r'###?\s*📝\s*Policy Explanation([\s\S]*?)(?=###|$)',
+                r'##\s*Permissions Policy Explanation([\s\S]*?)(?=##|$)',
                 final_message,
                 re.DOTALL | re.IGNORECASE
             )
-            
-            explanation_text = ""
             if explanation_match:
-                explanation_section = explanation_match.group(1)
-                # Extract just the Permissions Policy part
-                perm_explanation_match = re.search(
-                    r'\*\*Permissions Policy:\*\*([\s\S]*?)(?=\*\*Trust Policy:|\*\*Trust Policy\*\*|$)',
-                    explanation_section,
-                    re.DOTALL
-                )
-                if perm_explanation_match:
-                    explanation_text = perm_explanation_match.group(1).strip()
-                    logging.info(f"✅ Extracted permissions explanation ({len(explanation_text)} chars)")
-                else:
-                    logging.warning("⚠️ Could not extract permissions explanation from Policy Explanation section")
+                explanation_text = explanation_match.group(1).strip()
+                logging.info(f"✅ Extracted permissions explanation ({len(explanation_text)} chars)")
             else:
-                logging.warning("⚠️ No Policy Explanation section found")
+                logging.warning("⚠️ No Permissions Policy Explanation section found")
             
             # Extract trust policy explanation
             trust_explanation_text = ""
-            if explanation_match:
-                explanation_section = explanation_match.group(1)
-                trust_explanation_match = re.search(
-                    r'\*\*Trust Policy:\*\*([\s\S]*?)$',
-                    explanation_section,
-                    re.DOTALL
-                )
-                if trust_explanation_match:
-                    trust_explanation_text = trust_explanation_match.group(1).strip()
-                    logging.info(f"✅ Extracted trust explanation ({len(trust_explanation_text)} chars)")
+            trust_explanation_match = re.search(
+                r'##\s*Trust Policy Explanation([\s\S]*?)(?=##|$)',
+                final_message,
+                re.DOTALL | re.IGNORECASE
+            )
+            if trust_explanation_match:
+                trust_explanation_text = trust_explanation_match.group(1).strip()
+                logging.info(f"✅ Extracted trust explanation ({len(trust_explanation_text)} chars)")
+            else:
+                logging.warning("⚠️ No Trust Policy Explanation section found")
 
             # Extract score breakdown (separate for permissions and trust)
             score_breakdown = extract_score_breakdown(final_message)
@@ -542,42 +531,48 @@ Or I can use {{{{ACCOUNT_ID}}}} and {{{{REGION}}}} placeholders that you can rep
             # Extract SEPARATE refinement suggestions
             refinement_suggestions = {"permissions": [], "trust": []}
             
-            # Look for the main Refinement Suggestions section
-            refinement_section_match = re.search(
-                r'###?\s*(?:✨\s*)?Refinement Suggestions([\s\S]*?)(?=###|$)', 
-                final_message, 
+            # Look for Permissions Policy Refinement Suggestions section
+            perm_refinement_match = re.search(
+                r'##\s*Permissions Policy Refinement Suggestions([\s\S]*?)(?=##|$)',
+                final_message,
                 re.DOTALL | re.IGNORECASE
             )
             
-            if refinement_section_match:
-                refinement_text = refinement_section_match.group(1)
-                logging.info(f"✅ Found Refinement Suggestions section")
-                
-                # Extract Permissions Policy suggestions
-                perm_match = re.search(
-                    r'\*\*Permissions Policy:\*\*([\s\S]*?)(?=\*\*Trust Policy:|\*\*Trust Policy\*\*|$)',
-                    refinement_text,
-                    re.DOTALL
-                )
-                if perm_match:
-                    perm_text = perm_match.group(1)
-                    perm_suggestions = re.findall(r'(?:^|\n)\s*[-•*]\s*(.+?)(?=\n|$)', perm_text, re.MULTILINE)
-                    refinement_suggestions["permissions"] = [s.strip() for s in perm_suggestions if s.strip() and len(s.strip()) > 10]
-                    logging.info(f"✅ Extracted {len(refinement_suggestions['permissions'])} permissions refinement suggestions")
-                
-                # Extract Trust Policy suggestions
-                trust_match = re.search(
-                    r'\*\*Trust Policy:\*\*([\s\S]*?)$',
-                    refinement_text,
-                    re.DOTALL
-                )
-                if trust_match:
-                    trust_text = trust_match.group(1)
-                    trust_suggestions = re.findall(r'(?:^|\n)\s*[-•*]\s*(.+?)(?=\n|$)', trust_text, re.MULTILINE)
-                    refinement_suggestions["trust"] = [s.strip() for s in trust_suggestions if s.strip() and len(s.strip()) > 10]
-                    logging.info(f"✅ Extracted {len(refinement_suggestions['trust'])} trust refinement suggestions")
+            if perm_refinement_match:
+                perm_text = perm_refinement_match.group(1)
+                logging.info(f"📝 Found Permissions Refinement section, length: {len(perm_text)} chars")
+                logging.info(f"📝 First 200 chars: {perm_text[:200]}")
+                # Extract bullet points
+                perm_suggestions = re.findall(r'(?:^|\n)\s*[-•*]\s*(.+?)(?=\n|$)', perm_text, re.MULTILINE)
+                refinement_suggestions["permissions"] = [s.strip() for s in perm_suggestions if s.strip() and len(s.strip()) > 10]
+                logging.info(f"✅ Extracted {len(refinement_suggestions['permissions'])} permissions refinement suggestions")
+                if len(refinement_suggestions['permissions']) > 0:
+                    logging.info(f"   First suggestion: {refinement_suggestions['permissions'][0][:100]}")
             else:
-                logging.warning("⚠️ No Refinement Suggestions section found")
+                logging.warning("⚠️ No Permissions Policy Refinement Suggestions section found")
+                # Log what sections ARE present
+                sections = re.findall(r'##\s*([^\n]+)', final_message)
+                logging.warning(f"   Sections found: {sections}")
+            
+            # Look for Trust Policy Refinement Suggestions section
+            trust_refinement_match = re.search(
+                r'##\s*Trust Policy Refinement Suggestions([\s\S]*?)(?=##|$)',
+                final_message,
+                re.DOTALL | re.IGNORECASE
+            )
+            
+            if trust_refinement_match:
+                trust_text = trust_refinement_match.group(1)
+                logging.info(f"📝 Found Trust Refinement section, length: {len(trust_text)} chars")
+                logging.info(f"📝 First 200 chars: {trust_text[:200]}")
+                # Extract bullet points
+                trust_suggestions = re.findall(r'(?:^|\n)\s*[-•*]\s*(.+?)(?=\n|$)', trust_text, re.MULTILINE)
+                refinement_suggestions["trust"] = [s.strip() for s in trust_suggestions if s.strip() and len(s.strip()) > 10]
+                logging.info(f"✅ Extracted {len(refinement_suggestions['trust'])} trust refinement suggestions")
+                if len(refinement_suggestions['trust']) > 0:
+                    logging.info(f"   First suggestion: {refinement_suggestions['trust'][0][:100]}")
+            else:
+                logging.warning("⚠️ No Trust Policy Refinement Suggestions section found")
             
             # Build conversation history
             conversation_history = []
@@ -837,3 +832,90 @@ def clear_conversation(conversation_id: str):
         del conversations[conversation_id]
         return {"message": "Conversation cleared"}
     return {"error": "Conversation not found"}
+
+
+# ============================================
+# NEW API ENDPOINTS FOR VALIDATE & AUDIT UI
+# ============================================
+
+class QuickValidateRequest(BaseModel):
+    input_type: str  # 'policy' or 'arn'
+    input_value: str
+    compliance_frameworks: Optional[List[str]] = None
+
+class AccountAuditRequest(BaseModel):
+    mode: str  # 'full' or 'cloudtrail'
+    compliance_frameworks: Optional[List[str]] = None
+
+
+@app.post("/api/validate/quick")
+async def validate_quick(request: QuickValidateRequest):
+    """
+    Quick validation endpoint for single policy analysis
+    Matches frontend API call structure
+    """
+    try:
+        logging.info(f"🔍 Quick validation request: {request.input_type}")
+        
+        # Convert to ValidationRequest format
+        validation_req = ValidationRequest(
+            policy_json=request.input_value if request.input_type == 'policy' else None,
+            role_arn=request.input_value if request.input_type == 'arn' else None,
+            compliance_frameworks=request.compliance_frameworks or ['pci_dss', 'hipaa', 'sox', 'gdpr'],
+            mode='quick'
+        )
+        
+        # Use existing validate endpoint
+        result = await validate_policy(validation_req)
+        
+        # Add agent_reasoning if available
+        if result.get('success') and result.get('raw_response'):
+            result['agent_reasoning'] = result.get('raw_response', '')
+        
+        return result
+        
+    except Exception as e:
+        logging.exception("❌ Error in quick validate endpoint")
+        return {
+            "error": str(e),
+            "success": False
+        }
+
+
+@app.post("/api/audit/account")
+async def audit_account(request: AccountAuditRequest):
+    """
+    Account audit endpoint for autonomous AWS account scan
+    Matches frontend API call structure
+    """
+    try:
+        logging.info(f"🤖 Account audit request: {request.mode} mode")
+        
+        # Convert to AuditRequest format
+        audit_req = AuditRequest(
+            compliance_frameworks=request.compliance_frameworks or ['pci_dss', 'hipaa', 'sox', 'gdpr', 'cis']
+        )
+        
+        # Use existing audit endpoint
+        result = await autonomous_audit(audit_req)
+        
+        # Add agent_reasoning if available
+        if result.get('success') and result.get('raw_response'):
+            result['agent_reasoning'] = result.get('raw_response', '')
+        
+        # Add mode-specific data
+        if request.mode == 'cloudtrail':
+            # TODO: Implement CloudTrail analysis
+            result['cloudtrail_analysis'] = {
+                "message": "CloudTrail analysis coming soon",
+                "unused_permissions": []
+            }
+        
+        return result
+        
+    except Exception as e:
+        logging.exception("❌ Error in account audit endpoint")
+        return {
+            "error": str(e),
+            "success": False
+        }

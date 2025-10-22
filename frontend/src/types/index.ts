@@ -47,34 +47,17 @@ export interface GeneratePolicyResponse {
   permissions_score: number;
   trust_score: number;
   overall_score: number;
-  security_notes?: {
-    permissions?: string[];
-    trust?: string[];
-  };
-  score_breakdown?: {
-    permissions?: {
-      positive?: string[];
-      improvements?: string[];
-    };
-    trust?: {
-      positive?: string[];
-      improvements?: string[];
-    };
-  };
-  security_features?: {
-    permissions?: string[];
-    trust?: string[];
-  };
-  refinement_suggestions?: {
-    permissions?: string[];
-    trust?: string[];
-  };
-  conversation_history?: Array<{
-    role: string;
-    content: string;
-    timestamp?: string;
-  }>;
+  security_notes?: SecurityNotes;
+  score_breakdown?: ScoreBreakdown;
+  security_features?: SecurityFeatures;
+  refinement_suggestions?: RefinementSuggestions;
+  conversation_history?: ChatMessage[];
   is_question?: boolean;
+  reasoning?: {
+    plan: string;
+    actions: string[];
+    reflection: string;
+  };
 }
 
 export interface ValidationRequest {
@@ -84,50 +67,76 @@ export interface ValidationRequest {
   mode?: 'quick' | 'audit';
 }
 
-export interface Finding {
-  severity: 'critical' | 'high' | 'medium' | 'low' | 'info';
+export interface SecurityFinding {
+  id: string;
+  severity: 'Critical' | 'High' | 'Medium' | 'Low';
+  type: string;
   title: string;
   description: string;
-  recommendation?: string;
-  affected_resource?: string;
+  recommendation: string;
+  affectedStatement?: number;
+  code_snippet?: string;
 }
 
-export interface ComplianceStatus {
-  [framework: string]: {
-    compliant: boolean;
-    score: number;
-    findings: string[];
-  };
+export interface ComplianceFramework {
+  name: string;
+  status: 'Compliant' | 'NonCompliant' | 'Partial';
+  gaps?: string[];
+  violations?: Array<{
+    requirement: string;
+    description: string;
+    fix: string;
+  }>;
 }
 
 export interface AuditSummary {
   total_roles: number;
-  roles_scanned: number;
+  roles_analyzed: number;
+  total_policies: number;
+  total_findings: number;
   critical_findings: number;
   high_findings: number;
   medium_findings: number;
   low_findings: number;
-  scan_duration: string;
 }
 
 export interface ValidationResponse {
-  success: boolean;
+  findings: SecurityFinding[];
   risk_score: number;
-  findings: Finding[];
-  compliance_status: ComplianceStatus;
+  security_issues: string[];
   recommendations: string[];
-  quick_wins: string[];
-  audit_summary?: AuditSummary;
-  top_risks?: Finding[];
-  raw_response: string;
-  mcp_enabled: boolean;
-  error?: string;
+  compliance_status: Record<string, ComplianceFramework>;
+  quick_wins?: string[];
+  audit_summary?: AuditSummary | null;
+  top_risks?: string[];
+  agent_reasoning?: string;
 }
 
-export interface AuditRequest {
-  compliance_frameworks?: string[];
+export interface IAMPolicy {
+  Version: string;
+  Statement: Array<{
+    Sid?: string;
+    Effect: string;
+    Action: string | string[];
+    Resource: string | string[];
+    Condition?: any;
+  }>;
 }
 
-export interface AuditResponse extends ValidationResponse {
-  audit_summary: AuditSummary;
+export interface AnalyzeHistoryRequest {
+  role_arn: string;
+  date_range: string;
+}
+
+export interface AnalyzeHistoryResponse {
+  optimized_policy: any;
+  usage_summary: {
+    total_permissions: number;
+    used_permissions: number;
+    unused_permissions: number;
+    usage_percentage: number;
+  };
+  security_improvements: string[];
+  implementation_steps: string[];
+  risk_reduction: number;
 }

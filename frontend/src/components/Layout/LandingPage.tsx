@@ -10,7 +10,7 @@ const LandingPage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 relative overflow-hidden">
+    <div className="min-h-screen bg-slate-900 relative overflow-hidden">
       {/* Premium Animated Background */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         {/* Cyber Grid Pattern */}
@@ -25,10 +25,10 @@ const LandingPage: React.FC = () => {
           }}
         />
 
-        {/* Glowing Gradient Orbs */}
-        <div className="absolute top-0 right-0 w-[800px] h-[800px] bg-gradient-to-br from-orange-500/20 via-purple-500/20 to-pink-500/10 rounded-full blur-3xl animate-pulse-slow"></div>
-        <div className="absolute bottom-0 left-0 w-[700px] h-[700px] bg-gradient-to-tr from-purple-600/15 via-pink-500/15 to-orange-500/10 rounded-full blur-3xl animate-pulse-slow" style={{ animationDelay: '2s' }}></div>
-        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-gradient-to-br from-pink-500/10 via-purple-500/15 to-orange-500/10 rounded-full blur-3xl animate-pulse-slow" style={{ animationDelay: '4s' }}></div>
+        {/* Vibrant Gradient Orbs */}
+        <div className="absolute top-0 right-0 w-[800px] h-[800px] bg-gradient-to-br from-orange-500/15 via-purple-500/15 to-pink-500/10 rounded-full blur-3xl animate-pulse-slow"></div>
+        <div className="absolute bottom-0 left-0 w-[700px] h-[700px] bg-gradient-to-tr from-purple-600/12 via-pink-500/12 to-orange-500/8 rounded-full blur-3xl animate-pulse-slow" style={{ animationDelay: '2s' }}></div>
+        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-gradient-to-br from-pink-500/10 via-purple-500/12 to-orange-500/8 rounded-full blur-3xl animate-pulse-slow" style={{ animationDelay: '4s' }}></div>
         
         {/* Scan Lines Effect */}
         <div className="absolute inset-0 opacity-[0.02]" style={{
