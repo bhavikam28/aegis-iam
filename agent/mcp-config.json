@@ -1,16 +1,16 @@
 {
   "mcpServers": {
     "aws-iam": {
-      "command": "python",
-      "args": ["-m", "awslabs.iam_mcp_server"],
+      "command": "uvx",
+      "args": ["awslabs-iam-mcp-server"],
       "env": {
         "AWS_REGION": "us-east-1",
         "AWS_PROFILE": "default"
       }
     },
     "aws-cloudtrail": {
-      "command": "python",
-      "args": ["-m", "awslabs.cloudtrail_mcp_server"],
+      "command": "uvx",
+      "args": ["awslabs-cloudtrail-mcp-server"],
       "env": {
         "AWS_REGION": "us-east-1",
         "AWS_PROFILE": "default"

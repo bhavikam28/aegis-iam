@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import Sidebar from './Sidebar';
 import GeneratePolicy from '../Pages/GeneratePolicy';
 import ValidatePolicy from '../Pages/ValidatePolicy';
-import AnalyzeHistory from '../Pages/AnalyzeHistory';
+import AuditAccount from '../Pages/AuditAccount';
 
 const Dashboard: React.FC<{ onReturnHome: () => void }> = ({ onReturnHome }) => {
   const [activeSection, setActiveSection] = useState('generate');
@@ -13,8 +13,8 @@ const Dashboard: React.FC<{ onReturnHome: () => void }> = ({ onReturnHome }) => 
         return <GeneratePolicy />;
       case 'validate':
         return <ValidatePolicy />;
-      case 'analyze':
-        return <AnalyzeHistory />;
+      case 'audit':
+        return <AuditAccount />;
       default:
         return <GeneratePolicy />;
     }

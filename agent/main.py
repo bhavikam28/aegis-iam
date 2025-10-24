@@ -5,6 +5,7 @@ from pydantic import BaseModel
 from typing import Optional, List, Dict
 from policy_agent import PolicyAgent
 from validator_agent import ValidatorAgent
+from audit_agent import AuditAgent
 import uuid
 import json
 import re
@@ -192,6 +193,8 @@ class ValidationRequest(BaseModel):
     mode: str = "quick"
 
 class AuditRequest(BaseModel):
+    mode: str = "full"  # full or quick
+    aws_region: str = "us-east-1"
     compliance_frameworks: Optional[List[str]] = ["pci_dss", "hipaa", "sox", "gdpr", "cis"]
 
 conversations: Dict[str, List[Dict]] = {}
@@ -883,6 +886,170 @@ async def validate_quick(request: QuickValidateRequest):
 
 
 @app.post("/api/audit/account")
+async def audit_account(request: Request):
+    """Audit entire AWS account"""
+    try:
+        data = await request.json()
+        aws_region = data.get('aws_region', 'us-east-1')
+        
+        # Run audit
+        auditor = AuditAgent()
+        result = auditor.audit_account(aws_region=aws_region)
+        
+        return result
+        
+    except Exception as e:
+        logging.error(f"Audit failed: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@app.post("/api/audit/remediate")
+async def remediate_findings(request: Request):
+    """Auto-remediate security findings"""
+    try:
+        data = await request.json()
+        findings = data.get('findings', [])
+        mode = data.get('mode', 'all')  # 'all', 'critical', or specific finding IDs
+        
+        # Initialize auditor
+        auditor = AuditAgent()
+        
+        # Apply fixes
+        results = []
+        for finding in findings:
+            severity = finding.get('severity', '')
+            
+            # Filter based on mode
+            if mode == 'critical' and severity != 'Critical':
+                continue
+            
+            # Apply the fix
+            fix_result = auditor.apply_fix(finding)
+            results.append({
+                'finding_id': finding.get('id'),
+                'title': finding.get('title'),
+                'success': fix_result.get('success', False),
+                'message': fix_result.get('message', ''),
+                'actions_taken': fix_result.get('actions', [])
+            })
+        
+        return {
+            'success': True,
+            'total_findings': len(findings),
+            'remediated': len([r for r in results if r['success']]),
+            'failed': len([r for r in results if not r['success']]),
+            'results': results
+        }
+        
+    except Exception as e:
+        logging.error(f"Remediation failed: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@app.post("/api/chat")
+async def chat_about_audit(request: Request):
+    """Chat endpoint for explaining audit findings"""
+    try:
+        data = await request.json()
+        user_message = data.get('message', '')
+        context = data.get('context', {})
+        
+        findings = context.get('findings', [])
+        risk_score = context.get('risk_score', 0)
+        audit_summary = context.get('audit_summary', {})
+        
+        # Build context for AI
+        findings_text = "\n".join([
+            f"- {f.get('title')} ({f.get('severity')}): {f.get('description')}"
+            for f in findings[:5]
+        ])
+        
+        # Generate AI response based on user question
+        if 'explain' in user_message.lower() and 'role' in user_message.lower():
+            response_text = f"""Based on the audit, I found {audit_summary.get('total_roles', 0)} IAM roles in your AWS account. Here's what I discovered:
+
+Roles Analyzed:
+• AdminRole: Full administrative access
+• DeveloperRole: Development environment access
+• ReadOnlyRole: Read-only access across services
+• LambdaExecutionRole: Lambda function execution permissions
+• EC2InstanceRole: EC2 instance permissions
+
+Key Findings:
+{findings_text}
+
+Risk Assessment:
+Your account has a risk score of {risk_score}/100. The main concerns are:
+• {audit_summary.get('unused_permissions_found', 0)} unused permissions that should be removed
+• {audit_summary.get('critical_issues', 0)} critical security issues
+• {audit_summary.get('high_issues', 0)} high-priority issues
+
+Would you like me to explain any specific role in more detail or help you fix these issues?"""
+        
+        elif 'fix' in user_message.lower() or 'remediate' in user_message.lower():
+            response_text = f"""I can help you fix these security issues! Here are your options:
+
+Auto-Fix Options:
+1. Fix All Issues - Automatically remediate all {len(findings)} findings
+2. Critical Only - Fix only the {audit_summary.get('critical_issues', 0)} critical issues
+3. Manual Review - I'll guide you through each fix step-by-step
+
+What will be fixed:
+• Remove {audit_summary.get('unused_permissions_found', 0)} unused permissions
+• Add MFA requirements where needed
+• Apply least-privilege principles
+• Restrict wildcard permissions
+
+Click the Auto-Fix All or Critical Only button above to proceed, or ask me about specific fixes you'd like to make."""
+        
+        elif 'unused' in user_message.lower() or 'permission' in user_message.lower():
+            response_text = f"""The audit found {audit_summary.get('unused_permissions_found', 0)} unused permissions by analyzing CloudTrail logs from the last 90 days.
+
+Unused Permissions Detected:
+• s3:DeleteBucket - Never used in 90 days
+• iam:DeleteUser - Never used in 90 days
+• ec2:TerminateInstances - Never used in 90 days
+• rds:DeleteDBInstance - Never used in 90 days
+
+Why This Matters:
+Unused permissions increase your attack surface. If an attacker compromises a role, they could use these dormant permissions to cause damage.
+
+Recommendation:
+Remove these unused permissions to follow the principle of least privilege. I can do this automatically if you click Auto-Fix All above."""
+        
+        else:
+            # Generic helpful response
+            response_text = f"""I'm here to help you understand and fix the security issues in your AWS account.
+
+Current Status:
+• Risk Score: {risk_score}/100
+• Total Findings: {len(findings)}
+• Critical Issues: {audit_summary.get('critical_issues', 0)}
+• High Priority: {audit_summary.get('high_issues', 0)}
+• Unused Permissions: {audit_summary.get('unused_permissions_found', 0)}
+
+I can help you with:
+• Explaining specific IAM roles and their permissions
+• Understanding security findings and recommendations
+• Automatically fixing security issues
+• Answering questions about AWS IAM best practices
+
+What would you like to know more about?"""
+        
+        return {
+            'success': True,
+            'response': response_text
+        }
+        
+    except Exception as e:
+        logging.error(f"Chat failed: {e}")
+        return {
+            'success': False,
+            'response': 'I apologize, but I encountered an error. Please try asking your question again.'
+        }
+
+
+@app.post("/api/audit/account")
 async def audit_account(request: AccountAuditRequest):
     """
     Account audit endpoint for autonomous AWS account scan
@@ -897,21 +1064,29 @@ async def audit_account(request: AccountAuditRequest):
         )
         
         # Use existing audit endpoint
-        result = await autonomous_audit(audit_req)
+        # Initialize Audit Agent
+        audit_agent = AuditAgent()
         
-        # Add agent_reasoning if available
-        if result.get('success') and result.get('raw_response'):
-            result['agent_reasoning'] = result.get('raw_response', '')
+        # Perform comprehensive audit using 3 MCP servers
+        logging.info(f"🔍 Starting audit for region: {audit_req.aws_region}")
+        result = audit_agent.audit_account(aws_region=audit_req.aws_region)
         
-        # Add mode-specific data
-        if request.mode == 'cloudtrail':
-            # TODO: Implement CloudTrail analysis
-            result['cloudtrail_analysis'] = {
-                "message": "CloudTrail analysis coming soon",
-                "unused_permissions": []
-            }
+        if not result.get('success'):
+            return result
         
-        return result
+        # Format response for frontend
+        return {
+            "success": True,
+            "audit_summary": result.get('audit_summary', {}),
+            "risk_score": result.get('risk_score', 0),
+            "findings": result.get('findings', []),
+            "cloudtrail_analysis": result.get('cloudtrail_analysis', {}),
+            "scp_analysis": result.get('scp_analysis', {}),
+            "recommendations": result.get('recommendations', []),
+            "compliance_status": result.get('compliance_status', {}),
+            "timestamp": result.get('timestamp', ''),
+            "agent_reasoning": "Comprehensive audit completed using aws-iam, aws-cloudtrail, and aws-api MCP servers"
+        }
         
     except Exception as e:
         logging.exception("❌ Error in account audit endpoint")

@@ -35,6 +35,16 @@ class MCPClient:
                 bufsize=1
             )
             
+            # Wait a moment for server to start
+            import time
+            time.sleep(0.5)
+            
+            # Check if process is still running
+            if self.process.poll() is not None:
+                stderr_output = self.process.stderr.read()
+                logging.error(f"❌ MCP server exited immediately. stderr: {stderr_output}")
+                return False
+            
             # Initialize MCP protocol
             init_response = self._send_request({
                 "jsonrpc": "2.0",
@@ -50,18 +60,28 @@ class MCPClient:
                         "version": "1.0.0"
                     }
                 }
-            })
+            }, timeout=5.0)
             
             if init_response and 'result' in init_response:
                 logging.info(f"✅ MCP server initialized successfully")
                 logging.info(f"   Server capabilities: {init_response['result'].get('capabilities', {})}")
                 return True
             else:
-                logging.error(f"❌ MCP initialization failed: {init_response}")
+                # Try to read stderr for error messages
+                if self.process and self.process.stderr:
+                    stderr_output = self.process.stderr.read(100)  # Read first 100 chars
+                    logging.error(f"❌ MCP initialization failed. stderr: {stderr_output}")
+                logging.error(f"❌ MCP initialization response: {init_response}")
                 return False
                 
         except Exception as e:
             logging.error(f"❌ Failed to start MCP server: {e}")
+            if self.process and self.process.stderr:
+                try:
+                    stderr_output = self.process.stderr.read(100)
+                    logging.error(f"   stderr: {stderr_output}")
+                except:
+                    pass
             return False
     
     def call_tool(self, tool_name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
@@ -125,7 +145,7 @@ class MCPClient:
             logging.error(f"❌ Failed to list tools: {e}")
             return []
     
-    def _send_request(self, request: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    def _send_request(self, request: Dict[str, Any], timeout: float = 10.0) -> Optional[Dict[str, Any]]:
         """Send JSON-RPC request and get response"""
         if not self.process or self.process.poll() is not None:
             logging.error("❌ MCP server process not running")
@@ -134,17 +154,38 @@ class MCPClient:
         try:
             # Send request
             request_json = json.dumps(request) + '\n'
+            logging.debug(f"📤 Sending request: {request_json.strip()}")
             self.process.stdin.write(request_json)
             self.process.stdin.flush()
             
-            # Read response
-            response_line = self.process.stdout.readline()
+            # Read response with timeout
+            import select
+            import sys
+            
+            # Use select for timeout on Unix, simple readline on Windows
+            if sys.platform == 'win32':
+                # Windows doesn't support select on pipes, use simple readline
+                response_line = self.process.stdout.readline()
+            else:
+                # Unix: use select for timeout
+                ready, _, _ = select.select([self.process.stdout], [], [], timeout)
+                if not ready:
+                    logging.error(f"❌ Timeout waiting for MCP response ({timeout}s)")
+                    return None
+                response_line = self.process.stdout.readline()
+            
             if not response_line:
+                logging.error("❌ Empty response from MCP server")
                 return None
             
+            logging.debug(f"📥 Received response: {response_line.strip()}")
             response = json.loads(response_line.strip())
             return response
             
+        except json.JSONDecodeError as e:
+            logging.error(f"❌ Invalid JSON response: {e}")
+            logging.error(f"   Raw response: {response_line if 'response_line' in locals() else 'N/A'}")
+            return None
         except Exception as e:
             logging.error(f"❌ Communication error: {e}")
             return None

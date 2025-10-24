@@ -1,5 +1,5 @@
 import React from 'react';
-import { Shield, Search, BarChart3 } from 'lucide-react';
+import { Shield, Search, Scan } from 'lucide-react';
 
 interface SidebarProps {
   activeSection: string;
@@ -11,18 +11,18 @@ const Sidebar: React.FC<SidebarProps> = ({ activeSection, onSectionChange, onRet
   const sections = [
     {
       id: 'generate',
-      title: 'Generate',
+      title: 'Generate Policy',
       icon: Shield,
     },
     {
       id: 'validate',
-      title: 'Validate & Audit',
+      title: 'Validate Policy',
       icon: Search,
     },
     {
-      id: 'analyze',
-      title: 'Analyze',
-      icon: BarChart3,
+      id: 'audit',
+      title: 'Audit Account',
+      icon: Scan,
     }
   ];
 
