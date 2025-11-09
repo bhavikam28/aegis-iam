@@ -1,27 +1,28 @@
 {
   "mcpServers": {
     "aws-iam": {
-      "command": "uvx",
-      "args": ["awslabs-iam-mcp-server"],
+      "command": "python",
+      "args": ["-m", "awslabs.iam_mcp_server.server"],
       "env": {
         "AWS_REGION": "us-east-1",
         "AWS_PROFILE": "default"
       }
     },
     "aws-cloudtrail": {
-      "command": "uvx",
-      "args": ["awslabs-cloudtrail-mcp-server"],
+      "command": "python",
+      "args": ["-m", "awslabs.cloudtrail_mcp_server.server"],
       "env": {
         "AWS_REGION": "us-east-1",
         "AWS_PROFILE": "default"
       }
     },
     "aws-api": {
-      "command": "npx",
-      "args": ["-y", "@aws-mcp/server-aws-api"],
+      "command": "python",
+      "args": ["-m", "awslabs.aws_api_mcp_server.server"],
       "env": {
         "AWS_REGION": "us-east-1",
-        "AWS_PROFILE": "default"
+        "AWS_PROFILE": "default",
+        "READ_OPERATIONS_ONLY": "true"
       }
     }
   }

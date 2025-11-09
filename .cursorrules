@@ -1,0 +1,156 @@
+# AEGIS-IAM Project Rules & Context
+
+## Project Overview
+Aegis IAM is an AI-powered IAM security platform for AWS that generates, validates, and audits IAM policies using Claude 3.7 Sonnet.
+
+## Core Capabilities
+1. **Policy Generation**: Natural language → IAM permissions/trust policies via Bedrock
+2. **Policy Validation**: Validates against security best practices and compliance (PCI DSS, HIPAA, SOX, GDPR, CIS)
+3. **Autonomous Account Audit**: Scans AWS accounts for security issues across IAM roles and policies
+
+## Tech Stack
+- **Frontend**: React 18 + TypeScript + Tailwind CSS + Vite
+- **Backend**: FastAPI (Python) with async endpoints
+- **AI Model**: Claude 3.7 Sonnet via Amazon Bedrock
+- **AWS Integration**: boto3 + MCP (Model Context Protocol)
+- **Agent Framework**: Strands Agents SDK
+- **Communication**: REST API + Server-Sent Events (SSE)
+
+## Architecture
+
+### Frontend Layer (`frontend/`)
+- Components: GeneratePolicy, ValidatePolicy, AuditAccount, Dashboard, AnalyzeHistory
+- API service layer: `services/api.ts`
+- Real-time UI with SSE for audit progress
+
+### Backend Layer (`agent/`)
+- **main.py**: FastAPI endpoints with CORS middleware
+- **Three AI Agents**:
+  - **PolicyAgent**: Generates IAM policies via Bedrock
+  - **ValidatorAgent**: Quick validation + autonomous audit mode
+  - **AuditAgent**: Full account audits with MCP integration
+- **Security**: `security_validator.py`, `policy_scorer.py`
+
+### MCP Integration Layer
+- **Files**: `fastmcp_client.py`, `mcp-client.py`
+- **MCP Servers**: aws-iam-mcp-server, aws-cloudtrail-mcp-server, aws-api-mcp-server
+- **Protocol**: JSON-RPC stdio
+- **Fallback**: boto3 if MCP unavailable
+
+### AWS Services Layer
+- Amazon Bedrock (Claude 3.7 Sonnet)
+- AWS IAM API
+- AWS CloudTrail
+- AWS STS
+
+## Authentication Status
+⚠️ **NO USER AUTHENTICATION CURRENTLY IMPLEMENTED**
+- No login/signup system
+- No JWT or session management
+- Endpoints are public (no auth middleware)
+- CORS enabled for localhost:5173 and Vercel deployment
+- AWS credentials required for AWS operations (via AWS CLI, env vars, or IAM roles)
+
+## Key Features
+- **Agentic AI Design**: Autonomous decision-making in audit mode
+- **Multi-Mode Operation**:
+  - Quick validation (single policy)
+  - Autonomous audit (full account scan)
+  - Policy generation (conversational)
+- **Compliance Awareness**: Checks against multiple frameworks
+- **Real-Time**: SSE for audit progress and streaming responses
+- **MCP Integration**: Modular AWS API access with graceful fallback
+
+## Important Conventions
+- Backend runs async/await for concurrent operations
+- MCP tools enable AI agents to call AWS APIs directly
+- Conversation state stored in memory (not persistent)
+- Frontend communicates via HTTP REST + SSE
+- No rate limiting on endpoints currently
+
+## Development Setup
+- AWS credentials must be configured (via `aws configure` or environment variables)
+- Bedrock access required for Claude 3.7 Sonnet
+- MCP servers optional (falls back to boto3)
+
+## Agent Behavior
+- PolicyAgent: Generates policies through conversational interface
+- ValidatorAgent: Can operate in quick validation OR autonomous audit mode
+- AuditAgent: Performs comprehensive account scans with CloudTrail analysis and auto-remediation
+
+## Security Considerations
+- No user authentication = all endpoints are public
+- AWS credentials provide access to AWS services
+- CORS configured for specific origins only
+- Consider adding: JWT auth, rate limiting, user sessions, RBAC
+
+## Code Style
+- Python: FastAPI + async/await patterns
+- TypeScript: React functional components + hooks
+- Use Strands SDK for agent tool calling
+- MCP client abstraction for AWS operations
+```
+
+---
+
+## **📝 HOW TO ADD THIS FILE:**
+
+### **Option 1: Use Cursor (Recommended)**
+
+1. **Switch to "Plan" mode**
+2. **Paste this**:
+```
+Create a file named .cursorrules in the project root directory with this exact content:
+[paste the entire content I provided above]
+```
+3. **Review the plan** → **Approve**
+
+### **Option 2: Manual Creation**
+
+1. **In Cursor**: Right-click the root folder → **New File**
+2. **Name it**: `.cursorrules` (with the dot at the start!)
+3. **Paste the entire content** I provided above
+4. **Save** (Ctrl + S)
+
+---
+
+## **✅ WHAT HAPPENS AFTER YOU CREATE `.cursorrules`:**
+
+### **In EVERY New Chat:**
+✅ Cursor automatically reads this file  
+✅ AI knows your project structure  
+✅ AI understands your tech stack  
+✅ AI remembers key conventions  
+✅ AI knows about MCP integration  
+✅ AI knows authentication status  
+
+### **You Never Need to Explain Again:**
+- What aegis-iam does
+- Your architecture
+- Tech stack
+- Agent system
+- MCP integration
+
+---
+
+## **🎯 TEST IT:**
+
+After creating `.cursorrules`:
+
+1. **Start a NEW chat** (to test)
+2. **Ask**: "What does this project do?"
+3. **Cursor should know immediately** without you explaining!
+
+---
+
+## **💡 BONUS: Also Create a README.md**
+
+For human developers (and GitHub):
+```
+Create a comprehensive README.md that includes:
+- Project description
+- Setup instructions
+- Architecture overview
+- How to run locally
+- Environment variables needed
+- API endpoints documentation

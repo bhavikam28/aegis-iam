@@ -53,6 +53,7 @@ export interface GeneratePolicyResponse {
   refinement_suggestions?: RefinementSuggestions;
   conversation_history?: ChatMessage[];
   is_question?: boolean;
+  compliance_status?: Record<string, ComplianceFramework>;
   reasoning?: {
     plan: string;
     actions: string[];

@@ -202,8 +202,17 @@ class SecurityValidator:
                 resources = [resources]
                 
             for action in actions:
-                service = str(action).split(':')[0]
-                action_name = str(action).split(':')[1]
+                action_str = str(action)
+                
+                # Handle wildcard or actions without colons
+                if ':' not in action_str:
+                    # Wildcard or malformed action
+                    service = '*'
+                    action_name = action_str
+                else:
+                    parts = action_str.split(':', 1)
+                    service = parts[0]
+                    action_name = parts[1] if len(parts) > 1 else action_str
                 
                 if service not in service_actions:
                     service_actions[service] = {
@@ -536,6 +545,39 @@ class SecurityValidator:
                 services.add(service)
         return services
         
+    def _generate_recommendations(self, issues, recommendations, services_used):
+        """Generate context-aware recommendations based on issues and services"""
+        final_recommendations = []
+        
+        # Add service-specific recommendations from validation
+        final_recommendations.extend(recommendations)
+        
+        # Add recommendations based on issues
+        if any('wildcard' in str(issue).lower() for issue in issues):
+            final_recommendations.append("Replace wildcard permissions with specific resource ARNs")
+        
+        if any('mfa' in str(issue).lower() for issue in issues):
+            final_recommendations.append("Add MFA requirement for sensitive operations")
+        
+        # Service-specific recommendations
+        if 's3' in services_used:
+            if not any('encryption' in str(r).lower() for r in final_recommendations):
+                final_recommendations.append("Consider adding encryption requirements for S3 operations")
+        
+        if 'dynamodb' in services_used:
+            if not any('vpc' in str(r).lower() for r in final_recommendations):
+                final_recommendations.append("Consider using VPC endpoints for DynamoDB access")
+        
+        # Remove duplicates while preserving order
+        seen = set()
+        unique_recommendations = []
+        for rec in final_recommendations:
+            if rec not in seen:
+                seen.add(rec)
+                unique_recommendations.append(rec)
+        
+        return unique_recommendations
+    
     def _generate_grade_explanation(self, grade, positives, issues):
         """Generate detailed explanation of the security grade"""
         if grade == 'A':
@@ -548,7 +590,7 @@ class SecurityValidator:
             return "Poor - Policy has significant security gaps that should be addressed"
         else:
             return "Critical - Policy has severe security issues that must be fixed immediately"
-
+            
 # Global instance - easy to swap with AWS Security Hub validator in future
 validator = SecurityValidator()
 

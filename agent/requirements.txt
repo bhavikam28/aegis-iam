@@ -5,5 +5,8 @@ fastapi
 uvicorn
 gunicorn
 pydantic>=2.0
-awslabs.iam-mcp-server>=1.0.6
-awslabs.cloudtrail-mcp-server>=1.0.0
+fastmcp>=2.4.0
+nest-asyncio
+awslabs-iam-mcp-server>=1.0.6
+awslabs-cloudtrail-mcp-server>=0.0.4
+awslabs-aws-api-mcp-server>=0.1.0

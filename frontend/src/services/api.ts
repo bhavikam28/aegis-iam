@@ -71,31 +71,155 @@ export interface ConversationalResponse {
   is_question?: boolean;
 }
 
+// Service detection utility
+const detectServiceFromDescription = (description: string): string => {
+  if (!description || !description.trim()) {
+    return 'lambda'; // Safe default
+  }
+  
+  const descLower = description.toLowerCase();
+  
+  // Service keyword mappings (match backend patterns)
+  const servicePatterns: { [key: string]: string[] } = {
+    'lambda': ['lambda', 'function', 'serverless', 'aws lambda', 'lambda function'],
+    'ec2': ['ec2', 'instance', 'vm', 'virtual machine', 'ec2 instance'],
+    'ecs': ['ecs', 'container', 'task', 'ecs task', 'ecs service', 'docker'],
+    'fargate': ['fargate', 'aws fargate', 'ecs fargate'],
+    's3': ['s3', 'bucket', 'storage', 's3 bucket', 'object storage'],
+    'dynamodb': ['dynamodb', 'dynamo', 'table', 'dynamodb table', 'nosql'],
+    'rds': ['rds', 'database', 'mysql', 'postgresql', 'aurora', 'relational'],
+    'redshift': ['redshift', 'data warehouse', 'analytics database'],
+    'apigateway': ['api gateway', 'apigateway', 'rest api', 'api', 'http api'],
+    'sns': ['sns', 'notification', 'topic', 'publish'],
+    'sqs': ['sqs', 'queue', 'message queue'],
+    'glue': ['glue', 'etl', 'data transformation'],
+    'batch': ['batch', 'batch job', 'batch processing'],
+    'eks': ['eks', 'kubernetes', 'k8s'],
+    'ecr': ['ecr', 'container registry'],
+    'kinesis': ['kinesis', 'stream', 'data stream'],
+    'stepfunctions': ['step functions', 'stepfunctions', 'state machine'],
+    'eventbridge': ['eventbridge', 'event bus'],
+    'sagemaker': ['sagemaker', 'ml', 'machine learning'],
+    'iot': ['iot', 'internet of things', 'iot core'],
+    'cloudfront': ['cloudfront', 'cdn'],
+    'route53': ['route53', 'dns', 'domain'],
+  };
+  
+  // Score each service
+  const serviceScores: { [key: string]: number } = {};
+  
+  for (const [service, keywords] of Object.entries(servicePatterns)) {
+    let score = 0;
+    for (const keyword of keywords) {
+      if (descLower.includes(keyword)) {
+        score += keyword.length > 3 ? 2 : 1;
+      }
+      // Word boundary match
+      const regex = new RegExp(`\\b${keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`);
+      if (regex.test(descLower)) {
+        score += 3;
+      }
+    }
+    if (score > 0) {
+      serviceScores[service] = score;
+    }
+  }
+  
+  // Return service with highest score, or default to lambda
+  if (Object.keys(serviceScores).length === 0) {
+    return 'lambda';
+  }
+  
+  const detectedService = Object.entries(serviceScores)
+    .sort(([, a], [, b]) => b - a)[0][0];
+  
+  console.log(`🔍 Detected service: ${detectedService} from description`);
+  return detectedService;
+};
+
 export const generatePolicy = async (
   request: ConversationalRequest
 ): Promise<GeneratePolicyResponse> => {
-  const response = await fetch(`${API_URL}/generate`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      description: request.description,
-      service: 'lambda',
-      conversation_id: request.conversation_id || null,
-      is_followup: request.is_followup || false,
-      restrictive: request.restrictive || false,
-      compliance: request.compliance || 'general'
-    }),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Backend error: ${response.status} - ${errorText}`);
+  // Detect service from description if not explicitly provided
+  const detectedService = detectServiceFromDescription(request.description);
+  
+  let response: Response;
+  try {
+    response = await fetch(`${API_URL}/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        description: request.description,
+        service: detectedService, // Use detected service instead of hardcoded 'lambda'
+        conversation_id: request.conversation_id || null,
+        is_followup: request.is_followup || false,
+        restrictive: request.restrictive || false,
+        compliance: request.compliance || 'general'
+      }),
+    });
+  } catch (fetchError) {
+    console.error('Fetch error:', fetchError);
+    throw new Error(`Network error: ${fetchError instanceof Error ? fetchError.message : 'Failed to connect to server'}`);
   }
 
-  const backendResponse: ConversationalResponse = await response.json();
-  const messageContent = backendResponse.final_answer;
+  // Read response text once (can't read response body twice)
+  const responseText = await response.text();
+  
+  if (!response.ok) {
+    console.error(`Backend error (${response.status}):`, responseText);
+    throw new Error(`Backend error: ${response.status} - ${responseText.substring(0, 200)}`);
+  }
 
-  if (!messageContent) {
+  // Log response for debugging
+  console.log('Backend response text (first 500 chars):', responseText.substring(0, 500));
+  
+  // Check if response is empty or null
+  if (!responseText || responseText.trim() === '' || responseText.trim() === 'null') {
+    console.error('Backend returned empty or null response body');
+    console.error('Response text:', responseText);
+    throw new Error('Empty or null response body from server. Please check backend logs.');
+  }
+  
+  let backendResponse: ConversationalResponse | null;
+  try {
+    backendResponse = JSON.parse(responseText);
+  } catch (jsonError) {
+    console.error('JSON parse error:', jsonError);
+    console.error('Response text that failed to parse:', responseText);
+    throw new Error(`Invalid response format from server: ${jsonError instanceof Error ? jsonError.message : 'Unknown error'}`);
+  }
+  
+  // Check if response is null or undefined
+  if (!backendResponse || backendResponse === null || (typeof backendResponse === 'object' && Object.keys(backendResponse).length === 0)) {
+    console.error('Backend returned null/undefined/empty after parsing');
+    console.error('Parsed response:', backendResponse);
+    console.error('Response text (first 500 chars):', responseText.substring(0, 500));
+    throw new Error("Backend returned null or empty response. The server may have encountered an error. Please check backend logs.");
+  }
+  
+  console.log('Backend response parsed successfully:', {
+    hasFinalAnswer: !!backendResponse.final_answer,
+    hasPolicy: !!backendResponse.policy,
+    hasTrustPolicy: !!backendResponse.trust_policy,
+    conversationId: backendResponse.conversation_id
+  });
+  
+  // Check if final_answer exists - handle error responses and normal responses
+  if (!backendResponse.final_answer || (typeof backendResponse.final_answer === 'string' && backendResponse.final_answer.trim() === '')) {
+    console.error('Backend response missing final_answer:', backendResponse);
+    
+    // If there's an error field, use it as final_answer
+    if ('error' in backendResponse && backendResponse.error) {
+      backendResponse.final_answer = backendResponse.error;
+    } else {
+      // Provide a fallback
+      backendResponse.final_answer = backendResponse.explanation || 'Policy generation completed.';
+    }
+  }
+  
+  const messageContent = backendResponse.final_answer || backendResponse.error || 'No response received from the agent backend.';
+
+  if (!messageContent || (typeof messageContent === 'string' && messageContent.trim() === '')) {
     throw new Error("No response received from the agent backend.");
   }
 

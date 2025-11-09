@@ -2,6 +2,7 @@ import logging
 import boto3
 import json
 from strands import tool
+from service_utils import get_service_principal, detect_service_from_description
 
 logging.basicConfig(level=logging.INFO)
 
@@ -24,20 +25,19 @@ def generate_policy_from_bedrock(description: str, service: str) -> str:
     
     bedrock = get_bedrock_client()
     
-    # System prompt - Dynamic and flexible
-    system_prompt = """You are an AWS IAM policy generator. Generate policies based on the user's ACTUAL requirements, not templates.
+    # System prompt - Optimized for speed (reduced verbosity)
+    system_prompt = """You are an AWS IAM policy generator. Generate secure IAM policies efficiently.
 
 CRITICAL RULES:
-1. ALWAYS use ## (two hashes) for headers, NEVER ### (three hashes)
-2. ALWAYS include THREE SEPARATE scores: Permissions, Trust, and Overall
-3. NEVER output 0 for scores - calculate real numbers between 1-100
-4. ALWAYS include all required sections (policies, scores, analysis, explanations, suggestions)
-5. Generate policies based on the ACTUAL AWS service and requirements mentioned
-6. Use appropriate service principals in trust policy based on the service
-7. For S3: ALWAYS separate bucket operations and object operations into TWO statements
-8. Include relevant permissions for the specific service requested
-9. Add CloudWatch Logs permissions for services that need logging (Lambda, ECS, etc.)
-10. Use placeholders like {{ACCOUNT_ID}}, {{REGION}}, {{RESOURCE_NAME}} when specific values not provided"""
+1. ALWAYS use ## (two hashes) for headers
+2. ALWAYS include THREE scores: Permissions, Trust, Overall (1-100)
+3. ALWAYS include both Permissions Policy AND Trust Policy in JSON format
+4. Generate policies based on ACTUAL requirements
+5. Use appropriate service principals (lambda.amazonaws.com, ec2.amazonaws.com, etc.)
+6. For S3: Separate bucket operations (ListBucket) and object operations (GetObject) into TWO statements
+7. Add CloudWatch Logs permissions for Lambda/ECS services
+8. Use {{ACCOUNT_ID}}, {{REGION}} placeholders when values not provided
+9. Be concise but complete - focus on essential information"""
 
     # User prompt - Dynamic based on actual request
     user_prompt = f"""🚨🚨🚨 CRITICAL: YOU MUST RETURN BOTH POLICIES 🚨🚨🚨
@@ -182,7 +182,9 @@ YOU MUST list considerations for the trust policy:
 
 ## Permissions Policy Refinement Suggestions
 
- CRITICAL: YOU MUST INCLUDE THIS SECTION IN EVERY RESPONSE 
+🚨🚨🚨 CRITICAL: YOU MUST INCLUDE THIS EXACT SECTION HEADER IN EVERY RESPONSE 🚨🚨🚨
+
+Use this EXACT header: "## Permissions Policy Refinement Suggestions" (no variations, no emojis, no alternatives)
 
 YOU MUST provide 3-5 ACTIONABLE, SERVICE-SPECIFIC refinement suggestions based on the ACTUAL policy you just generated and the user's specific use case.
 
@@ -204,7 +206,9 @@ IMPORTANT: Generate suggestions specific to the services in THIS policy, not gen
 
 ## Trust Policy Refinement Suggestions
 
- CRITICAL: YOU MUST INCLUDE THIS SECTION IN EVERY RESPONSE 
+🚨🚨🚨 CRITICAL: YOU MUST INCLUDE THIS EXACT SECTION HEADER IN EVERY RESPONSE 🚨🚨🚨
+
+Use this EXACT header: "## Trust Policy Refinement Suggestions" (no variations, no emojis, no alternatives)
 
 YOU MUST provide 2-3 ACTIONABLE trust policy refinements based on the ACTUAL trust policy you just generated.
 
@@ -239,10 +243,10 @@ CRITICAL REMINDERS:
 
     body = json.dumps({
         "anthropic_version": "bedrock-2023-05-31",
-        "max_tokens": 8000,
+        "max_tokens": 4000,  # Optimized for speed (reduced from 8000 to 4000 - still sufficient for complete policies)
         "system": system_prompt,  # Add system prompt here
         "messages": [{"role": "user", "content": [{"type": "text", "text": user_prompt}]}],
-        "temperature": 0.1
+        "temperature": 0.1  # Low temperature for consistent, fast responses
     })
 
     try:
@@ -256,9 +260,29 @@ CRITICAL REMINDERS:
         
         raw_response_text = response_body.get('content', [{}])[0].get('text', '')
         
-        # Log what we got
+        # Extract token usage for cost tracking
+        usage = response_body.get('usage', {})
+        input_tokens = usage.get('input_tokens', 0)
+        output_tokens = usage.get('output_tokens', 0)
+        
+        # Claude 3.7 Sonnet pricing (us-east-1, as of 2024):
+        # Input: $3.00 per 1M tokens
+        # Output: $15.00 per 1M tokens
+        INPUT_COST_PER_1M = 3.00
+        OUTPUT_COST_PER_1M = 15.00
+        
+        input_cost = (input_tokens / 1_000_000) * INPUT_COST_PER_1M
+        output_cost = (output_tokens / 1_000_000) * OUTPUT_COST_PER_1M
+        total_cost = input_cost + output_cost
+        
+        # Log what we got + token usage
         logging.info("=" * 80)
-        logging.info("BEDROCK RESPONSE LENGTH: {} chars".format(len(raw_response_text)))
+        logging.info("💰 TOKEN USAGE & COST (AWS Bedrock Claude 3.7 Sonnet):")
+        logging.info(f"   Input tokens: {input_tokens:,} → ${input_cost:.6f}")
+        logging.info(f"   Output tokens: {output_tokens:,} → ${output_cost:.6f}")
+        logging.info(f"   💵 ESTIMATED COST: ${total_cost:.6f} per request")
+        logging.info(f"   Response length: {len(raw_response_text):,} chars")
+        logging.info(f"   Note: max_tokens={4000} is a LIMIT, not actual usage. You pay for {output_tokens:,} tokens generated.")
         logging.info("CHECKING FOR REQUIRED SECTIONS:")
         logging.info("  Has Permissions Policy: {}".format("## Permissions Policy" in raw_response_text))
         logging.info("  Has Trust Policy: {}".format("## Trust Policy" in raw_response_text))
@@ -274,18 +298,10 @@ CRITICAL REMINDERS:
             logging.error("❌ CRITICAL: Bedrock returned only Permissions Policy, missing Trust Policy!")
             logging.info("🔧 Auto-generating Trust Policy based on service...")
             
-            # Determine service principal
-            service_lower = service.lower() if service else "lambda"
-            if "lambda" in service_lower:
-                service_principal = "lambda.amazonaws.com"
-            elif "ec2" in service_lower:
-                service_principal = "ec2.amazonaws.com"
-            elif "ecs" in service_lower:
-                service_principal = "ecs-tasks.amazonaws.com"
-            elif "glue" in service_lower:
-                service_principal = "glue.amazonaws.com"
-            else:
-                service_principal = "lambda.amazonaws.com"  # Default
+            # Determine service principal using comprehensive mapping
+            detected_service = service or detect_service_from_description(description)
+            service_principal = get_service_principal(detected_service)
+            logging.info(f"✅ Using service principal: {service_principal} for service: {detected_service}")
             
             # Generate Trust Policy section
             trust_policy_section = f'''\n\n## Trust Policy\n\n```json\n{{\n  "Version": "2012-10-17",\n  "Statement": [\n    {{\n      "Effect": "Allow",\n      "Principal": {{\n        "Service": "{service_principal}"\n      }},\n      "Action": "sts:AssumeRole"\n    }}\n  ]\n}}\n```\n\n## Trust Policy Security Score: 85/100\n\n**Score Calculation:**\n- Base: 100 points\n- No conditions to restrict role assumption (-15)\n- **Final: 85/100**\n\n## Trust Policy Security Analysis\n\n**Positive:**\n- Uses specific service principal\n- Follows least privilege for trust relationships\n\n**Could Improve:**\n- Add aws:SourceAccount condition to prevent confused deputy\n- Add aws:SourceArn for additional security\n\n## Trust Policy Explanation\n\nThis trust policy allows the {service} service to assume this role. The service principal "{service_principal}" is the only entity that can assume this role.\n\n## Trust Policy Security Features\n\n- Service-specific principal\n- Standard AssumeRole action\n\n## Trust Policy Considerations\n\n- Consider adding condition keys for additional security\n- Review if cross-account access is needed\n\n## Trust Policy Refinement Suggestions\n\n- Add aws:SourceAccount condition to restrict which account can use this role\n- Add aws:SourceArn condition to restrict which specific resources can assume the role\n'''

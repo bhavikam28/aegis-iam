@@ -8,7 +8,7 @@ import logging
 import json
 import boto3
 from typing import Dict, List, Optional
-from mcp_client import get_mcp_client
+from fastmcp_client import get_mcp_client
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -374,9 +374,11 @@ For single policy validation, return ONLY a JSON code block with this structure:
       "id": "IAM-001",
       "title": "Universal Action Wildcard",
       "severity": "Critical",
+      "type": "wildcard",
       "description": "Policy uses wildcard (*:*) allowing ANY action across ALL AWS services.",
       "code_snippet": "\"Action\": \"*:*\"",
-      "recommendation": "Replace with specific actions: [\"s3:GetObject\", \"s3:PutObject\"]"
+      "detailed_explanation": "Security Impact: This policy grants unrestricted access to all actions across all AWS services. If credentials are compromised, an attacker could perform any operation on any service in the account, including reading, modifying, or deleting resources, creating new users or roles, and changing security configurations.\n\nPractical Risk Assessment: If someone gains access to credentials with these permissions (through a compromised device, leaked keys, or social engineering), they would have complete control over the AWS account. This could lead to unauthorized access to data, service disruption, or unauthorized changes to infrastructure. The risk applies regardless of account size - from personal projects to enterprise environments.",
+      "recommendation": "Replace with specific actions required for the intended use case. Use the principle of least privilege to grant only the minimum permissions necessary."
     }
   ],
   "compliance_status": {
@@ -396,7 +398,7 @@ For single policy validation, return ONLY a JSON code block with this structure:
 }
 ```
 
-You MUST include: risk_score, findings array, compliance_status object, quick_wins array, recommendations array.
+You MUST include: risk_score, findings array (each finding MUST have: id, title, severity, type, description, code_snippet, detailed_explanation, recommendation), compliance_status object, quick_wins array, recommendations array.
 
 NEVER:
 - Use informal language ("I'll", "Let me", "I'm going to", "I will")
@@ -529,10 +531,22 @@ COMPLIANCE FRAMEWORKS TO CHECK: {frameworks_str}
 Provide a comprehensive security analysis following the exact JSON format specified in your system prompt.
 Include:
 1. Risk score (0-100)
-2. Detailed findings with severity levels
+2. Detailed findings with severity levels, type, and detailed_explanation
 3. Compliance status for requested frameworks
 4. Prioritized remediation recommendations
-5. Quick wins for immediate improvement"""
+5. Quick wins for immediate improvement
+
+CRITICAL: For each finding, you MUST include a "detailed_explanation" field with:
+- Security Impact: Explain what this vulnerability means in practical terms (what could happen if exploited)
+- Practical Risk Assessment: Describe the realistic risk scenario without fear-mongering or specific company breach examples
+- Keep explanations universal and context-appropriate (works for personal projects, startups, and enterprises)
+- Do NOT mention specific company names, breach examples, dollar amounts, or record counts
+- Focus on the technical impact and practical consequences
+- Be professional, clear, and educational
+
+Example detailed_explanation format:
+"Security Impact: [Clear explanation of what the vulnerability means]\n\nPractical Risk Assessment: [Realistic scenario without fear-mongering]"
+"""
             
             logging.info(f"🔍 Starting validation in {mode.upper()} mode")
             
