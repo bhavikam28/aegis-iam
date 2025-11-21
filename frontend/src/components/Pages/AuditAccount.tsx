@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Scan, Shield, Activity, Database, Users, Lock, AlertTriangle, CheckCircle, Zap, Target, TrendingUp, Clock, Play, ChevronRight, XCircle, AlertCircle, Download, RefreshCw, Code, Eye, Settings, Info } from 'lucide-react';
-import { saveToStorage, loadFromStorage, STORAGE_KEYS } from '../../utils/persistence';
+import { saveToStorage, loadFromStorage, STORAGE_KEYS } from '@/utils/persistence';
 
 interface AuditSummary {
   total_roles: number;

@@ -3,7 +3,7 @@ import { Shield, Send, RefreshCw, User, Bot, MessageSquare, Lock, ArrowRight, Ch
 import type { LucideIcon } from 'lucide-react';
 import { generatePolicy, sendFollowUp } from '../../services/api';
 import { GeneratePolicyResponse, ChatMessage } from '../../types';
-import { saveToStorage, loadFromStorage, clearStorage, STORAGE_KEYS } from '../../utils/persistence.js';
+import { saveToStorage, loadFromStorage, clearStorage, STORAGE_KEYS } from '@/utils/persistence';
 
 const GeneratePolicy: React.FC = () => {
   const [description, setDescription] = useState('');

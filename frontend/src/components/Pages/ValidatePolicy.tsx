@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Search, AlertTriangle, XCircle, CheckCircle, Info, AlertCircle, Shield, Sparkles, Copy, Download, RefreshCw, Zap, Bot, ChevronDown, ChevronUp, Send, TrendingUp, Target, Clock, Share2, Activity, Scan, FileSearch, Users, Database, Lock, Eye, Settings, X, Minimize2, Maximize2, ArrowRight } from 'lucide-react';
-import { saveToStorage, loadFromStorage, STORAGE_KEYS } from '../../utils/persistence.js';
+import { saveToStorage, loadFromStorage, STORAGE_KEYS } from '@/utils/persistence';
 
 // ============================================
 // TYPE DEFINITIONS
