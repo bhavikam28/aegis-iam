@@ -327,10 +327,12 @@ iam-policy-check:
                           const response = await fetch(`${apiUrl}/api/github/install`);
                           const data = await response.json();
                           if (data.success) {
-                            // Show demo message if in demo mode
-                            if (data.demo_mode) {
-                              // Demo mode: Show informative message instead of opening GitHub
+                            // Show demo message if in demo mode, then open GitHub
+                            if (data.demo_mode && data.install_url) {
+                              // Demo mode: Show message, then open GitHub page
                               alert(`${data.message}\n\n${data.instructions}`);
+                              // Open GitHub Apps settings page for demo
+                              window.open(data.install_url, '_blank');
                             } else if (data.install_url) {
                               // Production mode: Open GitHub installation page directly
                               window.open(data.install_url, '_blank');
@@ -338,8 +340,17 @@ iam-policy-check:
                               alert(data.message || 'GitHub App installation ready');
                             }
                           } else if (data.error) {
-                            // Show error with setup instructions
-                            alert(`${data.error}\n\n${data.message || ''}\n\n${data.setup_url ? `Setup: ${data.setup_url}` : ''}`);
+                            // Show error with setup instructions, but still offer to open GitHub
+                            const userWantsToProceed = confirm(
+                              `${data.error}\n\n${data.message || ''}\n\n` +
+                              `Would you like to open GitHub App settings anyway?\n\n` +
+                              `(To enable full functionality, add credentials to .env file)`
+                            );
+                            if (userWantsToProceed) {
+                              // Open GitHub Apps page or installation page
+                              const githubUrl = data.setup_url || 'https://github.com/settings/apps';
+                              window.open(githubUrl, '_blank');
+                            }
                           } else {
                             alert('GitHub App not configured. Please check backend configuration.');
                           }
