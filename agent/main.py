@@ -3649,15 +3649,15 @@ async def github_app_install():
         # Get app ID from environment
         app_id = os.getenv('GITHUB_APP_ID', '')
         
-        # DEMO MODE: If not configured, return demo mode for localhost testing
+        # If not configured, check if we can use the actual GitHub App
         if not app_id:
-            # For demo purposes, don't open GitHub - just show success message
-            # This provides a better demo experience
+            # Try to get from a default or show setup instructions
             return {
-                "success": True,
-                "demo_mode": True,
-                "message": "✅ Demo Mode: GitHub App Integration Ready",
-                "instructions": "In production, clicking this button would:\n\n1. Open GitHub App installation page\n2. User selects repositories to install on\n3. App automatically analyzes IAM policies on every PR and push\n4. Security findings posted as PR comments\n\nFor full setup, configure GITHUB_APP_ID in backend environment variables."
+                "success": False,
+                "error": "GitHub App not configured",
+                "message": "To enable real GitHub App integration:\n\n1. Set GITHUB_APP_ID in your .env file (you have: 2330898)\n2. Set GITHUB_PRIVATE_KEY (from the .pem file)\n3. Set GITHUB_WEBHOOK_SECRET\n4. Restart backend\n\nFor localhost demo, webhooks won't work, but OAuth flow will!",
+                "setup_url": "https://github.com/settings/apps/new",
+                "app_id_hint": "2330898"  # Your actual App ID
             }
         
         # Production mode: Return actual installation URL
