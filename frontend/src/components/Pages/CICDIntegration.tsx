@@ -326,16 +326,16 @@ iam-policy-check:
                           const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
                           const response = await fetch(`${apiUrl}/api/github/install`);
                           const data = await response.json();
-                          if (data.success && data.install_url) {
+                          if (data.success) {
                             // Show demo message if in demo mode
                             if (data.demo_mode) {
-                              const confirmMessage = `Demo Mode Active\n\n${data.message}\n\n${data.instructions}\n\nWould you like to see the GitHub App installation page?`;
-                              if (window.confirm(confirmMessage)) {
-                                window.open(data.install_url, '_blank');
-                              }
-                            } else {
+                              // Demo mode: Show informative message instead of opening GitHub
+                              alert(`${data.message}\n\n${data.instructions}`);
+                            } else if (data.install_url) {
                               // Production mode: Open GitHub installation page directly
                               window.open(data.install_url, '_blank');
+                            } else {
+                              alert(data.message || 'GitHub App installation ready');
                             }
                           } else if (data.error) {
                             // Show error with setup instructions
