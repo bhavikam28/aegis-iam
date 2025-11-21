@@ -3483,15 +3483,76 @@ async def _handle_github_webhook(payload: Dict, event_type: str) -> Dict:
         
         pr = payload.get('pull_request', {})
         repo = payload.get('repository', {})
+        installation = payload.get('installation', {})
+        installation_id = installation.get('id')
         
-        return {
-            "success": True,
-            "message": "Webhook received - PR analysis will be performed",
-            "pr_number": pr.get('number'),
-            "repo": repo.get('full_name'),
-            "action": action,
-            "event_type": "pull_request"
-        }
+        if not installation_id:
+            logging.warning("No installation ID in webhook payload")
+            return {"success": False, "message": "No installation ID in webhook"}
+        
+        repo_owner = repo.get('owner', {}).get('login') or repo.get('full_name', '').split('/')[0]
+        repo_name = repo.get('name') or repo.get('full_name', '').split('/')[-1]
+        pr_number = pr.get('number')
+        
+        try:
+            logging.info(f"Processing PR #{pr_number} for {repo_owner}/{repo_name}")
+            
+            # Get GitHub client for this installation
+            github_client = GitHubClient(installation_id)
+            
+            # Fetch PR files
+            pr_files = github_client.get_pr_files(repo_owner, repo_name, pr_number)
+            
+            if not pr_files:
+                logging.info(f"No IAM policy files found in PR #{pr_number}")
+                return {
+                    "success": True,
+                    "message": "No IAM policy files found in PR",
+                    "pr_number": pr_number
+                }
+            
+            logging.info(f"Found {len(pr_files)} IAM policy files in PR #{pr_number}")
+            
+            # Analyze policies
+            analyzer = CICDAnalyzer()
+            analysis_result = analyzer.analyze_pr_changes(
+                changed_files=pr_files,
+                lookback_days=90
+            )
+            
+            # Generate PR comment
+            comment_generator = PRCommentGenerator()
+            comment = comment_generator.generate_comment(analysis_result.get('analysis', {}))
+            
+            # Post comment to PR
+            success = github_client.post_pr_comment(repo_owner, repo_name, pr_number, comment)
+            
+            if success:
+                logging.info(f"✅ Successfully posted comment on PR #{pr_number}")
+                return {
+                    "success": True,
+                    "message": "PR analyzed and comment posted",
+                    "pr_number": pr_number,
+                    "repo": repo.get('full_name'),
+                    "files_analyzed": len(pr_files),
+                    "risk_score": analysis_result.get('analysis', {}).get('risk_score', 0)
+                }
+            else:
+                logging.error(f"Failed to post comment on PR #{pr_number}")
+                return {
+                    "success": False,
+                    "message": "Analysis completed but failed to post comment",
+                    "pr_number": pr_number
+                }
+            
+        except Exception as e:
+            logging.error(f"Error processing PR webhook: {e}")
+            logging.exception(e)
+            return {
+                "success": False,
+                "message": f"Error processing PR: {str(e)}",
+                "pr_number": pr_number
+            }
     
     elif event_type == 'push':
         # Handle direct pushes to main/master branches
