@@ -25,6 +25,10 @@ import re
 import logging
 import asyncio
 import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 logging.basicConfig(level=logging.INFO)
 
@@ -3649,26 +3653,38 @@ async def github_app_install():
         # Get app ID from environment
         app_id = os.getenv('GITHUB_APP_ID', '')
         
-        # If not configured, check if we can use the actual GitHub App
+        # If not configured, still try to open the installation page
         if not app_id:
-            # Try to get from a default or show setup instructions
+            # User has App ID 2330898, try to construct installation URL
+            # The app slug might be "aegis-iam" or similar
+            app_slug = os.getenv('GITHUB_APP_SLUG', 'aegis-iam')
+            install_url = f"https://github.com/apps/{app_slug}/installations/new"
+            
+            # Return success with installation URL (even without full config)
             return {
-                "success": False,
-                "error": "GitHub App not configured",
-                "message": "To enable real GitHub App integration:\n\n1. Set GITHUB_APP_ID in your .env file (you have: 2330898)\n2. Set GITHUB_PRIVATE_KEY (from the .pem file)\n3. Set GITHUB_WEBHOOK_SECRET\n4. Restart backend\n\nFor localhost demo, webhooks won't work, but OAuth flow will!",
-                "setup_url": "https://github.com/settings/apps/new",
-                "app_id_hint": "2330898"  # Your actual App ID
+                "success": True,
+                "install_url": install_url,
+                "demo_mode": True,
+                "message": "Opening GitHub App installation page",
+                "instructions": "Select repositories to install the app on.\n\nNote: For full functionality, add GITHUB_APP_ID, GITHUB_PRIVATE_KEY, and GITHUB_WEBHOOK_SECRET to .env file and restart backend."
             }
         
         # Production mode: Return actual installation URL
-        # The URL format is: https://github.com/apps/{app-name}/installations/new
-        # Or: https://github.com/settings/installations/new (shows all apps)
+        # The installation URL format is: https://github.com/apps/{app-slug}/installations/new
+        # The app slug is usually the app name in lowercase with hyphens
+        
+        # Try to get app name/slug from environment, or construct from app ID
+        app_slug = os.getenv('GITHUB_APP_SLUG', 'aegis-iam')  # Default slug
+        
+        # Construct the installation URL
+        # Format: https://github.com/apps/{app-slug}/installations/new
+        install_url = f"https://github.com/apps/{app_slug}/installations/new"
         
         return {
             "success": True,
-            "install_url": "https://github.com/settings/installations/new",
-            "message": "Go to GitHub to install the app on your repositories",
-            "instructions": "After installing, the app will automatically analyze IAM policies on PRs and pushes"
+            "install_url": install_url,
+            "message": "Opening GitHub App installation page",
+            "instructions": "Select repositories to install the app on. After installing, the app will automatically analyze IAM policies on PRs and pushes."
         }
     except Exception as e:
         logging.error(f"❌ GitHub App install URL generation error: {e}")
