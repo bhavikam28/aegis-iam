@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Shield, Send, RefreshCw, User, Bot, MessageSquare, Lock, ArrowRight, CheckCircle, AlertCircle, Download, Copy, Sparkles, Info, X, Minimize2, ChevronUp, ChevronDown, Maximize2, XCircle, Lightbulb, FileCheck, Target } from 'lucide-react';
+import { Shield, Send, RefreshCw, User, Bot, MessageSquare, Lock, ArrowRight, CheckCircle, AlertCircle, Download, Copy, Sparkles, Info, X, Minimize2, ChevronUp, ChevronDown, Maximize2, XCircle, Lightbulb, FileCheck, Target, UserCheck, KeySquare, ShieldCheck, Cloud, Database, Server, Activity, Globe, BookOpen } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { generatePolicy, sendFollowUp } from '../../services/api';
 import { GeneratePolicyResponse, ChatMessage } from '../../types';
+import { saveToStorage, loadFromStorage, clearStorage, STORAGE_KEYS } from '../../utils/persistence';
 
 const GeneratePolicy: React.FC = () => {
   const [description, setDescription] = useState('');
@@ -18,20 +20,24 @@ const GeneratePolicy: React.FC = () => {
   const [copied, setCopied] = useState(false);
   const [copiedTrust, setCopiedTrust] = useState(false);
   const [showInitialForm, setShowInitialForm] = useState(true);
-  const [showScoreBreakdown, setShowScoreBreakdown] = useState(false);
   const [isChatbotOpen, setIsChatbotOpen] = useState(false);
   const [isChatbotExpanded, setIsChatbotExpanded] = useState(false);
   const [isRefining, setIsRefining] = useState(false); // Track if we're refining via chatbot
   const [renderError, setRenderError] = useState<Error | null>(null);
+  const [isNewSubmission, setIsNewSubmission] = useState(false); // Track if this is a fresh submission (not restored)
+  const [hasClearedState, setHasClearedState] = useState(false); // Track if user explicitly cleared state
   
-  // Collapsible sections state
-  const [showPermissionsPolicy, setShowPermissionsPolicy] = useState(true);
-  const [showTrustPolicy, setShowTrustPolicy] = useState(true);
-  const [showExplanation, setShowExplanation] = useState(true);
-  const [showRefinementSuggestions, setShowRefinementSuggestions] = useState(true);
-  const [showPermissionsSuggestions, setShowPermissionsSuggestions] = useState(true);
-  const [showTrustSuggestions, setShowTrustSuggestions] = useState(true);
+  // Collapsible sections state - Smart defaults: Show critical, collapse detailed sections
+  const [showPermissionsPolicy, setShowPermissionsPolicy] = useState(true); // Always show - critical
+  const [showTrustPolicy, setShowTrustPolicy] = useState(true); // Always show - critical
+  const [showExplanation, setShowExplanation] = useState(false); // Collapsed by default - detailed
+  const [showRefinementSuggestions, setShowRefinementSuggestions] = useState(false); // Collapsed by default - detailed
+  const [showPermissionsSuggestions, setShowPermissionsSuggestions] = useState(false); // Collapsed by default
+  const [showTrustSuggestions, setShowTrustSuggestions] = useState(false); // Collapsed by default
   const [showAdvancedOptions, setShowAdvancedOptions] = useState(false);
+  const [showComplianceAdherence, setShowComplianceAdherence] = useState(false); // Collapsed by default
+  const [showComplianceStatus, setShowComplianceStatus] = useState(false); // Collapsed by default
+  const [showScoreBreakdown, setShowScoreBreakdown] = useState(false); // Collapsed by default
   
   const chatEndRef = useRef<HTMLDivElement>(null);
 
@@ -44,21 +50,167 @@ const GeneratePolicy: React.FC = () => {
     { value: 'cis', label: 'CIS Benchmarks' }
   ];
 
+  // ============================================
+  // PERSISTENCE: Load saved state on mount (only if form is empty AND data is valid)
+  // ============================================
   useEffect(() => {
-    if (response?.conversation_history) {
-      setChatHistory(response.conversation_history);
+    // Check if user explicitly cleared state (stored in localStorage)
+    const wasCleared = localStorage.getItem('aegis_iam_generate_policy_cleared');
+    
+    if (wasCleared === 'true') {
+      console.log('🔄 State was explicitly cleared - skipping restoration and clearing flag');
+      clearStorage(STORAGE_KEYS.GENERATE_POLICY);
+      localStorage.removeItem('aegis_iam_generate_policy_cleared');
+      setHasClearedState(true);
+      return;
     }
-  }, [response]);
+    
+    // Only restore if user hasn't started typing (form is empty)
+    // AND the saved data is actually valid (has policies or valid conversation)
+    const saved = loadFromStorage<{
+      description: string;
+      restrictive: boolean;
+      compliance: string;
+      awsAccountId: string;
+      awsRegion: string;
+      response: GeneratePolicyResponse | null;
+      conversationId: string | null;
+      chatHistory: ChatMessage[];
+      showInitialForm: boolean;
+      isChatbotOpen: boolean;
+    }>(STORAGE_KEYS.GENERATE_POLICY);
+    
+    if (saved && !description && !response && !conversationId) {
+      // CRITICAL: NEVER restore question responses - they're context-dependent and cause confusion
+      const hasQuestionResponse = saved.response?.is_question === true;
+      
+      if (hasQuestionResponse) {
+        console.log('⚠️ Question response detected in saved data - clearing immediately (context-dependent)');
+        clearStorage(STORAGE_KEYS.GENERATE_POLICY);
+        localStorage.setItem('aegis_iam_generate_policy_cleared', 'true'); // Set flag to prevent restoration
+        setHasClearedState(true); // Mark as cleared
+        setShowInitialForm(true); // Force show initial form
+        return; // Don't restore anything if it's a question
+      }
+      
+      // Validate saved data before restoring
+      const hasValidPolicy = saved.response?.policy && 
+                             typeof saved.response.policy === 'object' &&
+                             Object.keys(saved.response.policy).length > 0;
+      
+      const hasValidConversation = saved.conversationId && 
+                                    saved.chatHistory && 
+                                    saved.chatHistory.length > 0;
+      
+      const hasValidContent = saved.response?.final_answer || 
+                              saved.response?.explanation;
+      
+      // Only restore if we have valid data (policy OR valid conversation)
+      // AND it's definitely NOT a question response
+      const shouldRestore = (hasValidPolicy || (hasValidConversation && hasValidContent)) && !hasQuestionResponse;
+      
+      if (shouldRestore) {
+        console.log('🔄 Restoring saved Generate Policy state');
+        setDescription(saved.description || '');
+        setRestrictive(saved.restrictive ?? true);
+        setCompliance(saved.compliance || 'general');
+        setAwsAccountId(saved.awsAccountId || '');
+        setAwsRegion(saved.awsRegion || '');
+        setResponse(saved.response);
+        setConversationId(saved.conversationId);
+        setChatHistory(saved.chatHistory || []);
+        setShowInitialForm(saved.showInitialForm ?? true);
+        setIsChatbotOpen(saved.isChatbotOpen ?? false);
+        setIsNewSubmission(false); // This is restored, not new
+      } else {
+        // Invalid saved data - clear it
+        console.log('⚠️ Invalid saved data detected - clearing');
+        clearStorage(STORAGE_KEYS.GENERATE_POLICY);
+      }
+    }
+  }, []); // Only run on mount
+
+  // ============================================
+  // PERSISTENCE: Save state whenever it changes
+  // ============================================
+  useEffect(() => {
+    // CRITICAL: NEVER save question responses - they're context-dependent and cause confusion
+    const isQuestionResponse = response?.is_question === true;
+    
+    if (isQuestionResponse) {
+      console.log('⚠️ Question response detected - NOT saving to persistence (context-dependent)');
+      // Clear any existing question responses from storage
+      clearStorage(STORAGE_KEYS.GENERATE_POLICY);
+      return; // Don't save question responses
+    }
+    
+    // Only save if we have meaningful data (response or conversation)
+    // AND we're not in the middle of starting fresh
+    // AND it's NOT a question response
+    const hasValidData = (response && response.policy) || 
+                        (conversationId && chatHistory.length > 0) ||
+                        (response && (response.final_answer || response.explanation));
+    
+    if (hasValidData && !showInitialForm && !isQuestionResponse) {
+      const stateToSave = {
+        description,
+        restrictive,
+        compliance,
+        awsAccountId,
+        awsRegion,
+        response,
+        conversationId,
+        chatHistory,
+        showInitialForm,
+        isChatbotOpen
+      };
+      saveToStorage(STORAGE_KEYS.GENERATE_POLICY, stateToSave, 24); // 24 hours expiry
+    } else if (showInitialForm && !description && !response && !conversationId) {
+      // If form is empty and we're showing initial form, clear any stale data
+      clearStorage(STORAGE_KEYS.GENERATE_POLICY);
+    }
+  }, [description, restrictive, compliance, awsAccountId, awsRegion, response, conversationId, chatHistory, showInitialForm, isChatbotOpen]);
+
+  // Only update chatHistory from response if it's a new conversation or explicitly provided
+  // Don't overwrite existing chat history for follow-up responses
+  useEffect(() => {
+    // Only set from conversation_history if:
+    // 1. We have no chat history yet (initial load)
+    // 2. OR the conversation_history is explicitly provided and different
+    if (response?.conversation_history && response.conversation_history.length > 0) {
+      // Only update if we don't have chat history yet, or if it's a completely new conversation
+      setChatHistory(prev => {
+        // If we have no history, use the one from response
+        if (prev.length === 0) {
+          return response.conversation_history || [];
+        }
+        // Otherwise, preserve existing history (don't overwrite)
+        return prev;
+      });
+    }
+  }, [response?.conversation_id]); // Only run when conversation_id changes (new conversation)
 
   useEffect(() => {
     if (chatEndRef.current) {
       chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [chatHistory]);
-
-  // Add initial greeting when chatbot opens
+  
+  // Debug: Log chat history changes
   useEffect(() => {
-    if (isChatbotOpen && response && chatHistory.length === 0) {
+    console.log('🔄 Chat history changed:', {
+      messageCount: chatHistory.length,
+      lastMessage: chatHistory[chatHistory.length - 1] ? {
+        role: chatHistory[chatHistory.length - 1].role,
+        contentLength: chatHistory[chatHistory.length - 1].content?.length || 0,
+        contentPreview: chatHistory[chatHistory.length - 1].content?.substring(0, 100)
+      } : null
+    });
+  }, [chatHistory]);
+
+  // Add initial greeting when chatbot opens (only once, don't clear existing history)
+  useEffect(() => {
+    if (isChatbotOpen && response && chatHistory.length === 0 && response.policy) {
       const permissionsScore = response?.permissions_score || 0;
       const trustScore = response?.trust_score || 0;
       
@@ -82,7 +234,7 @@ What would you like to do?`,
       
       setChatHistory([initialGreeting]);
     }
-  }, [isChatbotOpen, response]);
+  }, [isChatbotOpen, response?.conversation_id]); // Only run when conversation_id changes (new conversation)
 
   const handleCopyPolicy = async () => {
     if (response?.policy) {
@@ -126,23 +278,131 @@ What would you like to do?`,
       .trim();
   };
 
+  // Validation helper functions
+  const validateAccountId = (accountId: string): { valid: boolean; error?: string } => {
+    if (!accountId.trim()) return { valid: true }; // Optional field
+    
+    const cleaned = accountId.trim().replace(/[\s\-\.]/g, '');
+    if (!/^\d{12}$/.test(cleaned)) {
+      return {
+        valid: false,
+        error: 'AWS Account ID must be exactly 12 numeric digits (e.g., 123456789012)'
+      };
+    }
+    return { valid: true };
+  };
+
+  const validateRegion = (region: string): { valid: boolean; error?: string } => {
+    if (!region.trim()) return { valid: true }; // Optional field
+    
+    const cleaned = region.trim().toLowerCase();
+    
+    // Known valid regions (from aws_constants.py) - All 38 AWS regions as of 2025
+    // Since we're using a dropdown, this is mainly a safety check
+    const knownRegions = [
+      // US Regions (4)
+      'us-east-1', 'us-east-2', 'us-west-1', 'us-west-2',
+      // AWS GovCloud (US) Regions (2)
+      'us-gov-east-1', 'us-gov-west-1',
+      // Europe Regions (8)
+      'eu-west-1', 'eu-west-2', 'eu-west-3', 'eu-central-1', 'eu-north-1', 'eu-south-1', 'eu-south-2', 'eu-central-2',
+      // Asia Pacific Regions (14)
+      'ap-south-1', 'ap-south-2', 'ap-southeast-1', 'ap-southeast-2', 'ap-southeast-3', 'ap-southeast-4', 'ap-southeast-5', 'ap-southeast-6', 'ap-southeast-7',
+      'ap-northeast-1', 'ap-northeast-2', 'ap-northeast-3', 'ap-east-1', 'ap-east-2',
+      // Canada (2)
+      'ca-central-1', 'ca-west-1',
+      // South America (1)
+      'sa-east-1',
+      // Africa (1)
+      'af-south-1',
+      // Middle East (3)
+      'me-south-1', 'me-central-1', 'il-central-1',
+      // Mexico (1)
+      'mx-central-1',
+      // China (2)
+      'cn-north-1', 'cn-northwest-1'
+    ];
+    
+    if (!knownRegions.includes(cleaned)) {
+      return {
+        valid: false,
+        error: `Region '${cleaned}' is not a recognized AWS region. Please select a valid region from the dropdown.`
+      };
+    }
+    
+    return { valid: true };
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!description.trim()) return;
+    if (!description.trim()) {
+      setError('Please describe what permissions you need');
+      return;
+    }
+
+    // Validate AWS Account ID if provided
+    if (awsAccountId.trim()) {
+      const accountValidation = validateAccountId(awsAccountId);
+      if (!accountValidation.valid) {
+        setError(accountValidation.error || 'Invalid AWS Account ID');
+        return;
+      }
+    }
+
+    // Validate AWS Region if provided
+    if (awsRegion.trim()) {
+      const regionValidation = validateRegion(awsRegion);
+      if (!regionValidation.valid) {
+        setError(regionValidation.error || 'Invalid AWS Region');
+        return;
+      }
+    }
+
+    // CRITICAL: Check if this is a NEW request (different description) or continuation
+    const saved = loadFromStorage<{
+      description: string;
+      conversationId: string | null;
+    }>(STORAGE_KEYS.GENERATE_POLICY);
+    
+    // Determine if this is a new request:
+    // - No saved data
+    // - Different description (user changed it)
+    // - No conversation ID (fresh start)
+    const isNewRequest = !saved || 
+                         !saved.description || 
+                         (saved.description.trim() !== description.trim()) ||
+                         !saved.conversationId;
+    
+    // If new request, clear all old state BEFORE generating
+    if (isNewRequest) {
+      console.log('🆕 New request detected - clearing old state');
+      // Clear persistence FIRST
+      clearStorage(STORAGE_KEYS.GENERATE_POLICY);
+      // Clear all state variables
+      setResponse(null);
+      setConversationId(null);
+      setChatHistory([]);
+      setIsChatbotOpen(false);
+      setIsRefining(false);
+      setIsNewSubmission(true); // Mark as new submission
+      setHasClearedState(false); // Reset cleared flag for new request
+    } else {
+      setIsNewSubmission(false); // This is a continuation
+      setHasClearedState(false); // Reset cleared flag for continuation
+    }
 
     setLoading(true);
     setError(null);
-    setResponse(null);
     setShowInitialForm(false);
     
     try {
       // Build description with optional AWS values if provided
       let enhancedDescription = description;
       if (awsAccountId.trim()) {
-        enhancedDescription += `\n\nAWS Account ID: ${awsAccountId.trim()}`;
+        enhancedDescription += `\n\nAWS Account ID: ${awsAccountId.trim().replace(/[\s\-\.]/g, '')}`;
       }
       if (awsRegion.trim()) {
-        enhancedDescription += `\n\nAWS Region: ${awsRegion.trim()}`;
+        enhancedDescription += `\n\nAWS Region: ${awsRegion.trim().toLowerCase()}`;
       }
       
       const result = await generatePolicy({
@@ -158,10 +418,14 @@ What would you like to do?`,
       
       setResponse(result);
       setConversationId(result?.conversation_id || null);
+      // Reset new submission flag after response received
+      // This allows legitimate questions to show if agent asks for clarification
+      setIsNewSubmission(false);
     } catch (err) {
       console.error("Error generating policy:", err);
       setError(err instanceof Error ? err.message : 'Failed to generate policy');
       setShowInitialForm(true);
+      setIsNewSubmission(false); // Reset on error too
     } finally {
       setLoading(false);
     }
@@ -189,51 +453,126 @@ What would you like to do?`,
     setFollowUpMessage('');
     
     try {
+      console.log('🚀 Sending follow-up message:', currentMessage);
+      console.log('🚀 Conversation ID:', conversationId);
+      
       const result = await sendFollowUp(currentMessage, conversationId);
+      
+      console.log('📥 Raw result received:', result);
       
       // Check if result is null/undefined
       if (!result) {
+        console.error('❌ Result is null/undefined');
         throw new Error('No response received from server');
       }
       
       // Use the result's final_answer directly - it should already contain both policies in JSON format
       // The backend agent is now instructed to ALWAYS return both policies in JSON format
-      let responseContent = result?.final_answer || 'Policy updated successfully.';
+      let responseContent = result?.final_answer || result?.explanation || 'Policy updated successfully.';
       
-      // Extract and update policies from result if available
-      // The backend should always return both policies, so we update our state
-      if (result?.policy || result?.trust_policy) {
-        // Update response state with new policies
-        setResponse(prev => ({
-          ...prev,
-          ...result,
-          policy: result?.policy || prev?.policy,
-          trust_policy: result?.trust_policy || prev?.trust_policy,
-          permissions_score: result?.permissions_score ?? prev?.permissions_score ?? 0,
-          trust_score: result?.trust_score ?? prev?.trust_score ?? 0,
-          overall_score: result?.overall_score ?? prev?.overall_score ?? 0,
-          final_answer: result?.final_answer || prev?.final_answer || '',
-          explanation: result?.explanation || prev?.explanation || '',
-        }));
-      } else {
-        // Even if no policy, update the response with final_answer for chat display
-        setResponse(prev => ({
-          ...prev,
-          ...result,
-          final_answer: result?.final_answer || prev?.final_answer || '',
-          explanation: result?.explanation || prev?.explanation || result?.final_answer || '',
-        }));
+      // Debug logging
+      console.log('📨 Chatbot response received:', {
+        hasFinalAnswer: !!result?.final_answer,
+        finalAnswerLength: result?.final_answer?.length || 0,
+        finalAnswerPreview: result?.final_answer?.substring(0, 200) || 'EMPTY',
+        hasExplanation: !!result?.explanation,
+        responseContentLength: responseContent.length,
+        responseContentPreview: responseContent.substring(0, 200)
+      });
+      
+      // If responseContent is still empty or just whitespace, use a fallback
+      if (!responseContent || responseContent.trim() === '') {
+        console.error('❌ CRITICAL: Response content is empty!', {
+          resultKeys: Object.keys(result || {}),
+          finalAnswer: result?.final_answer,
+          explanation: result?.explanation
+        });
+        responseContent = 'I received your message, but the response was empty. Please try again.';
       }
+      
+      // CRITICAL: Always preserve existing policies unless explicitly replaced
+      // Update response state - preserve policies from previous state if not in result
+      setResponse(prev => {
+        if (!prev) {
+          // If no previous response, use result as-is
+          return result as any;
+        }
+        
+        // Determine if we have new policies in the result
+        const hasNewPolicy = result?.policy && typeof result.policy === 'object' && Object.keys(result.policy).length > 0;
+        const hasNewTrustPolicy = result?.trust_policy && typeof result.trust_policy === 'object' && Object.keys(result.trust_policy).length > 0;
+        
+        // Build merged response - only include defined values from result
+        const merged: any = { ...prev };
+        
+        // Update fields only if they're defined in result (not undefined)
+        if (result?.conversation_id) merged.conversation_id = result.conversation_id;
+        if (result?.final_answer) merged.final_answer = result.final_answer;
+        if (result?.message_count !== undefined) merged.message_count = result.message_count;
+        
+        // Policies: only update if new ones provided, otherwise preserve
+        merged.policy = hasNewPolicy ? result.policy : (prev.policy || result?.policy || null);
+        merged.trust_policy = hasNewTrustPolicy ? result.trust_policy : (prev.trust_policy || result?.trust_policy || null);
+        
+        // Scores: update if provided
+        if (result?.permissions_score !== undefined) merged.permissions_score = result.permissions_score;
+        if (result?.trust_score !== undefined) merged.trust_score = result.trust_score;
+        if (result?.overall_score !== undefined) merged.overall_score = result.overall_score;
+        
+        // Text fields: update if provided
+        if (result?.explanation) merged.explanation = result.explanation;
+        if (result?.trust_explanation) merged.trust_explanation = result.trust_explanation;
+        
+        // Compliance and security: update if provided
+        if (result?.compliance_status) merged.compliance_status = result.compliance_status;
+        if (result?.security_findings) merged.security_findings = result.security_findings;
+        if (result?.security_notes) merged.security_notes = result.security_notes;
+        if (result?.security_features) merged.security_features = result.security_features;
+        if (result?.score_breakdown) merged.score_breakdown = result.score_breakdown;
+        if (result?.refinement_suggestions) merged.refinement_suggestions = result.refinement_suggestions;
+        if (result?.conversation_history) merged.conversation_history = result.conversation_history;
+        if (result?.is_question !== undefined) merged.is_question = result.is_question;
+        
+        return merged;
+      });
       
       // Add assistant response to chat
       const assistantMessage: ChatMessage = {
         role: 'assistant',
-        content: responseContent,
+        content: responseContent.trim() || 'I received your message, but the response was empty. Please try again.',
         timestamp: new Date().toISOString()
       };
-      setChatHistory(prev => [...prev, assistantMessage]);
+      
+      console.log('💬 Adding assistant message to chat:', {
+        contentLength: assistantMessage.content.length,
+        contentPreview: assistantMessage.content.substring(0, 100)
+      });
+      
+      setChatHistory(prev => {
+        const updated = [...prev, assistantMessage];
+        console.log('📝 Chat history updated, total messages:', updated.length);
+        console.log('📝 Last message preview:', updated[updated.length - 1]?.content?.substring(0, 100));
+        return updated;
+      });
+      
+      // Force a re-render by updating a dummy state
+      setTimeout(() => {
+        console.log('🔄 Forcing chat history check:', chatHistory.length);
+      }, 100);
     } catch (err) {
-      console.error("Error sending follow-up:", err);
+      console.error("❌ Error sending follow-up:", err);
+      console.error("❌ Error details:", {
+        message: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined
+      });
+      
+      // Add error message to chat
+      const errorMessage: ChatMessage = {
+        role: 'assistant',
+        content: `I encountered an error: ${err instanceof Error ? err.message : 'Failed to process your request'}. Please try again.`,
+        timestamp: new Date().toISOString()
+      };
+      setChatHistory(prev => [...prev, errorMessage]);
       setError(err instanceof Error ? err.message : 'Failed to refine policy');
     } finally {
       setLoading(false);
@@ -242,23 +581,33 @@ What would you like to do?`,
   };
 
   const handleNewConversation = () => {
-    // Clear all state
+    // Set flag in localStorage to persist across refreshes
+    localStorage.setItem('aegis_iam_generate_policy_cleared', 'true');
+    
+    // Clear persistence FIRST to prevent restoration on refresh
+    clearStorage(STORAGE_KEYS.GENERATE_POLICY);
+    console.log('🔄 Cleared persistence storage');
+    
+    // Set flag to prevent showing question pages
+    setHasClearedState(true);
+    
+    // Clear all state IMMEDIATELY
     setResponse(null);
     setConversationId(null);
-    setFollowUpMessage('');
     setChatHistory([]);
+    setFollowUpMessage('');
+    setDescription('');
     setShowInitialForm(true);
     setError(null);
     setIsChatbotOpen(false);
     setIsRefining(false);
+    setIsNewSubmission(false);
     setAwsAccountId('');
     setAwsRegion('');
+    setCompliance('general');
+    setRestrictive(true);
     
-    // Clear localStorage for fresh start
-    localStorage.removeItem('aegis_response');
-    localStorage.removeItem('aegis_conversation_id');
-    localStorage.removeItem('aegis_chat_history');
-    localStorage.removeItem('aegis_show_initial_form');
+    console.log('🔄 Cleared all state for new conversation');
   };
 
   const hasPolicy = response?.policy !== null && 
@@ -268,15 +617,140 @@ What would you like to do?`,
                     response?.is_question !== true;
   
   // Check if there's an explanation or final_answer to display (even without a new policy)
+  // BUT only if it's not empty/null/invalid
   const hasContent = hasPolicy || 
-                     (response?.final_answer && response.final_answer.trim() !== '') ||
-                     (response?.explanation && response.explanation.trim() !== '');
+                     (response?.final_answer && response.final_answer.trim() !== '' && response.final_answer !== 'null') ||
+                     (response?.explanation && response.explanation.trim() !== '' && response.explanation !== 'null');
+  
+  // CRITICAL: If response exists but has no valid data, clear it
+  // ALSO: If response is a question, ALWAYS clear it immediately
+  useEffect(() => {
+    // ALWAYS clear question responses - they cause persistence issues
+    if (response && response.is_question === true) {
+      console.log('⚠️ Question response detected - clearing immediately (never show question pages)');
+      setResponse(null);
+      setConversationId(null);
+      setChatHistory([]);
+      setShowInitialForm(true);
+      clearStorage(STORAGE_KEYS.GENERATE_POLICY);
+      localStorage.setItem('aegis_iam_generate_policy_cleared', 'true');
+      setHasClearedState(true);
+      return;
+    }
+    
+    // If user explicitly cleared state and we have a question response, clear it
+    if (hasClearedState && response && response.is_question === true) {
+      console.log('⚠️ Question response detected after state clear - clearing immediately');
+      setResponse(null);
+      setConversationId(null);
+      setChatHistory([]);
+      setShowInitialForm(true);
+      clearStorage(STORAGE_KEYS.GENERATE_POLICY);
+      return;
+    }
+    
+    // Only clear if response exists but is invalid AND we're not loading
+    if (response && !loading && !hasPolicy && !hasContent) {
+      // Check if it's a question without conversation context (invalid state)
+      if (response.is_question && !conversationId) {
+        console.log('⚠️ Invalid question response without conversation - clearing');
+        setResponse(null);
+        setConversationId(null);
+        setChatHistory([]);
+        setShowInitialForm(true);
+        clearStorage(STORAGE_KEYS.GENERATE_POLICY);
+        setHasClearedState(true);
+      } else if (!response.is_question && !hasPolicy && !hasContent) {
+        // Not a question but also no content - invalid
+        console.log('⚠️ Invalid response with no content - clearing');
+        setResponse(null);
+        setConversationId(null);
+        setChatHistory([]);
+        setShowInitialForm(true);
+        clearStorage(STORAGE_KEYS.GENERATE_POLICY);
+      }
+    }
+  }, [response, hasPolicy, hasContent, loading, conversationId, hasClearedState]);
 
   const permissionsScore = response?.permissions_score || 0;
   const trustScore = response?.trust_score || 0;
 
+  type ServiceIconConfig = {
+    pattern: RegExp;
+    icon: LucideIcon;
+    gradient: string;
+  };
+
+  const serviceIconConfigs: ServiceIconConfig[] = [
+    { pattern: /(s3|bucket|object|storage)/i, icon: Cloud, gradient: 'from-blue-500 to-cyan-500' },
+    { pattern: /(lambda|function|runtime)/i, icon: Activity, gradient: 'from-violet-500 to-purple-500' },
+    { pattern: /(log|cloudwatch|monitor|metrics)/i, icon: Server, gradient: 'from-amber-500 to-orange-500' },
+    { pattern: /(dynamodb|database|table|data)/i, icon: Database, gradient: 'from-emerald-500 to-green-500' },
+    { pattern: /(kms|encrypt|key|secrets?)/i, icon: KeySquare, gradient: 'from-rose-500 to-pink-500' },
+    { pattern: /(iam|identity|access|role)/i, icon: ShieldCheck, gradient: 'from-indigo-500 to-blue-500' },
+    { pattern: /(api|http|external|internet|global)/i, icon: Globe, gradient: 'from-teal-500 to-cyan-500' },
+  ];
+
   const getServiceIcon = (title: string) => {
-    return '🔒';
+    const match = serviceIconConfigs.find((config) => config.pattern.test(title));
+    return match || { icon: Lock, gradient: 'from-purple-500 to-blue-500' };
+  };
+
+  const flattenToStrings = (value: unknown): string[] => {
+    if (!value) return [];
+    if (Array.isArray(value)) {
+      return value.flatMap((item) => flattenToStrings(item));
+    }
+    if (typeof value === 'object') {
+      return Object.values(value as Record<string, unknown>).flatMap((item) => flattenToStrings(item));
+    }
+    return [String(value)];
+  };
+
+  const trustStatements = response?.trust_policy?.Statement;
+  const primaryTrustStatement = Array.isArray(trustStatements)
+    ? trustStatements[0]
+    : trustStatements;
+
+  const trustPrincipalValues = primaryTrustStatement?.Principal;
+  const trustPrincipalLabel = flattenToStrings(trustPrincipalValues).join(', ') || 'Defined principal';
+  const trustPrincipalType = trustPrincipalValues && typeof trustPrincipalValues === 'object'
+    ? Object.keys(trustPrincipalValues)
+        .map((key) => key.replace(/([A-Z])/g, ' $1').trim())
+        .join(', ')
+    : trustPrincipalValues
+    ? 'Principal'
+    : 'Not specified';
+
+  const trustActionsRaw = primaryTrustStatement?.Action;
+  const trustActionList = flattenToStrings(trustActionsRaw);
+  const trustActionLabel = trustActionList.join(', ') || 'sts:AssumeRole';
+  const trustActionCount = trustActionList.length || 1;
+
+  const trustConditionEntries = primaryTrustStatement?.Condition
+    ? Object.entries(primaryTrustStatement.Condition as Record<string, Record<string, unknown>>).flatMap(
+        ([conditionType, conditions]) =>
+          Object.keys(conditions).map((conditionKey) => `${conditionType} ${conditionKey}`)
+      )
+    : [];
+  const trustConditionLabel = trustConditionEntries.length > 0
+    ? trustConditionEntries.join(', ')
+    : 'No additional conditions';
+  const trustConditionCount = trustConditionEntries.length;
+
+  const HeadingBadge: React.FC<{ Icon: LucideIcon; gradient: string }> = ({ Icon, gradient }) => (
+    <span className={`flex-shrink-0 w-9 h-9 bg-gradient-to-br ${gradient} rounded-xl flex items-center justify-center shadow-md`}>
+      <Icon className="w-4 h-4 text-white" />
+    </span>
+  );
+
+  const formatDetailLabel = (label: string) => {
+    const withSpaces = label
+      .replace(/_/g, ' ')
+      .replace(/([a-z])([A-Z])/g, '$1 $2')
+      .replace(/\s+/g, ' ')
+      .toLowerCase();
+    return withSpaces.replace(/\b\w/g, char => char.toUpperCase());
   };
 
   const parseExplanation = (explanation: string) => {
@@ -474,15 +948,73 @@ What would you like to do?`,
                             <label htmlFor="awsRegion" className="block text-slate-700 text-sm font-semibold mb-2">
                               AWS Region
                             </label>
-                            <input
+                            <select
                               id="awsRegion"
-                              type="text"
                               value={awsRegion}
                               onChange={(e) => setAwsRegion(e.target.value)}
-                              placeholder="us-east-1"
-                              className="w-full px-4 py-3 bg-white/60 backdrop-blur-sm border-2 border-slate-200 rounded-xl text-slate-900 text-base placeholder-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 focus:outline-none transition-all duration-300 font-medium"
-                            />
-                            <p className="text-xs text-slate-500 mt-1 font-medium">e.g., us-east-1, eu-west-1</p>
+                              className="w-full px-4 py-3 bg-white/60 backdrop-blur-sm border-2 border-slate-200 rounded-xl text-slate-900 text-base focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 focus:outline-none transition-all duration-300 font-medium cursor-pointer"
+                            >
+                              <option value="">Select a region (optional)</option>
+                              <optgroup label="US Regions">
+                                <option value="us-east-1">us-east-1 - US East (N. Virginia)</option>
+                                <option value="us-east-2">us-east-2 - US East (Ohio)</option>
+                                <option value="us-west-1">us-west-1 - US West (N. California)</option>
+                                <option value="us-west-2">us-west-2 - US West (Oregon)</option>
+                              </optgroup>
+                              <optgroup label="AWS GovCloud (US) Regions">
+                                <option value="us-gov-east-1">us-gov-east-1 - AWS GovCloud (US-East)</option>
+                                <option value="us-gov-west-1">us-gov-west-1 - AWS GovCloud (US-West)</option>
+                              </optgroup>
+                              <optgroup label="Europe Regions">
+                                <option value="eu-west-1">eu-west-1 - Europe (Ireland)</option>
+                                <option value="eu-west-2">eu-west-2 - Europe (London)</option>
+                                <option value="eu-west-3">eu-west-3 - Europe (Paris)</option>
+                                <option value="eu-central-1">eu-central-1 - Europe (Frankfurt)</option>
+                                <option value="eu-north-1">eu-north-1 - Europe (Stockholm)</option>
+                                <option value="eu-south-1">eu-south-1 - Europe (Milan)</option>
+                                <option value="eu-south-2">eu-south-2 - Europe (Spain)</option>
+                                <option value="eu-central-2">eu-central-2 - Europe (Zurich)</option>
+                              </optgroup>
+                              <optgroup label="Asia Pacific Regions">
+                                <option value="ap-south-1">ap-south-1 - Asia Pacific (Mumbai)</option>
+                                <option value="ap-south-2">ap-south-2 - Asia Pacific (Hyderabad)</option>
+                                <option value="ap-southeast-1">ap-southeast-1 - Asia Pacific (Singapore)</option>
+                                <option value="ap-southeast-2">ap-southeast-2 - Asia Pacific (Sydney)</option>
+                                <option value="ap-southeast-3">ap-southeast-3 - Asia Pacific (Jakarta)</option>
+                                <option value="ap-southeast-4">ap-southeast-4 - Asia Pacific (Melbourne)</option>
+                                <option value="ap-southeast-5">ap-southeast-5 - Asia Pacific (Malaysia)</option>
+                                <option value="ap-southeast-6">ap-southeast-6 - Asia Pacific (New Zealand)</option>
+                                <option value="ap-southeast-7">ap-southeast-7 - Asia Pacific (Thailand)</option>
+                                <option value="ap-northeast-1">ap-northeast-1 - Asia Pacific (Tokyo)</option>
+                                <option value="ap-northeast-2">ap-northeast-2 - Asia Pacific (Seoul)</option>
+                                <option value="ap-northeast-3">ap-northeast-3 - Asia Pacific (Osaka)</option>
+                                <option value="ap-east-1">ap-east-1 - Asia Pacific (Hong Kong)</option>
+                                <option value="ap-east-2">ap-east-2 - Asia Pacific (Taipei)</option>
+                              </optgroup>
+                              <optgroup label="Canada Regions">
+                                <option value="ca-central-1">ca-central-1 - Canada (Central)</option>
+                                <option value="ca-west-1">ca-west-1 - Canada West (Calgary)</option>
+                              </optgroup>
+                              <optgroup label="South America Regions">
+                                <option value="sa-east-1">sa-east-1 - South America (São Paulo)</option>
+                              </optgroup>
+                              <optgroup label="Africa Regions">
+                                <option value="af-south-1">af-south-1 - Africa (Cape Town)</option>
+                              </optgroup>
+                              <optgroup label="Middle East Regions">
+                                <option value="me-south-1">me-south-1 - Middle East (Bahrain)</option>
+                                <option value="me-central-1">me-central-1 - Middle East (UAE)</option>
+                                <option value="il-central-1">il-central-1 - Israel (Tel Aviv)</option>
+                              </optgroup>
+                              <optgroup label="Mexico Regions">
+                                <option value="mx-central-1">mx-central-1 - Mexico (Central)</option>
+                              </optgroup>
+                              <optgroup label="China Regions (Special)">
+                                <option value="cn-north-1">cn-north-1 - China (Beijing)</option>
+                                <option value="cn-northwest-1">cn-northwest-1 - China (Ningxia)</option>
+                              </optgroup>
+                            </select>
+                            <p className="text-xs text-slate-500 mt-1 font-medium">Select from all available AWS regions</p>
                           </div>
                         </div>
                       </div>
@@ -550,7 +1082,8 @@ What would you like to do?`,
       )}
 
       {/* LOADING STATE AFTER MORE INFO PAGE - Premium Light Theme */}
-      {!showInitialForm && loading && response && response.is_question && !isRefining && (
+      {/* DISABLED: Never show loading after question responses */}
+      {false && !showInitialForm && loading && response?.is_question && !isRefining && (
         <div className="relative min-h-screen flex items-center justify-center">
           <div className="text-center px-8 max-w-3xl">
             <div className="inline-flex items-center justify-center w-32 h-32 mb-10 relative">
@@ -587,7 +1120,8 @@ What would you like to do?`,
       )}
 
       {/* MORE INFORMATION NEEDED PAGE - Premium Light Theme */}
-      {!showInitialForm && !loading && response && response.is_question && (
+      {/* DISABLED: Question responses cause persistence issues - never show this page */}
+      {false && !showInitialForm && !loading && response?.is_question === true && conversationId && !isNewSubmission && !hasClearedState && chatHistory.length > 0 && (
         <div className="relative min-h-screen">
           <div className="relative max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
             <div className="text-center mb-12">
@@ -654,7 +1188,8 @@ What would you like to do?`,
       )}
 
       {/* RESULTS DISPLAY */}
-      {!showInitialForm && response && hasContent && (
+      {/* Only show if we have a policy OR valid content OR compliance status, AND it's NOT a question response */}
+      {!showInitialForm && response && (hasContent || (response.compliance_status && Object.keys(response.compliance_status).length > 0)) && !response.is_question && (
         <div className="relative min-h-screen">
           <div className="relative max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
             {/* HEADER - Matching Audit Account Design Exactly */}
@@ -663,9 +1198,9 @@ What would you like to do?`,
               <div className="text-center mb-6">
                 <div className="inline-flex items-center space-x-2 bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-blue-200 rounded-full px-4 py-1.5 backdrop-blur-sm">
                   <span className="text-blue-700 text-sm font-semibold">Security Assessment Complete</span>
+                  </div>
                 </div>
-              </div>
-
+                
               {/* Main Heading - Fixed Text Cutoff with Proper Line Height */}
               <div className="text-center mb-8">
                 <h2 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 bg-clip-text text-transparent mb-4 tracking-tight text-center" style={{ lineHeight: '1.15', letterSpacing: '-0.02em' }}>
@@ -687,12 +1222,12 @@ What would you like to do?`,
                     <div className="flex items-center space-x-2 px-4 py-2 bg-blue-500/10 border-2 border-blue-200/50 rounded-full backdrop-blur-xl">
                       <CheckCircle className="w-4 h-4 text-blue-600" />
                       <span className="text-xs sm:text-sm text-blue-700 font-semibold">Permissions Policy</span>
-                    </div>
+                  </div>
                     <div className="flex items-center space-x-2 px-4 py-2 bg-purple-500/10 border-2 border-purple-200/50 rounded-full backdrop-blur-xl">
                       <CheckCircle className="w-4 h-4 text-purple-600" />
                       <span className="text-xs sm:text-sm text-purple-700 font-semibold">Trust Policy</span>
-                    </div>
                   </div>
+                </div>
                 )}
               </div>
               
@@ -729,31 +1264,18 @@ What would you like to do?`,
             {/* SECURITY SCORES SECTION - Premium Light Theme with Subsection Header */}
             <div className="mb-16 animate-fadeIn" style={{ animationDelay: '0.1s' }}>
               {/* Premium Section Header - Matching Audit Account */}
-              <div className="flex items-center justify-between mb-6">
-                <div>
-                  <h3 className="text-3xl font-bold text-slate-900 tracking-tight flex items-center space-x-3 mb-2">
-                    <Shield className="w-7 h-7 text-blue-600" />
+              <div className="mb-6">
+                <div className="flex flex-col gap-2">
+                  <h3 className="text-3xl font-bold text-slate-900 tracking-tight flex items-center space-x-3">
+                    <HeadingBadge Icon={Shield} gradient="from-blue-500 to-purple-500" />
                     <span>Security Scores</span>
                   </h3>
                   <p className="text-slate-600 text-sm font-medium">Policy security assessment</p>
                 </div>
-                <button
-                  onClick={() => setShowScoreBreakdown(!showScoreBreakdown)}
-                  className="group flex items-center space-x-2 px-4 py-2 bg-white/80 backdrop-blur-xl hover:bg-white/90 border-2 border-slate-200 hover:border-blue-300 rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl"
-                >
-                  <span className="text-sm font-semibold text-slate-700 group-hover:text-blue-600 transition-colors duration-300">
-                    {showScoreBreakdown ? 'Hide Details' : 'Show Details'}
-                  </span>
-                  {showScoreBreakdown ? (
-                    <ChevronUp className="w-4 h-4 text-slate-500 group-hover:text-blue-600 transition-colors duration-300" />
-                  ) : (
-                    <ChevronDown className="w-4 h-4 text-slate-500 group-hover:text-blue-600 transition-colors duration-300" />
-                  )}
-                </button>
               </div>
 
               {/* Quick Stats Dashboard Widget */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                 <div className="bg-gradient-to-br from-blue-50 to-purple-50 border-2 border-blue-200/50 rounded-xl p-5 shadow-lg">
                   <div className="flex items-center justify-between mb-3">
                     <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-500 rounded-lg flex items-center justify-center shadow-md">
@@ -792,6 +1314,20 @@ What would you like to do?`,
                   </div>
                   <div className="text-xs text-slate-600 font-medium">Recommendations</div>
                 </div>
+              </div>
+
+              <div className="flex justify-end mb-6">
+                <button
+                  onClick={() => setShowScoreBreakdown(!showScoreBreakdown)}
+                  className={`group inline-flex items-center space-x-2 px-5 py-2.5 rounded-full border-2 transition-all duration-300 shadow-md hover:shadow-lg text-sm font-semibold ${
+                    showScoreBreakdown
+                      ? 'bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 border-transparent text-white hover:scale-[1.03]'
+                      : 'bg-white/85 border-blue-200/60 text-slate-700 hover:border-blue-300 hover:text-blue-600'
+                  }`}
+                >
+                  {showScoreBreakdown ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                  <span>{showScoreBreakdown ? 'Hide Detailed Breakdown' : 'View Detailed Breakdown'}</span>
+                </button>
               </div>
 
               {/* Score Cards Grid - Premium Light Theme */}
@@ -862,52 +1398,54 @@ What would you like to do?`,
                   {/* Collapsible Breakdown - Premium Enhanced */}
                   {showScoreBreakdown && (
                   <div className="mt-6 pt-6 border-t border-slate-200/50 space-y-6 animate-in slide-in-from-top duration-300">
-                    {response.score_breakdown?.permissions?.positive?.length > 0 && (
-                      <div className="bg-gradient-to-br from-emerald-50 via-green-50 to-teal-50 border-2 border-emerald-200/50 rounded-xl p-6 shadow-lg">
-                        <div className="flex items-center space-x-3 mb-5">
-                          <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-green-500 rounded-lg flex items-center justify-center shadow-md">
-                            <CheckCircle className="w-6 h-6 text-white" />
+                    {(response.score_breakdown?.permissions?.positive?.length || 0) > 0 && (
+                      <div className="bg-white/85 backdrop-blur border-2 border-blue-200/50 rounded-2xl p-6 shadow-xl">
+                        <div className="flex items-center justify-between mb-5">
+                          <div className="flex items-center space-x-3">
+                            <div className="w-11 h-11 bg-gradient-to-br from-blue-500 to-purple-500 rounded-xl flex items-center justify-center shadow-md">
+                              <CheckCircle className="w-5 h-5 text-white" />
+                            </div>
+                            <div>
+                              <h4 className="text-lg font-semibold text-slate-900">Strengths</h4>
+                              <p className="text-xs text-slate-500">{response.score_breakdown?.permissions?.positive?.length || 0} security features identified</p>
+                            </div>
                           </div>
-                          <div>
-                            <h4 className="text-lg font-bold bg-gradient-to-r from-emerald-600 to-green-600 bg-clip-text text-transparent">
-                              Strengths
-                            </h4>
-                            <p className="text-xs text-slate-600 font-medium">{response.score_breakdown.permissions.positive.length} security features</p>
-                          </div>
+                          <span className="text-xs font-medium text-blue-600 bg-blue-500/10 px-3 py-1 rounded-full border border-blue-200/60">Optimized</span>
                         </div>
                         <ul className="space-y-3">
-                          {response.score_breakdown.permissions.positive.map((item, idx) => (
-                            <li key={idx} className="bg-white/80 backdrop-blur-sm border border-emerald-200/50 rounded-lg p-3 flex items-start space-x-3 shadow-sm hover:shadow-md transition-all">
-                              <div className="flex-shrink-0 w-6 h-6 bg-gradient-to-br from-emerald-400 to-green-400 rounded-full flex items-center justify-center mt-0.5">
+                          {(response.score_breakdown?.permissions?.positive || []).map((item, idx) => (
+                            <li key={idx} className="group bg-gradient-to-br from-blue-50/80 via-purple-50/70 to-white border border-blue-200/50 rounded-xl p-4 flex items-start space-x-4 shadow-sm hover:shadow-lg transition-all">
+                              <div className="flex-shrink-0 w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-500 rounded-lg flex items-center justify-center shadow-md group-hover:scale-[1.05] transition-transform">
                                 <CheckCircle className="w-4 h-4 text-white" />
                               </div>
-                              <span className="text-sm text-slate-700 leading-relaxed font-medium flex-1">{item}</span>
+                              <span className="text-[15px] text-slate-700 leading-relaxed flex-1">{item}</span>
                             </li>
                           ))}
                         </ul>
                       </div>
                     )}
                     
-                    {response.score_breakdown?.permissions?.improvements?.length > 0 && (
-                      <div className="bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50 border-2 border-amber-200/50 rounded-xl p-6 shadow-lg">
-                        <div className="flex items-center space-x-3 mb-5">
-                          <div className="w-10 h-10 bg-gradient-to-br from-amber-500 to-orange-500 rounded-lg flex items-center justify-center shadow-md">
-                            <Target className="w-6 h-6 text-white" />
+                    {(response.score_breakdown?.permissions?.improvements?.length || 0) > 0 && (
+                      <div className="bg-white/85 backdrop-blur border-2 border-purple-200/50 rounded-2xl p-6 shadow-xl">
+                        <div className="flex items-center justify-between mb-5">
+                          <div className="flex items-center space-x-3">
+                            <div className="w-11 h-11 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl flex items-center justify-center shadow-md">
+                              <Target className="w-5 h-5 text-white" />
+                            </div>
+                            <div>
+                              <h4 className="text-lg font-semibold text-slate-900">Opportunities</h4>
+                              <p className="text-xs text-slate-500">{response.score_breakdown?.permissions?.improvements?.length || 0} targeted recommendations</p>
+                            </div>
                           </div>
-                          <div>
-                            <h4 className="text-lg font-bold bg-gradient-to-r from-amber-600 to-orange-600 bg-clip-text text-transparent">
-                              Room for Improvement
-                            </h4>
-                            <p className="text-xs text-slate-600 font-medium">{response.score_breakdown.permissions.improvements.length} recommendations</p>
-                          </div>
+                          <span className="text-xs font-medium text-purple-600 bg-purple-500/10 px-3 py-1 rounded-full border border-purple-200/60">Action Needed</span>
                         </div>
                         <ul className="space-y-3">
-                          {response.score_breakdown.permissions.improvements.map((item, idx) => (
-                            <li key={idx} className="bg-white/80 backdrop-blur-sm border border-amber-200/50 rounded-lg p-3 flex items-start space-x-3 shadow-sm hover:shadow-md transition-all">
-                              <div className="flex-shrink-0 w-6 h-6 bg-gradient-to-br from-amber-400 to-orange-400 rounded-full flex items-center justify-center mt-0.5">
+                          {(response.score_breakdown?.permissions?.improvements || []).map((item, idx) => (
+                            <li key={idx} className="group bg-gradient-to-br from-purple-50/80 via-pink-50/70 to-white border border-purple-200/50 rounded-xl p-4 flex items-start space-x-4 shadow-sm hover:shadow-lg transition-all">
+                              <div className="flex-shrink-0 w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center shadow-md group-hover:scale-[1.05] transition-transform">
                                 <Target className="w-4 h-4 text-white" />
                               </div>
-                              <span className="text-sm text-slate-700 leading-relaxed font-medium flex-1">{item}</span>
+                              <span className="text-[15px] text-slate-700 leading-relaxed flex-1">{item}</span>
                             </li>
                           ))}
                         </ul>
@@ -983,52 +1521,54 @@ What would you like to do?`,
                   {/* Collapsible Breakdown - Premium Enhanced */}
                   {showScoreBreakdown && (
                   <div className="mt-6 pt-6 border-t border-slate-200/50 space-y-6 animate-in slide-in-from-top duration-300">
-                    {response.score_breakdown?.trust?.positive?.length > 0 && (
-                      <div className="bg-gradient-to-br from-emerald-50 via-green-50 to-teal-50 border-2 border-emerald-200/50 rounded-xl p-6 shadow-lg">
-                        <div className="flex items-center space-x-3 mb-5">
-                          <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-green-500 rounded-lg flex items-center justify-center shadow-md">
-                            <CheckCircle className="w-6 h-6 text-white" />
+                    {(response.score_breakdown?.trust?.positive?.length || 0) > 0 && (
+                      <div className="bg-white/85 backdrop-blur border-2 border-blue-200/50 rounded-2xl p-6 shadow-xl">
+                        <div className="flex items-center justify-between mb-5">
+                          <div className="flex items-center space-x-3">
+                            <div className="w-11 h-11 bg-gradient-to-br from-blue-500 to-purple-500 rounded-xl flex items-center justify-center shadow-md">
+                              <CheckCircle className="w-5 h-5 text-white" />
+                            </div>
+                            <div>
+                              <h4 className="text-lg font-semibold text-slate-900">Strengths</h4>
+                              <p className="text-xs text-slate-500">{response.score_breakdown?.trust?.positive?.length || 0} security features identified</p>
+                            </div>
                           </div>
-                          <div>
-                            <h4 className="text-lg font-bold bg-gradient-to-r from-emerald-600 to-green-600 bg-clip-text text-transparent">
-                              Strengths
-                            </h4>
-                            <p className="text-xs text-slate-600 font-medium">{response.score_breakdown.trust.positive.length} security features</p>
-                          </div>
+                          <span className="text-xs font-medium text-blue-600 bg-blue-500/10 px-3 py-1 rounded-full border border-blue-200/60">Optimized</span>
                         </div>
                         <ul className="space-y-3">
-                          {response.score_breakdown.trust.positive.map((item, idx) => (
-                            <li key={idx} className="bg-white/80 backdrop-blur-sm border border-emerald-200/50 rounded-lg p-3 flex items-start space-x-3 shadow-sm hover:shadow-md transition-all">
-                              <div className="flex-shrink-0 w-6 h-6 bg-gradient-to-br from-emerald-400 to-green-400 rounded-full flex items-center justify-center mt-0.5">
+                          {(response.score_breakdown?.trust?.positive || []).map((item, idx) => (
+                            <li key={idx} className="group bg-gradient-to-br from-blue-50/80 via-purple-50/70 to-white border border-blue-200/50 rounded-xl p-4 flex items-start space-x-4 shadow-sm hover:shadow-lg transition-all">
+                              <div className="flex-shrink-0 w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-500 rounded-lg flex items-center justify-center shadow-md group-hover:scale-[1.05] transition-transform">
                                 <CheckCircle className="w-4 h-4 text-white" />
                               </div>
-                              <span className="text-sm text-slate-700 leading-relaxed font-medium flex-1">{item}</span>
+                              <span className="text-[15px] text-slate-700 leading-relaxed flex-1">{item}</span>
                             </li>
                           ))}
                         </ul>
                       </div>
                     )}
                     
-                    {response.score_breakdown?.trust?.improvements?.length > 0 && (
-                      <div className="bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50 border-2 border-amber-200/50 rounded-xl p-6 shadow-lg">
-                        <div className="flex items-center space-x-3 mb-5">
-                          <div className="w-10 h-10 bg-gradient-to-br from-amber-500 to-orange-500 rounded-lg flex items-center justify-center shadow-md">
-                            <Target className="w-6 h-6 text-white" />
+                    {(response.score_breakdown?.trust?.improvements?.length || 0) > 0 && (
+                      <div className="bg-white/85 backdrop-blur border-2 border-purple-200/50 rounded-2xl p-6 shadow-xl">
+                        <div className="flex items-center justify-between mb-5">
+                          <div className="flex items-center space-x-3">
+                            <div className="w-11 h-11 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl flex items-center justify-center shadow-md">
+                              <Target className="w-5 h-5 text-white" />
+                            </div>
+                            <div>
+                              <h4 className="text-lg font-semibold text-slate-900">Opportunities</h4>
+                              <p className="text-xs text-slate-500">{response.score_breakdown?.trust?.improvements?.length || 0} targeted recommendations</p>
+                            </div>
                           </div>
-                          <div>
-                            <h4 className="text-lg font-bold bg-gradient-to-r from-amber-600 to-orange-600 bg-clip-text text-transparent">
-                              Room for Improvement
-                            </h4>
-                            <p className="text-xs text-slate-600 font-medium">{response.score_breakdown.trust.improvements.length} recommendations</p>
-                          </div>
+                          <span className="text-xs font-medium text-purple-600 bg-purple-500/10 px-3 py-1 rounded-full border border-purple-200/60">Action Needed</span>
                         </div>
                         <ul className="space-y-3">
-                          {response.score_breakdown.trust.improvements.map((item, idx) => (
-                            <li key={idx} className="bg-white/80 backdrop-blur-sm border border-amber-200/50 rounded-lg p-3 flex items-start space-x-3 shadow-sm hover:shadow-md transition-all">
-                              <div className="flex-shrink-0 w-6 h-6 bg-gradient-to-br from-amber-400 to-orange-400 rounded-full flex items-center justify-center mt-0.5">
+                          {(response.score_breakdown?.trust?.improvements || []).map((item, idx) => (
+                            <li key={idx} className="group bg-gradient-to-br from-purple-50/80 via-pink-50/70 to-white border border-purple-200/50 rounded-xl p-4 flex items-start space-x-4 shadow-sm hover:shadow-lg transition-all">
+                              <div className="flex-shrink-0 w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center shadow-md group-hover:scale-[1.05] transition-transform">
                                 <Target className="w-4 h-4 text-white" />
                               </div>
-                              <span className="text-sm text-slate-700 leading-relaxed font-medium flex-1">{item}</span>
+                              <span className="text-[15px] text-slate-700 leading-relaxed flex-1">{item}</span>
                             </li>
                           ))}
                         </ul>
@@ -1048,24 +1588,24 @@ What would you like to do?`,
                 <div className="flex items-center justify-between mb-6">
                   <div>
                     <h3 className="text-3xl font-bold text-slate-900 tracking-tight flex items-center space-x-3 mb-2">
-                      <Shield className="w-8 h-8 text-blue-600" />
+                      <HeadingBadge Icon={Shield} gradient="from-blue-500 to-purple-500" />
                       <span>Permissions Policy</span>
                     </h3>
                     <p className="text-slate-600 text-sm font-medium">IAM permissions configuration</p>
                   </div>
-                  <button
-                    onClick={() => setShowPermissionsPolicy(!showPermissionsPolicy)}
+                <button
+                  onClick={() => setShowPermissionsPolicy(!showPermissionsPolicy)}
                     className="group flex items-center space-x-2 px-4 py-2 bg-white/80 backdrop-blur-xl hover:bg-white/90 border-2 border-slate-200 hover:border-blue-300 rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl"
-                  >
+                >
                     <span className="text-sm font-semibold text-slate-700 group-hover:text-blue-600 transition-colors duration-300">
                       {showPermissionsPolicy ? 'Hide' : 'Show'}
                     </span>
-                    {showPermissionsPolicy ? (
+                  {showPermissionsPolicy ? (
                       <ChevronUp className="w-4 h-4 text-slate-500 group-hover:text-blue-600 transition-colors duration-300" />
-                    ) : (
+                  ) : (
                       <ChevronDown className="w-4 h-4 text-slate-500 group-hover:text-blue-600 transition-colors duration-300" />
-                    )}
-                  </button>
+                  )}
+                </button>
                 </div>
 
                 {showPermissionsPolicy && (
@@ -1117,7 +1657,7 @@ What would you like to do?`,
                   {/* About Permissions Policy - Enhanced Premium Subsection */}
                   <div className="mt-6">
                     <div className="bg-gradient-to-r from-blue-50 via-purple-50 to-pink-50 border-2 border-blue-200/50 rounded-xl p-5 shadow-lg">
-                      <div className="flex items-start space-x-3">
+                  <div className="flex items-start space-x-3">
                         <div className="flex-shrink-0 w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-500 rounded-lg flex items-center justify-center shadow-md">
                           <Info className="w-5 h-5 text-white" />
                         </div>
@@ -1127,64 +1667,106 @@ What would you like to do?`,
                           </div>
                           <p className="text-sm text-slate-700 leading-relaxed font-medium">
                             The Permissions Policy defines <strong className="text-blue-600">WHAT</strong> actions this IAM role can perform on AWS resources. 
-                            It specifies the exact services, actions, and resources that are allowed or denied.
-                          </p>
+                        It specifies the exact services, actions, and resources that are allowed or denied.
+                      </p>
                         </div>
-                      </div>
                     </div>
                   </div>
+                </div>
 
                 {response.explanation && (
                   <div className="bg-white/80 backdrop-blur-xl border-2 border-blue-200/50 rounded-2xl p-8 mt-6 shadow-xl">
-                    {/* Premium Subsection Header */}
-                    <div className="mb-6">
-                      <h4 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center space-x-3 mb-2">
-                        <Shield className="w-6 h-6 text-blue-600" />
-                        <span>What These Permissions Do</span>
-                      </h4>
+                    {/* Premium Subsection Header with Collapse Button */}
+                    <div className="mb-4 flex items-center justify-between">
+                      <div>
+                        <h4 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center space-x-3 mb-1">
+                        <HeadingBadge Icon={BookOpen} gradient="from-indigo-500 to-blue-500" />
+                      <span>What These Permissions Do</span>
+                    </h4>
                       <p className="text-slate-600 text-sm font-medium">Breakdown of each permission statement</p>
+                      </div>
+                      <button
+                        onClick={() => setShowExplanation(!showExplanation)}
+                        className="group flex items-center space-x-2 px-4 py-2 bg-white/80 backdrop-blur-xl hover:bg-white/90 border-2 border-slate-200 hover:border-blue-300 rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl"
+                      >
+                        <span className="text-sm font-semibold text-slate-700 group-hover:text-blue-600 transition-colors duration-300">
+                          {showExplanation ? 'Hide' : 'Show'}
+                        </span>
+                        {showExplanation ? (
+                          <ChevronUp className="w-4 h-4 text-slate-500 group-hover:text-blue-600 transition-colors duration-300" />
+                        ) : (
+                          <ChevronDown className="w-4 h-4 text-slate-500 group-hover:text-blue-600 transition-colors duration-300" />
+                        )}
+                      </button>
                     </div>
                     
+                    {showExplanation && (
+                    
                     <div className="grid grid-cols-1 gap-4">
-                      {parseExplanation(response.explanation).map((section: any, index) => (
-                        <div key={index} className="bg-gradient-to-br from-white to-slate-50 rounded-xl p-5 border-2 border-slate-200/50 transition-all duration-300 hover:border-blue-300 hover:shadow-lg">
-                          <div>
-                            <div className="flex items-start space-x-3 mb-3">
-                              <div className="text-3xl">{getServiceIcon(section.title)}</div>
-                              <div className="flex-1">
-                                <div className="text-xs text-slate-500 mb-2 font-bold uppercase tracking-wider">STATEMENT {section.num}</div>
-                                <h5 className="text-slate-900 font-bold text-base">{stripMarkdown(section.title)}</h5>
+                      {parseExplanation(response.explanation).map((section: any, index) => {
+                        const { icon: ServiceIcon, gradient } = getServiceIcon(section?.title || '');
+                        return (
+                          <div
+                            key={index}
+                            className="bg-gradient-to-br from-white to-slate-50 rounded-xl p-5 border-2 border-slate-200/50 transition-all duration-300 hover:border-blue-300 hover:shadow-lg"
+                          >
+                            <div className="flex items-start space-x-4 mb-4">
+                              <div className={`flex-shrink-0 w-12 h-12 bg-gradient-to-br ${gradient} rounded-xl flex items-center justify-center shadow-md`}>
+                                <ServiceIcon className="w-6 h-6 text-white" />
                               </div>
+                            <div className="flex-1">
+                                <div className="text-xs text-slate-500 mb-2 font-bold uppercase tracking-wider">Statement {section.num}</div>
+                                <h5 className="text-slate-900 font-bold text-base leading-snug">{stripMarkdown(section.title)}</h5>
                             </div>
+                          </div>
                           
-                          <div className="space-y-2">
+                            <div className="space-y-3">
                             {section.details.Permission && (
-                              <div className="bg-slate-100 rounded-lg p-3 border border-slate-200">
-                                <div className="text-sm text-slate-800 font-mono">
+                                <div className="bg-slate-100/80 rounded-lg p-3 border border-slate-200 shadow-inner">
+                                  <div className="text-sm text-slate-800 font-mono whitespace-pre-wrap break-words">
                                   {section.details.Permission}
                                 </div>
                               </div>
                             )}
                             
                             {section.details.Purpose && (
-                              <div className="text-sm text-slate-700 leading-relaxed font-medium">
-                                <span className="font-bold text-slate-600">Purpose:</span> {stripMarkdown(section.details.Purpose)}
+                                <div className="bg-white/90 border border-blue-200/40 rounded-lg p-3 shadow-sm">
+                                  <div className="text-xs font-semibold text-blue-600 uppercase tracking-wide mb-1">Purpose</div>
+                                  <p className="text-sm text-slate-700 leading-relaxed font-medium">
+                                    {stripMarkdown(section.details.Purpose)}
+                                  </p>
                               </div>
                             )}
                             
                             {section.details.Security && (
-                              <div className="flex items-start space-x-2 bg-green-50 border-2 border-green-200 rounded-lg p-2">
-                                <CheckCircle className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
-                                <div className="text-xs text-green-700 font-medium">
+                                <div className="flex items-start space-x-3 bg-emerald-50 border-2 border-emerald-200 rounded-lg p-3 shadow-sm">
+                                  <div className="w-8 h-8 bg-gradient-to-br from-emerald-500 to-green-500 rounded-full flex items-center justify-center">
+                                    <CheckCircle className="w-4 h-4 text-white" />
+                                  </div>
+                                  <div className="text-xs text-emerald-700 font-semibold leading-relaxed">
                                   {section.details.Security}
                                 </div>
                               </div>
                             )}
-                          </div>
+
+                            {Object.entries(section.details || {})
+                              .filter(([key]) => !['Permission', 'Purpose', 'Security'].includes(key))
+                              .map(([key, value]) => (
+                                <div key={key} className="bg-white/90 border border-slate-200 rounded-lg p-3 shadow-sm">
+                                  <div className="text-xs text-slate-500 font-semibold uppercase tracking-wide mb-1">
+                                    {formatDetailLabel(key)}
+                                  </div>
+                                  <p className="text-sm text-slate-700 leading-relaxed">
+                                    {stripMarkdown(String(value))}
+                                  </p>
+                                </div>
+                              ))}
                           </div>
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
+                  )}
                   </div>
                 )}
                 </>
@@ -1198,24 +1780,24 @@ What would you like to do?`,
                   <div className="flex items-center justify-between mb-6">
                     <div>
                       <h3 className="text-3xl font-bold text-slate-900 tracking-tight flex items-center space-x-3 mb-2">
-                        <CheckCircle className="w-8 h-8 text-purple-600" />
+                        <HeadingBadge Icon={ShieldCheck} gradient="from-purple-500 to-pink-500" />
                         <span>Trust Policy</span>
                       </h3>
                       <p className="text-slate-600 text-sm font-medium">IAM role trust relationship</p>
                     </div>
-                    <button
-                      onClick={() => setShowTrustPolicy(!showTrustPolicy)}
+                  <button
+                    onClick={() => setShowTrustPolicy(!showTrustPolicy)}
                       className="group flex items-center space-x-2 px-4 py-2 bg-white/80 backdrop-blur-xl hover:bg-white/90 border-2 border-slate-200 hover:border-purple-300 rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl"
-                    >
+                  >
                       <span className="text-sm font-semibold text-slate-700 group-hover:text-purple-600 transition-colors duration-300">
                         {showTrustPolicy ? 'Hide' : 'Show'}
                       </span>
-                      {showTrustPolicy ? (
+                    {showTrustPolicy ? (
                         <ChevronUp className="w-4 h-4 text-slate-500 group-hover:text-purple-600 transition-colors duration-300" />
-                      ) : (
+                    ) : (
                         <ChevronDown className="w-4 h-4 text-slate-500 group-hover:text-purple-600 transition-colors duration-300" />
-                      )}
-                    </button>
+                    )}
+                  </button>
                   </div>
 
                   {showTrustPolicy && (
@@ -1267,7 +1849,7 @@ What would you like to do?`,
                   {/* About Trust Policy - Enhanced Premium Subsection */}
                   <div className="mt-6">
                     <div className="bg-gradient-to-r from-purple-50 via-pink-50 to-orange-50 border-2 border-purple-200/50 rounded-xl p-5 shadow-lg">
-                      <div className="flex items-start space-x-3">
+                    <div className="flex items-start space-x-3">
                         <div className="flex-shrink-0 w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center shadow-md">
                           <Info className="w-5 h-5 text-white" />
                         </div>
@@ -1277,8 +1859,8 @@ What would you like to do?`,
                           </div>
                           <p className="text-sm text-slate-700 leading-relaxed font-medium">
                             The Trust Policy defines <strong className="text-purple-600">WHO</strong> can assume this IAM role. Without it, 
-                            nobody (not even AWS services) can use the permissions policy above.
-                          </p>
+                          nobody (not even AWS services) can use the permissions policy above.
+                        </p>
                         </div>
                       </div>
                     </div>
@@ -1289,62 +1871,122 @@ What would you like to do?`,
                       {/* Premium Subsection Header */}
                       <div className="mb-6">
                         <h4 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center space-x-3 mb-2">
-                          <Shield className="w-6 h-6 text-purple-600" />
-                          <span>What This Trust Policy Does</span>
-                        </h4>
+                          <HeadingBadge Icon={ShieldCheck} gradient="from-purple-500 to-pink-500" />
+                        <span>What This Trust Policy Does</span>
+                      </h4>
                         <p className="text-slate-600 text-sm font-medium">Who can assume this role and under what conditions</p>
                       </div>
                       
-                      <div className="bg-gradient-to-br from-white to-slate-50 rounded-xl p-5 border-2 border-slate-200/50">
-                        <div className="space-y-4">
-                          <div>
-                            <div className="text-xs text-slate-500 mb-2 uppercase tracking-wide font-bold">Trusted Entity</div>
-                            <div className="bg-slate-100 rounded-lg p-3 border border-slate-200">
-                              <div className="text-sm text-slate-800 font-mono">
-                                {response.trust_policy.Statement?.[0]?.Principal?.Service || 
-                                 JSON.stringify(response.trust_policy.Statement?.[0]?.Principal)}
+                      <div className="space-y-6">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <div className="bg-gradient-to-br from-purple-500/10 via-pink-500/10 to-orange-500/10 border-2 border-purple-200/60 rounded-xl p-5 shadow-lg">
+                            <div className="flex items-start space-x-3">
+                              <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center shadow-md">
+                                <UserCheck className="w-5 h-5 text-white" />
                               </div>
+                              <div className="flex-1">
+                                <div className="text-xs font-semibold uppercase tracking-wide text-slate-600 mb-1">Trusted Principal</div>
+                                <p className="text-sm font-semibold text-slate-900 leading-snug break-words">
+                                  {trustPrincipalLabel}
+                                </p>
                             </div>
+                            </div>
+                            <p className="text-xs text-slate-600 mt-3">Type: {trustPrincipalType}</p>
                           </div>
                           
-                          <div>
-                            <div className="text-xs text-slate-500 mb-2 uppercase tracking-wide font-bold">What It Means</div>
-                            <div className="space-y-3">
+                          <div className="bg-gradient-to-br from-blue-500/10 via-purple-500/10 to-pink-500/10 border-2 border-blue-200/60 rounded-xl p-5 shadow-lg">
+                            <div className="flex items-start space-x-3">
+                              <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-500 rounded-lg flex items-center justify-center shadow-md">
+                                <KeySquare className="w-5 h-5 text-white" />
+                              </div>
+                              <div className="flex-1">
+                                <div className="text-xs font-semibold uppercase tracking-wide text-slate-600 mb-1">Assume Method</div>
+                                <p className="text-sm font-semibold text-slate-900 leading-snug break-words">
+                                  {trustActionLabel}
+                                </p>
+                              </div>
+                            </div>
+                            <p className="text-xs text-slate-600 mt-3">
+                              {trustActionCount} action{trustActionCount === 1 ? '' : 's'} defined
+                            </p>
+                          </div>
+
+                          <div className="bg-gradient-to-br from-emerald-500/10 via-green-500/10 to-teal-500/10 border-2 border-emerald-200/60 rounded-xl p-5 shadow-lg">
+                            <div className="flex items-start space-x-3">
+                              <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-green-500 rounded-lg flex items-center justify-center shadow-md">
+                                <ShieldCheck className="w-5 h-5 text-white" />
+                              </div>
+                              <div className="flex-1">
+                                <div className="text-xs font-semibold uppercase tracking-wide text-slate-600 mb-1">Conditions</div>
+                                <p className="text-sm font-semibold text-slate-900 leading-snug break-words">
+                                  {trustConditionLabel}
+                                </p>
+                              </div>
+                            </div>
+                            <p className="text-xs text-slate-600 mt-3">
+                              {trustConditionCount > 0 ? `${trustConditionCount} condition${trustConditionCount === 1 ? '' : 's'} enforced` : 'No additional conditions'}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="bg-white/90 border-2 border-purple-200/50 rounded-xl p-6 shadow-lg">
+                          <div className="space-y-5">
+                            <div className="bg-gradient-to-br from-purple-500/10 via-pink-500/10 to-orange-500/10 border border-purple-200/60 rounded-xl p-4 shadow-sm">
+                              <div className="text-xs text-slate-600 font-semibold uppercase tracking-wide mb-2">Trusted Entity</div>
+                              <div className="text-sm text-slate-900 font-mono break-words">
+                                {trustPrincipalLabel}
+                              </div>
+                              <div className="text-xs text-slate-500 mt-2">Principal Type: {trustPrincipalType}</div>
+                            </div>
+
+                            <div className="space-y-4">
                               {stripMarkdown(response.trust_explanation).split('\n\n').map((section, idx) => {
                                 const lines = section.split('\n');
-                                const title = lines[0];
+                                const rawTitle = lines[0];
                                 const details = lines.slice(1);
-                                
-                                // Skip redundant "Trusted Entity" repetition
-                                if (title && title.toLowerCase().includes('trusted entity')) {
+
+                                if (rawTitle && rawTitle.toLowerCase().includes('trusted entity')) {
                                   return null;
+                                }
+
+                                const detailTitle = stripMarkdown(rawTitle || `Insight ${idx + 1}`);
+                                const normalizedTitle = detailTitle.toLowerCase();
+
+                                let DetailIcon: LucideIcon = BookOpen;
+                                let detailGradient = 'from-blue-500 to-purple-500';
+
+                                if (normalizedTitle.includes('security') || normalizedTitle.includes('risk')) {
+                                  DetailIcon = ShieldCheck;
+                                  detailGradient = 'from-emerald-500 to-green-500';
+                                } else if (normalizedTitle.includes('condition') || normalizedTitle.includes('restriction')) {
+                                  DetailIcon = KeySquare;
+                                  detailGradient = 'from-amber-500 to-orange-500';
+                                } else if (normalizedTitle.includes('access') || normalizedTitle.includes('who')) {
+                                  DetailIcon = UserCheck;
+                                  detailGradient = 'from-purple-500 to-pink-500';
                                 }
                                 
                                 return (
-                                  <div key={idx} className="bg-slate-100 rounded-lg p-4 border border-slate-200">
-                                    <div>
-                                      {title && (
-                                        <h5 className="text-slate-900 font-bold text-sm mb-2">{stripMarkdown(title)}</h5>
-                                      )}
-                                      {details.map((detail, dIdx) => (
-                                        detail.trim() && (
-                                          <p key={dIdx} className="text-sm text-slate-700 leading-relaxed mb-1 font-medium">
-                                            {stripMarkdown(detail.trim())}
-                                          </p>
-                                        )
-                                      ))}
+                                  <div key={idx} className="bg-white/90 border border-slate-200 rounded-xl p-4 shadow-sm">
+                                    <div className="flex items-start space-x-3">
+                                      <div className={`w-10 h-10 bg-gradient-to-br ${detailGradient} rounded-lg flex items-center justify-center shadow-md`}>
+                                        <DetailIcon className="w-5 h-5 text-white" />
+                                      </div>
+                                      <div className="flex-1">
+                                        <h5 className="text-slate-900 font-semibold text-sm mb-2 leading-snug">{detailTitle}</h5>
+                                    {details.map((detail, dIdx) => (
+                                      detail.trim() && (
+                                            <p key={dIdx} className="text-sm text-slate-700 leading-relaxed mb-1 font-normal">
+                                          {stripMarkdown(detail.trim())}
+                                        </p>
+                                      )
+                                    ))}
+                                      </div>
                                     </div>
                                   </div>
                                 );
                               })}
-                            </div>
                           </div>
-                          
-                          <div className="flex items-start space-x-2 bg-green-50 border-2 border-green-200 rounded-lg p-3">
-                            <CheckCircle className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
-                            <div className="text-xs text-green-700 font-medium">
-                              Follows AWS security best practices by explicitly defining trusted principals
-                            </div>
                           </div>
                         </div>
                       </div>
@@ -1356,17 +1998,17 @@ What would you like to do?`,
               )}
 
               {/* PERMISSIONS POLICY REFINEMENT SUGGESTIONS - Premium Subsection */}
-              {response?.refinement_suggestions?.permissions?.length > 0 && (
+              {(response?.refinement_suggestions?.permissions?.length || 0) > 0 && (
                 <div className="animate-fadeIn" style={{ animationDelay: '0.3s' }}>
                   {/* Premium Subsection Header */}
                   <div className="flex items-center justify-between mb-6">
-                    <div>
+                          <div>
                       <h3 className="text-3xl font-bold text-slate-900 tracking-tight flex items-center space-x-3 mb-2">
-                        <Sparkles className="w-7 h-7 text-blue-600" />
+                        <HeadingBadge Icon={Sparkles} gradient="from-blue-500 to-purple-500" />
                         <span>Permissions Policy Refinements</span>
-                      </h3>
+                            </h3>
                       <p className="text-slate-600 text-sm font-medium">AI-powered improvement suggestions</p>
-                    </div>
+                          </div>
                     <button
                       onClick={() => setShowPermissionsSuggestions(!showPermissionsSuggestions)}
                       className="group flex items-center space-x-2 px-4 py-2 bg-white/80 backdrop-blur-xl hover:bg-white/90 border-2 border-slate-200 hover:border-blue-300 rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl"
@@ -1374,16 +2016,16 @@ What would you like to do?`,
                       <span className="text-sm font-semibold text-slate-700 group-hover:text-blue-600 transition-colors duration-300">
                         {showPermissionsSuggestions ? 'Hide' : 'Show'}
                       </span>
-                      {showPermissionsSuggestions ? (
+                        {showPermissionsSuggestions ? (
                         <ChevronUp className="w-4 h-4 text-slate-500 group-hover:text-blue-600 transition-colors duration-300" />
-                      ) : (
+                        ) : (
                         <ChevronDown className="w-4 h-4 text-slate-500 group-hover:text-blue-600 transition-colors duration-300" />
-                      )}
-                    </button>
+                        )}
+                      </button>
                   </div>
 
                   {/* Content Card */}
-                  {showPermissionsSuggestions && (
+                      {showPermissionsSuggestions && (
                   <div className="relative bg-white/80 backdrop-blur-xl border-2 border-blue-200/50 rounded-2xl p-8 shadow-xl hover:shadow-2xl transition-all duration-500">
                       {/* Pro Tip - Enhanced Premium */}
                       <div className="bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-pink-500/10 border-2 border-blue-200/50 rounded-xl p-5 mb-6 shadow-lg">
@@ -1397,49 +2039,116 @@ What would you like to do?`,
                             </p>
                           </div>
                         </div>
-                      </div>
-                      
-                      <div className="grid grid-cols-1 gap-4">
-                        {response.refinement_suggestions.permissions.map((suggestion, idx) => (
-                          <button
-                            key={idx}
-                            onClick={() => {
-                              setFollowUpMessage(suggestion);
-                              setIsChatbotOpen(true);
-                            }}
+                          </div>
+                          
+                          <div className="grid grid-cols-1 gap-4">
+                            {(response.refinement_suggestions?.permissions || []).map((suggestion, idx) => (
+                              <button
+                                key={idx}
+                                onClick={async () => {
+                                  // Auto-send the refinement suggestion
+                                  if (!conversationId) {
+                                    setError('Please generate a policy first');
+                                    return;
+                                  }
+                                  
+                                  setIsChatbotOpen(true);
+                                  setIsRefining(true);
+                                  
+                                  // Add user message to chat
+                                  const userMessage: ChatMessage = {
+                                    role: 'user',
+                                    content: `Please implement this refinement: ${suggestion}`,
+                                    timestamp: new Date().toISOString()
+                                  };
+                                  setChatHistory(prev => [...prev, userMessage]);
+                                  
+                                  // Auto-send the message
+                                  try {
+                                    setLoading(true);
+                                    setError(null);
+                                    
+                                    const result = await sendFollowUp(
+                                      `Please implement this refinement: ${suggestion}`,
+                                      conversationId
+                                    );
+                                    
+                                    if (!result) {
+                                      throw new Error('No response received from server');
+                                    }
+                                    
+                                    // Update response with new policy data
+                                    setResponse(prev => {
+                                      if (!prev) return result as any;
+                                      
+                                      const merged: any = { ...prev };
+                                      if (result?.conversation_id) merged.conversation_id = result.conversation_id;
+                                      if (result?.final_answer) merged.final_answer = result.final_answer;
+                                      if (result?.policy) merged.policy = result.policy;
+                                      if (result?.trust_policy) merged.trust_policy = result.trust_policy;
+                                      if (result?.permissions_score !== undefined) merged.permissions_score = result.permissions_score;
+                                      if (result?.trust_score !== undefined) merged.trust_score = result.trust_score;
+                                      if (result?.overall_score !== undefined) merged.overall_score = result.overall_score;
+                                      if (result?.score_breakdown) merged.score_breakdown = result.score_breakdown;
+                                      if (result?.security_features) merged.security_features = result.security_features;
+                                      if (result?.security_notes) merged.security_notes = result.security_notes;
+                                      if (result?.refinement_suggestions) merged.refinement_suggestions = result.refinement_suggestions;
+                                      if (result?.explanation) merged.explanation = result.explanation;
+                                      if (result?.trust_explanation) merged.trust_explanation = result.trust_explanation;
+                                      if (result?.compliance_status) merged.compliance_status = result.compliance_status;
+                                      
+                                      return merged;
+                                    });
+                                    
+                                    // Add assistant response to chat
+                                    const assistantMessage: ChatMessage = {
+                                      role: 'assistant',
+                                      content: result.final_answer || result.explanation || 'Refinement applied successfully.',
+                                      timestamp: new Date().toISOString()
+                                    };
+                                    setChatHistory(prev => [...prev, assistantMessage]);
+                                    
+                                  } catch (err) {
+                                    console.error("Error applying refinement:", err);
+                                    setError(err instanceof Error ? err.message : 'Failed to apply refinement');
+                                  } finally {
+                                    setLoading(false);
+                                    setIsRefining(false);
+                                  }
+                                }}
                             className="group relative px-6 py-5 bg-gradient-to-br from-white to-slate-50/50 hover:from-white hover:to-blue-50/30 border-2 border-slate-200 hover:border-blue-300 rounded-xl text-left transition-all duration-300 shadow-lg hover:shadow-xl hover:scale-[1.02] overflow-hidden"
-                          >
-                            <div className="relative flex items-center space-x-4">
+                              >
+                                <div className="relative flex items-center space-x-4">
                               <div className="flex-shrink-0 w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-500 rounded-lg flex items-center justify-center shadow-md group-hover:scale-110 group-hover:rotate-3 transition-all duration-300">
                                 <FileCheck className="w-6 h-6 text-white" />
-                              </div>
-                              <div className="flex-1">
+                                  </div>
+                                  <div className="flex-1">
                                 <p className="text-slate-700 group-hover:text-slate-900 font-medium transition-colors duration-300 leading-relaxed">
-                                  {suggestion}
-                                </p>
-                              </div>
+                                      {suggestion}
+                                    </p>
+                                  </div>
                               <ArrowRight className="w-5 h-5 text-slate-400 group-hover:text-blue-600 opacity-0 group-hover:opacity-100 transition-all duration-300 transform group-hover:translate-x-1 flex-shrink-0" />
-                            </div>
-                          </button>
-                        ))}
-                      </div>
+                                </div>
+                              </button>
+                            ))}
+                          </div>
                   </div>
-                  )}
+                      )}
                 </div>
               )}
 
               {/* TRUST POLICY REFINEMENT SUGGESTIONS - Premium Subsection */}
-              {response?.refinement_suggestions?.trust?.length > 0 && (
+              {(response?.refinement_suggestions?.trust?.length || 0) > 0 && (
                 <div className="animate-fadeIn" style={{ animationDelay: '0.4s' }}>
                   {/* Premium Subsection Header */}
                   <div className="flex items-center justify-between mb-6">
-                    <div>
+                          <div>
                       <h3 className="text-3xl font-bold text-slate-900 tracking-tight flex items-center space-x-3 mb-2">
-                        <Sparkles className="w-7 h-7 text-purple-600" />
+                        <HeadingBadge Icon={Sparkles} gradient="from-purple-500 to-pink-500" />
                         <span>Trust Policy Refinements</span>
-                      </h3>
+                            </h3>
                       <p className="text-slate-600 text-sm font-medium">AI-powered improvement suggestions</p>
-                    </div>
+                          </div>
                     <button
                       onClick={() => setShowTrustSuggestions(!showTrustSuggestions)}
                       className="group flex items-center space-x-2 px-4 py-2 bg-white/80 backdrop-blur-xl hover:bg-white/90 border-2 border-slate-200 hover:border-purple-300 rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl"
@@ -1447,16 +2156,16 @@ What would you like to do?`,
                       <span className="text-sm font-semibold text-slate-700 group-hover:text-purple-600 transition-colors duration-300">
                         {showTrustSuggestions ? 'Hide' : 'Show'}
                       </span>
-                      {showTrustSuggestions ? (
+                        {showTrustSuggestions ? (
                         <ChevronUp className="w-4 h-4 text-slate-500 group-hover:text-purple-600 transition-colors duration-300" />
-                      ) : (
+                        ) : (
                         <ChevronDown className="w-4 h-4 text-slate-500 group-hover:text-purple-600 transition-colors duration-300" />
-                      )}
-                    </button>
+                        )}
+                      </button>
                   </div>
 
                   {/* Content Card */}
-                  {showTrustSuggestions && (
+                      {showTrustSuggestions && (
                   <div className="relative bg-white/80 backdrop-blur-xl border-2 border-purple-200/50 rounded-2xl p-8 shadow-xl hover:shadow-2xl transition-all duration-500">
                       {/* Pro Tip - Enhanced Premium */}
                       <div className="bg-gradient-to-r from-purple-500/10 via-pink-500/10 to-orange-500/10 border-2 border-purple-200/50 rounded-xl p-5 mb-6 shadow-lg">
@@ -1470,86 +2179,572 @@ What would you like to do?`,
                             </p>
                           </div>
                         </div>
-                      </div>
-                      
-                      <div className="grid grid-cols-1 gap-4">
-                        {response.refinement_suggestions.trust.map((suggestion, idx) => (
-                          <button
-                            key={idx}
-                            onClick={() => {
-                              setFollowUpMessage(suggestion);
-                              setIsChatbotOpen(true);
-                            }}
+                          </div>
+                          
+                          <div className="grid grid-cols-1 gap-4">
+                            {(response.refinement_suggestions?.trust || []).map((suggestion, idx) => (
+                              <button
+                                key={idx}
+                                onClick={async () => {
+                                  // Auto-send the refinement suggestion
+                                  if (!conversationId) {
+                                    setError('Please generate a policy first');
+                                    return;
+                                  }
+                                  
+                                  setIsChatbotOpen(true);
+                                  setIsRefining(true);
+                                  
+                                  // Add user message to chat
+                                  const userMessage: ChatMessage = {
+                                    role: 'user',
+                                    content: `Please implement this refinement: ${suggestion}`,
+                                    timestamp: new Date().toISOString()
+                                  };
+                                  setChatHistory(prev => [...prev, userMessage]);
+                                  
+                                  // Auto-send the message
+                                  try {
+                                    setLoading(true);
+                                    setError(null);
+                                    
+                                    const result = await sendFollowUp(
+                                      `Please implement this refinement: ${suggestion}`,
+                                      conversationId
+                                    );
+                                    
+                                    if (!result) {
+                                      throw new Error('No response received from server');
+                                    }
+                                    
+                                    // Update response with new policy data
+                                    setResponse(prev => {
+                                      if (!prev) return result as any;
+                                      
+                                      const merged: any = { ...prev };
+                                      if (result?.conversation_id) merged.conversation_id = result.conversation_id;
+                                      if (result?.final_answer) merged.final_answer = result.final_answer;
+                                      if (result?.policy) merged.policy = result.policy;
+                                      if (result?.trust_policy) merged.trust_policy = result.trust_policy;
+                                      if (result?.permissions_score !== undefined) merged.permissions_score = result.permissions_score;
+                                      if (result?.trust_score !== undefined) merged.trust_score = result.trust_score;
+                                      if (result?.overall_score !== undefined) merged.overall_score = result.overall_score;
+                                      if (result?.score_breakdown) merged.score_breakdown = result.score_breakdown;
+                                      if (result?.security_features) merged.security_features = result.security_features;
+                                      if (result?.security_notes) merged.security_notes = result.security_notes;
+                                      if (result?.refinement_suggestions) merged.refinement_suggestions = result.refinement_suggestions;
+                                      if (result?.explanation) merged.explanation = result.explanation;
+                                      if (result?.trust_explanation) merged.trust_explanation = result.trust_explanation;
+                                      if (result?.compliance_status) merged.compliance_status = result.compliance_status;
+                                      
+                                      return merged;
+                                    });
+                                    
+                                    // Add assistant response to chat
+                                    const assistantMessage: ChatMessage = {
+                                      role: 'assistant',
+                                      content: result.final_answer || result.explanation || 'Refinement applied successfully.',
+                                      timestamp: new Date().toISOString()
+                                    };
+                                    setChatHistory(prev => [...prev, assistantMessage]);
+                                    
+                                  } catch (err) {
+                                    console.error("Error applying refinement:", err);
+                                    setError(err instanceof Error ? err.message : 'Failed to apply refinement');
+                                  } finally {
+                                    setLoading(false);
+                                    setIsRefining(false);
+                                  }
+                                }}
                             className="group relative px-6 py-5 bg-gradient-to-br from-white to-slate-50/50 hover:from-white hover:to-purple-50/30 border-2 border-slate-200 hover:border-purple-300 rounded-xl text-left transition-all duration-300 shadow-lg hover:shadow-xl hover:scale-[1.02] overflow-hidden"
-                          >
-                            <div className="relative flex items-center space-x-4">
+                              >
+                                <div className="relative flex items-center space-x-4">
                               <div className="flex-shrink-0 w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center shadow-md group-hover:scale-110 group-hover:rotate-3 transition-all duration-300">
                                 <FileCheck className="w-6 h-6 text-white" />
-                              </div>
-                              <div className="flex-1">
+                                  </div>
+                                  <div className="flex-1">
                                 <p className="text-slate-700 group-hover:text-slate-900 font-medium transition-colors duration-300 leading-relaxed">
-                                  {suggestion}
-                                </p>
-                              </div>
+                                      {suggestion}
+                                    </p>
+                                  </div>
                               <ArrowRight className="w-5 h-5 text-slate-400 group-hover:text-purple-600 opacity-0 group-hover:opacity-100 transition-all duration-300 transform group-hover:translate-x-1 flex-shrink-0" />
-                            </div>
-                          </button>
-                        ))}
-                      </div>
+                                </div>
+                              </button>
+                            ))}
+                          </div>
                   </div>
+                      )}
+                    </div>
+              )}
+
+              {/* COMPLIANCE FRAMEWORK ADHERENCE - Premium Subsection - Collapsible */}
+              {compliance && compliance !== 'general' && response && response.policy && (
+                <div className="mb-16 animate-fadeIn" style={{ animationDelay: '0.35s' }}>
+                  {/* Premium Subsection Header with Collapse Button */}
+                  <div className="mb-8 flex items-center justify-between">
+                    <div>
+                      <h3 className="text-3xl font-bold text-slate-900 tracking-tight flex items-center space-x-3 mb-2">
+                        <HeadingBadge Icon={ShieldCheck} gradient="from-purple-500 to-pink-500" />
+                        <span>Compliance Framework Adherence</span>
+                      </h3>
+                      <p className="text-slate-600 text-sm font-medium">
+                        How this policy adheres to {complianceFrameworks.find(f => f.value === compliance)?.label || compliance.toUpperCase()}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => setShowComplianceAdherence(!showComplianceAdherence)}
+                      className="group flex items-center space-x-2 px-4 py-2 bg-white/80 backdrop-blur-xl hover:bg-white/90 border-2 border-slate-200 hover:border-purple-300 rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl"
+                    >
+                      <span className="text-sm font-semibold text-slate-700 group-hover:text-purple-600 transition-colors duration-300">
+                        {showComplianceAdherence ? 'Hide' : 'Show'}
+                      </span>
+                      {showComplianceAdherence ? (
+                        <ChevronUp className="w-4 h-4 text-slate-500 group-hover:text-purple-600 transition-colors duration-300" />
+                      ) : (
+                        <ChevronDown className="w-4 h-4 text-slate-500 group-hover:text-purple-600 transition-colors duration-300" />
+                      )}
+                    </button>
+                  </div>
+                  
+                  {showComplianceAdherence && (
+                    <>
+                      {/* Compliance Framework Info Card */}
+                      <div className="bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50 border-2 border-purple-200/50 rounded-2xl p-8 shadow-xl mb-6">
+                    <div className="flex items-start space-x-4">
+                      <div className="flex-shrink-0 w-16 h-16 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl flex items-center justify-center shadow-lg">
+                        <ShieldCheck className="w-8 h-8 text-white" />
+                      </div>
+                      <div className="flex-1">
+                        <h4 className="text-xl font-bold text-slate-900 mb-2">
+                          {complianceFrameworks.find(f => f.value === compliance)?.label || compliance.toUpperCase()} Compliance
+                        </h4>
+                        <p className="text-slate-700 text-sm font-medium leading-relaxed mb-4">
+                          This policy was generated with {complianceFrameworks.find(f => f.value === compliance)?.label || compliance.toUpperCase()} requirements in mind. 
+                          The following features ensure adherence to this compliance framework:
+                        </p>
+                        
+                        {/* Framework Overview - More Descriptive */}
+                        <div className="bg-white/80 rounded-xl p-5 mb-6 border-2 border-purple-200/50 shadow-lg">
+                          <div className="flex items-start space-x-3 mb-3">
+                            <Info className="w-5 h-5 text-purple-600 mt-0.5 flex-shrink-0" />
+                            <div className="flex-1">
+                              <div className="text-slate-900 font-bold text-base mb-2">About {complianceFrameworks.find(f => f.value === compliance)?.label || compliance.toUpperCase()}</div>
+                              {compliance === 'pci-dss' && (
+                                <p className="text-slate-700 text-sm leading-relaxed font-medium">
+                                  PCI DSS (Payment Card Industry Data Security Standard) is a set of security standards designed to ensure that all companies that accept, process, store, or transmit credit card information maintain a secure environment. This policy implements key requirements including least-privilege access, access logging, and resource-level restrictions to protect cardholder data.
+                                </p>
+                              )}
+                              {compliance === 'hipaa' && (
+                                <p className="text-slate-700 text-sm leading-relaxed font-medium">
+                                  HIPAA (Health Insurance Portability and Accountability Act) requires healthcare organizations to implement safeguards to protect Protected Health Information (PHI). This policy ensures access controls, audit logging, and data protection measures are in place to comply with HIPAA security rules, particularly sections 164.308 (Administrative Safeguards) and 164.312 (Technical Safeguards).
+                                </p>
+                              )}
+                              {compliance === 'sox' && (
+                                <p className="text-slate-700 text-sm leading-relaxed font-medium">
+                                  SOX (Sarbanes-Oxley Act) mandates that public companies implement internal controls over financial reporting. This policy supports SOX compliance by enforcing access controls, segregation of duties, comprehensive audit logging, and change management controls to ensure financial data integrity and prevent unauthorized access or modifications.
+                                </p>
+                              )}
+                              {compliance === 'gdpr' && (
+                                <p className="text-slate-700 text-sm leading-relaxed font-medium">
+                                  GDPR (General Data Protection Regulation) protects EU citizens' personal data. This policy implements data minimization principles (Article 5), access controls (Article 32), and audit logging requirements to ensure personal data is accessed only when necessary and all access is properly logged and monitored.
+                                </p>
+                              )}
+                              {compliance === 'cis' && (
+                                <p className="text-slate-700 text-sm leading-relaxed font-medium">
+                                  CIS AWS Benchmarks provide prescriptive security configuration guidance for AWS environments. This policy follows CIS recommendations for IAM policies, implementing least-privilege access, resource-level permissions, and security best practices to align with CIS Benchmark controls.
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        
+                        {/* Compliance Requirements List - Enhanced with More Details */}
+                        <div className="space-y-3 mb-6">
+                          <div className="text-slate-900 font-bold text-base mb-3">Key Compliance Features Implemented:</div>
+                          {compliance === 'pci-dss' && (
+                            <>
+                              <div className="flex items-start space-x-3 bg-white/60 rounded-lg p-4 border border-purple-200/50 shadow-sm hover:shadow-md transition-shadow">
+                                <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
+                                <div className="flex-1">
+                                  <div className="text-slate-900 font-bold text-sm mb-1.5">Least-Privilege Access (Requirement 7.1.2)</div>
+                                  <div className="text-slate-600 text-xs font-medium leading-relaxed mb-2">
+                                    Policy uses specific actions instead of wildcards, limiting access to only necessary permissions. This ensures that even if credentials are compromised, attackers can only perform the exact operations needed for the intended function, significantly reducing the attack surface.
+                                  </div>
+                                  <div className="text-slate-500 text-xs font-semibold bg-slate-50 px-2 py-1 rounded border border-slate-200 inline-block">
+                                    PCI DSS Requirement 7.1.2: Restrict access to cardholder data by business need-to-know
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="flex items-start space-x-3 bg-white/60 rounded-lg p-4 border border-purple-200/50 shadow-sm hover:shadow-md transition-shadow">
+                                <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
+                                <div className="flex-1">
+                                  <div className="text-slate-900 font-bold text-sm mb-1.5">Resource-Level Restrictions</div>
+                                  <div className="text-slate-600 text-xs font-medium leading-relaxed mb-2">
+                                    Permissions are scoped to specific resources (tables, buckets, etc.) rather than using wildcards. This prevents unauthorized access to other resources in your account, ensuring cardholder data environments are properly isolated and protected.
+                                  </div>
+                                  <div className="text-slate-500 text-xs font-semibold bg-slate-50 px-2 py-1 rounded border border-slate-200 inline-block">
+                                    PCI DSS Requirement 7.1.2: Limit access to cardholder data environment
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="flex items-start space-x-3 bg-white/60 rounded-lg p-4 border border-purple-200/50 shadow-sm hover:shadow-md transition-shadow">
+                                <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
+                                <div className="flex-1">
+                                  <div className="text-slate-900 font-bold text-sm mb-1.5">Access Logging Ready (Requirement 10)</div>
+                                  <div className="text-slate-600 text-xs font-medium leading-relaxed mb-2">
+                                    CloudWatch Logs permissions enable comprehensive access monitoring and audit trails. All access to cardholder data can be logged and reviewed, supporting PCI DSS Requirement 10 which mandates tracking and monitoring all access to network resources and cardholder data.
+                                  </div>
+                                  <div className="text-slate-500 text-xs font-semibold bg-slate-50 px-2 py-1 rounded border border-slate-200 inline-block">
+                                    PCI DSS Requirement 10: Track and monitor all access to network resources and cardholder data
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="flex items-start space-x-3 bg-white/60 rounded-lg p-4 border border-purple-200/50 shadow-sm hover:shadow-md transition-shadow">
+                                <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
+                                <div className="flex-1">
+                                  <div className="text-slate-900 font-bold text-sm mb-1.5">Network Segmentation Principles</div>
+                                  <div className="text-slate-600 text-xs font-medium leading-relaxed mb-2">
+                                    By restricting permissions to specific resources and services, this policy supports network segmentation principles. Access is limited to only the necessary services, reducing the risk of lateral movement if one component is compromised.
+                                  </div>
+                                  <div className="text-slate-500 text-xs font-semibold bg-slate-50 px-2 py-1 rounded border border-slate-200 inline-block">
+                                    PCI DSS Requirement 1: Install and maintain network security controls
+                                  </div>
+                                </div>
+                              </div>
+                            </>
+                          )}
+                          
+                          {compliance === 'hipaa' && (
+                            <>
+                              <div className="flex items-start space-x-3 bg-white/60 rounded-lg p-4 border border-purple-200/50 shadow-sm hover:shadow-md transition-shadow">
+                                <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
+                                <div className="flex-1">
+                                  <div className="text-slate-900 font-bold text-sm mb-1.5">Access Controls (164.308(a)(4))</div>
+                                  <div className="text-slate-600 text-xs font-medium leading-relaxed mb-2">
+                                    Policy implements least-privilege access controls to protect PHI (Protected Health Information). HIPAA requires covered entities to implement procedures to authorize access to ePHI only when such access is appropriate based on the user's role. This policy ensures that only necessary permissions are granted, reducing the risk of unauthorized PHI access.
+                                  </div>
+                                  <div className="text-slate-500 text-xs font-semibold bg-slate-50 px-2 py-1 rounded border border-slate-200 inline-block">
+                                    HIPAA 164.308(a)(4): Information access management
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="flex items-start space-x-3 bg-white/60 rounded-lg p-4 border border-purple-200/50 shadow-sm hover:shadow-md transition-shadow">
+                                <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
+                                <div className="flex-1">
+                                  <div className="text-slate-900 font-bold text-sm mb-1.5">Audit Logging (164.312(b))</div>
+                                  <div className="text-slate-600 text-xs font-medium leading-relaxed mb-2">
+                                    CloudWatch Logs permissions enable audit controls for access to ePHI. HIPAA requires implementation of hardware, software, and/or procedural mechanisms that record and examine activity in information systems that contain or use ePHI. This policy ensures all access to PHI is logged and can be audited.
+                                  </div>
+                                  <div className="text-slate-500 text-xs font-semibold bg-slate-50 px-2 py-1 rounded border border-slate-200 inline-block">
+                                    HIPAA 164.312(b): Audit controls
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="flex items-start space-x-3 bg-white/60 rounded-lg p-4 border border-purple-200/50 shadow-sm hover:shadow-md transition-shadow">
+                                <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
+                                <div className="flex-1">
+                                  <div className="text-slate-900 font-bold text-sm mb-1.5">Data Protection & Encryption</div>
+                                  <div className="text-slate-600 text-xs font-medium leading-relaxed mb-2">
+                                    Resource-level restrictions limit access to specific data stores, reducing PHI exposure risk. HIPAA requires implementation of technical policies and procedures to allow access only to persons or software programs that have been granted access rights. This policy ensures PHI is only accessible to authorized services and processes.
+                                  </div>
+                                  <div className="text-slate-500 text-xs font-semibold bg-slate-50 px-2 py-1 rounded border border-slate-200 inline-block">
+                                    HIPAA 164.312(a)(2)(iv): Encryption and decryption
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="flex items-start space-x-3 bg-white/60 rounded-lg p-4 border border-purple-200/50 shadow-sm hover:shadow-md transition-shadow">
+                                <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
+                                <div className="flex-1">
+                                  <div className="text-slate-900 font-bold text-sm mb-1.5">Minimum Necessary Standard</div>
+                                  <div className="text-slate-600 text-xs font-medium leading-relaxed mb-2">
+                                    By using specific actions instead of wildcards, this policy implements the HIPAA "minimum necessary" standard, ensuring that access to PHI is limited to the minimum amount necessary to accomplish the intended purpose. This reduces the risk of unauthorized disclosure of PHI.
+                                  </div>
+                                  <div className="text-slate-500 text-xs font-semibold bg-slate-50 px-2 py-1 rounded border border-slate-200 inline-block">
+                                    HIPAA 164.502(b): Minimum necessary requirements
+                                  </div>
+                                </div>
+                              </div>
+                            </>
+                          )}
+                          
+                          {compliance === 'sox' && (
+                            <>
+                              <div className="flex items-start space-x-3 bg-white/60 rounded-lg p-4 border border-purple-200/50 shadow-sm hover:shadow-md transition-shadow">
+                                <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
+                                <div className="flex-1">
+                                  <div className="text-slate-900 font-bold text-sm mb-1.5">Access Controls & Segregation of Duties</div>
+                                  <div className="text-slate-600 text-xs font-medium leading-relaxed mb-2">
+                                    Policy uses specific permissions and resource restrictions to enforce access controls. This ensures that no single role has excessive privileges, supporting SOX Section 404 requirements for internal controls over financial reporting. Segregation of duties prevents conflicts of interest and reduces fraud risk.
+                                  </div>
+                                  <div className="text-slate-500 text-xs font-semibold bg-slate-50 px-2 py-1 rounded border border-slate-200 inline-block">
+                                    SOX Section 404: Management assessment of internal controls
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="flex items-start space-x-3 bg-white/60 rounded-lg p-4 border border-purple-200/50 shadow-sm hover:shadow-md transition-shadow">
+                                <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
+                                <div className="flex-1">
+                                  <div className="text-slate-900 font-bold text-sm mb-1.5">Comprehensive Audit Logging</div>
+                                  <div className="text-slate-600 text-xs font-medium leading-relaxed mb-2">
+                                    CloudWatch Logs permissions enable detailed audit trails for financial data access. SOX requires organizations to maintain audit trails that track who accessed financial systems, when, and what changes were made. This policy ensures all access is logged and can be reviewed during SOX audits.
+                                  </div>
+                                  <div className="text-slate-500 text-xs font-semibold bg-slate-50 px-2 py-1 rounded border border-slate-200 inline-block">
+                                    SOX Section 302: CEO/CFO certification of financial statements
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="flex items-start space-x-3 bg-white/60 rounded-lg p-4 border border-purple-200/50 shadow-sm hover:shadow-md transition-shadow">
+                                <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
+                                <div className="flex-1">
+                                  <div className="text-slate-900 font-bold text-sm mb-1.5">Change Management Controls</div>
+                                  <div className="text-slate-600 text-xs font-medium leading-relaxed mb-2">
+                                    Least-privilege design prevents unauthorized changes to financial systems. By limiting permissions to only what's necessary, this policy ensures that changes to financial data or systems require proper authorization and can be tracked, supporting SOX requirements for change management and preventing unauthorized modifications.
+                                  </div>
+                                  <div className="text-slate-500 text-xs font-semibold bg-slate-50 px-2 py-1 rounded border border-slate-200 inline-block">
+                                    SOX Section 404: Controls over financial reporting systems
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="flex items-start space-x-3 bg-white/60 rounded-lg p-4 border border-purple-200/50 shadow-sm hover:shadow-md transition-shadow">
+                                <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
+                                <div className="flex-1">
+                                  <div className="text-slate-900 font-bold text-sm mb-1.5">Data Integrity Protection</div>
+                                  <div className="text-slate-600 text-xs font-medium leading-relaxed mb-2">
+                                    Resource-level restrictions and specific action permissions ensure that financial data can only be accessed and modified by authorized processes. This protects the integrity of financial records and supports SOX requirements for accurate financial reporting.
+                                  </div>
+                                  <div className="text-slate-500 text-xs font-semibold bg-slate-50 px-2 py-1 rounded border border-slate-200 inline-block">
+                                    SOX Section 302: Accuracy of financial records
+                                  </div>
+                                </div>
+                              </div>
+                            </>
+                          )}
+                          
+                          {compliance === 'gdpr' && (
+                            <>
+                              <div className="flex items-start space-x-3 bg-white/60 rounded-lg p-4 border border-purple-200/50 shadow-sm hover:shadow-md transition-shadow">
+                                <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
+                                <div className="flex-1">
+                                  <div className="text-slate-900 font-bold text-sm mb-1.5">Data Minimization (Article 5)</div>
+                                  <div className="text-slate-600 text-xs font-medium leading-relaxed mb-2">
+                                    Policy grants only necessary permissions, following data minimization principles. GDPR Article 5 requires that personal data be adequate, relevant, and limited to what is necessary in relation to the purposes for which they are processed. This policy ensures that access to personal data is restricted to only what's required for the specific function.
+                                  </div>
+                                  <div className="text-slate-500 text-xs font-semibold bg-slate-50 px-2 py-1 rounded border border-slate-200 inline-block">
+                                    GDPR Article 5(1)(c): Data minimization principle
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="flex items-start space-x-3 bg-white/60 rounded-lg p-4 border border-purple-200/50 shadow-sm hover:shadow-md transition-shadow">
+                                <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
+                                <div className="flex-1">
+                                  <div className="text-slate-900 font-bold text-sm mb-1.5">Access Controls (Article 32)</div>
+                                  <div className="text-slate-600 text-xs font-medium leading-relaxed mb-2">
+                                    Resource-level restrictions limit access to personal data, ensuring proper access controls. GDPR Article 32 requires implementation of appropriate technical and organizational measures to ensure a level of security appropriate to the risk, including the ability to ensure the ongoing confidentiality, integrity, availability, and resilience of processing systems.
+                                  </div>
+                                  <div className="text-slate-500 text-xs font-semibold bg-slate-50 px-2 py-1 rounded border border-slate-200 inline-block">
+                                    GDPR Article 32: Security of processing
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="flex items-start space-x-3 bg-white/60 rounded-lg p-4 border border-purple-200/50 shadow-sm hover:shadow-md transition-shadow">
+                                <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
+                                <div className="flex-1">
+                                  <div className="text-slate-900 font-bold text-sm mb-1.5">Audit Logging & Accountability</div>
+                                  <div className="text-slate-600 text-xs font-medium leading-relaxed mb-2">
+                                    CloudWatch Logs enable audit trails for data access, supporting data subject rights. GDPR requires organizations to demonstrate compliance (Article 5(2)) and be able to show how personal data is accessed and processed. This policy ensures all access to personal data is logged, supporting accountability requirements and enabling responses to data subject access requests.
+                                  </div>
+                                  <div className="text-slate-500 text-xs font-semibold bg-slate-50 px-2 py-1 rounded border border-slate-200 inline-block">
+                                    GDPR Article 5(2): Accountability principle
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="flex items-start space-x-3 bg-white/60 rounded-lg p-4 border border-purple-200/50 shadow-sm hover:shadow-md transition-shadow">
+                                <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
+                                <div className="flex-1">
+                                  <div className="text-slate-900 font-bold text-sm mb-1.5">Purpose Limitation</div>
+                                  <div className="text-slate-600 text-xs font-medium leading-relaxed mb-2">
+                                    By restricting permissions to specific actions and resources, this policy ensures that personal data is processed only for specified, explicit, and legitimate purposes (GDPR Article 5(1)(b)). Access is limited to what's necessary for the intended purpose, preventing unauthorized use of personal data.
+                                  </div>
+                                  <div className="text-slate-500 text-xs font-semibold bg-slate-50 px-2 py-1 rounded border border-slate-200 inline-block">
+                                    GDPR Article 5(1)(b): Purpose limitation principle
+                                  </div>
+                                </div>
+                              </div>
+                            </>
+                          )}
+                          
+                          {compliance === 'cis' && (
+                            <>
+                              <div className="flex items-start space-x-3 bg-white/60 rounded-lg p-4 border border-purple-200/50 shadow-sm hover:shadow-md transition-shadow">
+                                <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
+                                <div className="flex-1">
+                                  <div className="text-slate-900 font-bold text-sm mb-1.5">Least-Privilege Access (CIS 1.1, 1.2)</div>
+                                  <div className="text-slate-600 text-xs font-medium leading-relaxed mb-2">
+                                    Policy follows CIS AWS Benchmarks by using specific actions and resource restrictions. CIS Benchmark 1.1 and 1.2 recommend maintaining current contact details and ensuring security contact information is registered. This policy implements least-privilege principles aligned with CIS recommendations for IAM access management.
+                                  </div>
+                                  <div className="text-slate-500 text-xs font-semibold bg-slate-50 px-2 py-1 rounded border border-slate-200 inline-block">
+                                    CIS AWS Benchmark 1.1, 1.2: IAM access management
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="flex items-start space-x-3 bg-white/60 rounded-lg p-4 border border-purple-200/50 shadow-sm hover:shadow-md transition-shadow">
+                                <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
+                                <div className="flex-1">
+                                  <div className="text-slate-900 font-bold text-sm mb-1.5">Resource-Level Permissions (CIS 1.20)</div>
+                                  <div className="text-slate-600 text-xs font-medium leading-relaxed mb-2">
+                                    Policy adheres to CIS recommendations for IAM policy structure and permissions. CIS Benchmark 1.20 recommends ensuring that IAM policies are attached only to groups or roles. This policy uses resource-level restrictions and specific actions, following CIS best practices for IAM policy design.
+                                  </div>
+                                  <div className="text-slate-500 text-xs font-semibold bg-slate-50 px-2 py-1 rounded border border-slate-200 inline-block">
+                                    CIS AWS Benchmark 1.20: IAM policy structure
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="flex items-start space-x-3 bg-white/60 rounded-lg p-4 border border-purple-200/50 shadow-sm hover:shadow-md transition-shadow">
+                                <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
+                                <div className="flex-1">
+                                  <div className="text-slate-900 font-bold text-sm mb-1.5">Monitoring & Logging (CIS 3.1, 3.2)</div>
+                                  <div className="text-slate-600 text-xs font-medium leading-relaxed mb-2">
+                                    CloudWatch Logs permissions enable security monitoring as recommended by CIS. CIS Benchmarks 3.1 and 3.2 recommend ensuring CloudTrail is enabled and configured for all regions. This policy ensures logging capabilities are in place, supporting CIS monitoring and audit requirements.
+                                  </div>
+                                  <div className="text-slate-500 text-xs font-semibold bg-slate-50 px-2 py-1 rounded border border-slate-200 inline-block">
+                                    CIS AWS Benchmark 3.1, 3.2: Logging and monitoring
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="flex items-start space-x-3 bg-white/60 rounded-lg p-4 border border-purple-200/50 shadow-sm hover:shadow-md transition-shadow">
+                                <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
+                                <div className="flex-1">
+                                  <div className="text-slate-900 font-bold text-sm mb-1.5">Security Best Practices Alignment</div>
+                                  <div className="text-slate-600 text-xs font-medium leading-relaxed mb-2">
+                                    This policy follows CIS AWS Benchmark recommendations for IAM security, including avoiding wildcard permissions, using resource-level restrictions, and implementing proper access controls. These practices align with CIS Framework controls for securing AWS IAM configurations.
+                                  </div>
+                                  <div className="text-slate-500 text-xs font-semibold bg-slate-50 px-2 py-1 rounded border border-slate-200 inline-block">
+                                    CIS AWS Benchmark: IAM security best practices
+                                  </div>
+                                </div>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                      {/* Additional Info */}
+                      <div className="bg-blue-50/50 border-2 border-blue-200/50 rounded-xl p-4">
+                        <div className="flex items-start space-x-3">
+                          <Info className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
+                          <div>
+                            <p className="text-blue-900 font-semibold text-sm mb-1">Compliance Validation</p>
+                            <p className="text-blue-700 text-xs font-medium">
+                              This policy was designed with {complianceFrameworks.find(f => f.value === compliance)?.label || compliance.toUpperCase()} requirements in mind.
+                              {response.compliance_status && Object.keys(response.compliance_status).length > 0 ? (
+                                <> For detailed compliance validation results, see the Compliance Status section below.</>
+                              ) : (
+                                <> Use the Compliance Framework selector in Quick Actions above to validate this policy against {complianceFrameworks.find(f => f.value === compliance)?.label || compliance.toUpperCase()}.</>
+                              )}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </>
                   )}
                 </div>
               )}
 
-              {/* COMPLIANCE STATUS - Premium Subsection */}
+              {/* COMPLIANCE STATUS - Premium Subsection - Collapsible */}
               {response.compliance_status && Object.keys(response.compliance_status).length > 0 && (
                 <div className="mb-16 animate-fadeIn" style={{ animationDelay: '0.4s' }}>
-                  {/* Premium Subsection Header */}
-                  <div className="mb-8">
+                  {/* Premium Subsection Header with Collapse Button */}
+                  <div className="mb-8 flex items-center justify-between">
+                    <div>
                     <h3 className="text-3xl font-bold text-slate-900 tracking-tight flex items-center space-x-3 mb-2">
                       <CheckCircle className="w-7 h-7 text-blue-600" />
                       <span>Compliance Status</span>
                     </h3>
                     <p className="text-slate-600 text-sm font-medium">Compliance validation against selected framework</p>
+                    </div>
+                    <button
+                      onClick={() => setShowComplianceStatus(!showComplianceStatus)}
+                      className="group flex items-center space-x-2 px-4 py-2 bg-white/80 backdrop-blur-xl hover:bg-white/90 border-2 border-slate-200 hover:border-blue-300 rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl"
+                    >
+                      <span className="text-sm font-semibold text-slate-700 group-hover:text-blue-600 transition-colors duration-300">
+                        {showComplianceStatus ? 'Hide' : 'Show'}
+                      </span>
+                      {showComplianceStatus ? (
+                        <ChevronUp className="w-4 h-4 text-slate-500 group-hover:text-blue-600 transition-colors duration-300" />
+                      ) : (
+                        <ChevronDown className="w-4 h-4 text-slate-500 group-hover:text-blue-600 transition-colors duration-300" />
+                      )}
+                    </button>
                   </div>
-
-                  {/* Overall Compliance Summary Banner */}
-                  {(() => {
+                  
+                  {showComplianceStatus && (
+                    <>
+                      {/* Overall Compliance Summary Banner */}
+                      {(() => {
                     const frameworks = Object.values(response.compliance_status || {});
-                    const compliantCount = frameworks.filter((f: any) => f.status === 'Compliant').length;
-                    const nonCompliantCount = frameworks.length - compliantCount;
+                    // Normalize statuses for counting
+                    const normalizedFrameworks = frameworks.map((f: any) => ({
+                      ...f,
+                      normalizedStatus: f.status === 'Partially Compliant' 
+                        ? 'Partial' 
+                        : f.status === 'Non-Compliant' || f.status === 'NonCompliant'
+                        ? 'NonCompliant'
+                        : f.status
+                    }));
+                    const compliantCount = normalizedFrameworks.filter((f: any) => f.normalizedStatus === 'Compliant').length;
+                    const partialCount = normalizedFrameworks.filter((f: any) => f.normalizedStatus === 'Partial').length;
+                    const nonCompliantCount = normalizedFrameworks.filter((f: any) => f.normalizedStatus === 'NonCompliant').length;
                     const totalViolations = frameworks.reduce((sum: number, f: any) => {
                       return sum + (f.violations?.length || f.gaps?.length || 0);
                     }, 0);
+                    const hasIssues = nonCompliantCount > 0 || partialCount > 0;
                     
                     return (
                       <div className={`mb-8 border-2 rounded-2xl p-6 shadow-xl ${
-                        nonCompliantCount > 0 
-                          ? 'bg-gradient-to-r from-red-50 via-orange-50 to-yellow-50 border-red-200/50'
+                        hasIssues
+                          ? partialCount > 0 && nonCompliantCount === 0
+                            ? 'bg-gradient-to-r from-yellow-50 via-orange-50 to-amber-50 border-yellow-200/50'
+                            : 'bg-gradient-to-r from-red-50 via-orange-50 to-yellow-50 border-red-200/50'
                           : 'bg-gradient-to-r from-green-50 via-emerald-50 to-teal-50 border-green-200/50'
                       }`}>
                         <div className="flex items-center justify-between flex-wrap gap-4">
                           <div className="flex items-center space-x-4">
                             <div className={`w-16 h-16 rounded-full flex items-center justify-center border-2 ${
-                              nonCompliantCount > 0
-                                ? 'bg-red-500/10 border-red-200/50'
+                              hasIssues
+                                ? partialCount > 0 && nonCompliantCount === 0
+                                  ? 'bg-yellow-500/10 border-yellow-200/50'
+                                  : 'bg-red-500/10 border-red-200/50'
                                 : 'bg-green-500/10 border-green-200/50'
                             }`}>
-                              {nonCompliantCount > 0 ? (
+                              {hasIssues ? (
+                                nonCompliantCount > 0 ? (
                                 <XCircle className="w-8 h-8 text-red-600" />
+                                ) : (
+                                  <AlertCircle className="w-8 h-8 text-yellow-600" />
+                                )
                               ) : (
                                 <CheckCircle className="w-8 h-8 text-green-600" />
                               )}
-                            </div>
+                </div>
                             <div>
                               <div className={`font-black text-2xl mb-1 ${
-                                nonCompliantCount > 0 ? 'text-red-900' : 'text-green-900'
+                                hasIssues
+                                  ? partialCount > 0 && nonCompliantCount === 0
+                                    ? 'text-yellow-900'
+                                    : 'text-red-900'
+                                  : 'text-green-900'
                               }`}>
-                                {nonCompliantCount > 0 ? 'Non-Compliance Detected' : 'Fully Compliant'}
+                                {hasIssues 
+                                  ? nonCompliantCount > 0 
+                                    ? 'Non-Compliance Detected'
+                                    : 'Partially Compliant'
+                                  : 'Fully Compliant'}
                               </div>
                               <div className="text-slate-700 text-sm font-medium">
-                                {nonCompliantCount > 0 
-                                  ? `${nonCompliantCount} of ${frameworks.length} frameworks failed • ${totalViolations} total violations`
+                                {hasIssues
+                                  ? `${nonCompliantCount + partialCount} of ${frameworks.length} frameworks need attention • ${totalViolations} total ${totalViolations === 1 ? 'issue' : 'issues'}`
                                   : `All ${frameworks.length} framework requirements met`
                                 }
                               </div>
@@ -1559,7 +2754,11 @@ What would you like to do?`,
                             <div className="text-right">
                               <div className="text-slate-600 text-xs font-semibold uppercase tracking-wide mb-1">Compliance Rate</div>
                               <div className={`font-black text-3xl ${
-                                nonCompliantCount > 0 ? 'text-red-600' : 'text-green-600'
+                                hasIssues
+                                  ? partialCount > 0 && nonCompliantCount === 0
+                                    ? 'text-yellow-600'
+                                    : 'text-red-600'
+                                  : 'text-green-600'
                               }`}>
                                 {Math.round((compliantCount / frameworks.length) * 100)}%
                               </div>
@@ -1572,25 +2771,40 @@ What would you like to do?`,
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {Object.entries(response.compliance_status).map(([key, framework]: [string, any]) => {
+                      // Normalize status: "Partially Compliant" -> "Partial", etc.
+                      const normalizedStatus = framework.status === 'Partially Compliant' 
+                        ? 'Partial' 
+                        : framework.status === 'Non-Compliant' || framework.status === 'NonCompliant'
+                        ? 'NonCompliant'
+                        : framework.status;
+                      
                       const violations = framework.violations || [];
                       const gaps = framework.gaps || [];
                       const totalIssues = violations.length + gaps.length;
+                      const isCompliant = normalizedStatus === 'Compliant';
+                      const isPartial = normalizedStatus === 'Partial' || normalizedStatus === 'Partially Compliant';
                       
                       return (
                         <div key={key} className={`bg-white/80 backdrop-blur-xl border-2 rounded-2xl p-6 shadow-xl hover:shadow-2xl transition-all duration-300 ${
-                          framework.status === 'Compliant' 
+                          isCompliant
                             ? 'border-green-200/50' 
+                            : isPartial
+                            ? 'border-yellow-200/50'
                             : 'border-red-200/50'
                         }`}>
                           <div className="flex items-center justify-between mb-4">
                             <div className="flex items-center space-x-3">
                               <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
-                                framework.status === 'Compliant'
+                                isCompliant
                                   ? 'bg-green-500/10 border-2 border-green-200/50'
+                                  : isPartial
+                                  ? 'bg-yellow-500/10 border-2 border-yellow-200/50'
                                   : 'bg-red-500/10 border-2 border-red-200/50'
                               }`}>
-                                {framework.status === 'Compliant' ? (
+                                {isCompliant ? (
                                   <CheckCircle className="w-6 h-6 text-green-600" />
+                                ) : isPartial ? (
+                                  <AlertCircle className="w-6 h-6 text-yellow-600" />
                                 ) : (
                                   <XCircle className="w-6 h-6 text-red-600" />
                                 )}
@@ -1601,16 +2815,18 @@ What would you like to do?`,
                               </div>
                             </div>
                             <span className={`px-3 py-1.5 rounded-full text-xs font-bold ${
-                              framework.status === 'Compliant'
+                              isCompliant
                                 ? 'bg-green-500/10 text-green-700 border border-green-200/50'
+                                : isPartial
+                                ? 'bg-yellow-500/10 text-yellow-700 border border-yellow-200/50'
                                 : 'bg-red-500/10 text-red-700 border border-red-200/50'
                             }`}>
-                              {framework.status}
+                              {normalizedStatus}
                             </span>
                           </div>
                           
                           {/* Progress Indicator */}
-                          {framework.status !== 'Compliant' && (
+                          {!isCompliant && (
                             <div className="mb-4">
                               <div className="flex items-center justify-between text-xs text-slate-600 mb-2">
                                 <span className="font-semibold">Remediation Progress</span>
@@ -1665,15 +2881,344 @@ What would you like to do?`,
                           )}
 
                           {/* Compliant State */}
-                          {framework.status === 'Compliant' && (
+                          {isCompliant && (
                             <div className="bg-green-50 rounded-xl p-4 border-2 border-green-200/50 text-center">
                               <CheckCircle className="w-8 h-8 text-green-600 mx-auto mb-2" />
                               <p className="text-green-700 font-semibold text-sm">All requirements met</p>
                             </div>
                           )}
+                          
+                          {/* Partial Compliance State */}
+                          {isPartial && totalIssues === 0 && (
+                            <div className="bg-yellow-50 rounded-xl p-4 border-2 border-yellow-200/50 text-center">
+                              <AlertCircle className="w-8 h-8 text-yellow-600 mx-auto mb-2" />
+                              <p className="text-yellow-700 font-semibold text-sm">Partially compliant - some requirements need attention</p>
+                            </div>
+                          )}
                         </div>
                       );
                     })}
+                  </div>
+                    </>
+                  )}
+                </div>
+              )}
+
+              {/* QUICK ACTIONS - Premium Subsection */}
+              {response && response.policy && (
+                <div className="mb-16 animate-fadeIn" style={{ animationDelay: '0.45s' }}>
+                  {/* Premium Subsection Header */}
+                  <div className="mb-6">
+                    <h3 className="text-3xl font-bold text-slate-900 tracking-tight flex items-center space-x-3 mb-2">
+                      <HeadingBadge Icon={Sparkles} gradient="from-purple-500 to-pink-500" />
+                      <span>Quick Actions</span>
+                    </h3>
+                    <p className="text-slate-600 text-sm font-medium">Quick access to common tasks</p>
+                  </div>
+
+                  {/* Quick Actions Card */}
+                  <div className="bg-white/80 backdrop-blur-xl border-2 border-purple-200/50 rounded-2xl p-6 shadow-xl">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Compliance Framework Selector */}
+                      <div className="space-y-2">
+                        <label className="block text-slate-700 text-sm font-semibold">
+                          <FileCheck className="w-4 h-4 inline mr-2 text-purple-600" />
+                          Compliance Framework
+                        </label>
+                        <select
+                          value={compliance}
+                          onChange={async (e) => {
+                            const newCompliance = e.target.value;
+                            
+                            // If user selects a compliance framework, validate the policy against it
+                            if (newCompliance !== 'general' && response?.policy && conversationId) {
+                              try {
+                                setLoading(true);
+                                setError(null);
+                                
+                                // Send a follow-up request to validate against the new compliance framework
+                                const validationMessage = `Validate this policy against ${newCompliance.toUpperCase()} compliance framework and show me the compliance status.`;
+                                
+                                // Add user message to chat
+                                const userMessage: ChatMessage = {
+                                  role: 'user',
+                                  content: validationMessage,
+                                  timestamp: new Date().toISOString()
+                                };
+                                setChatHistory(prev => [...prev, userMessage]);
+                                
+                                const result = await sendFollowUp(
+                                  validationMessage,
+                                  conversationId
+                                );
+                                
+                                if (result) {
+                                  // Add assistant response to chat
+                                  const assistantMessage: ChatMessage = {
+                                    role: 'assistant',
+                                    content: result.final_answer || result.explanation || 'Compliance validation completed.',
+                                    timestamp: new Date().toISOString()
+                                  };
+                                  setChatHistory(prev => [...prev, assistantMessage]);
+                                  
+                                  // Update response state - preserve policies, update compliance status
+                                  setResponse(prev => prev ? {
+                                    ...prev,
+                                    compliance_status: result.compliance_status || prev.compliance_status,
+                                    final_answer: result.final_answer || prev.final_answer,
+                                    explanation: result.explanation || prev.explanation,
+                                    conversation_history: result.conversation_history || prev.conversation_history
+                                  } : result);
+                                  
+                                  // Update compliance state
+                                  setCompliance(newCompliance);
+                                }
+                              } catch (err: any) {
+                                console.error("Error validating compliance:", err);
+                                setError(err.message || "Failed to validate compliance. Please try again.");
+                                
+                                // Add error message to chat
+                                const errorMessage: ChatMessage = {
+                                  role: 'assistant',
+                                  content: `Sorry, I encountered an error: ${err.message || 'Failed to validate compliance. Please try again.'}`,
+                                  timestamp: new Date().toISOString()
+                                };
+                                setChatHistory(prev => [...prev, errorMessage]);
+                              } finally {
+                                setLoading(false);
+                                if (chatEndRef.current) {
+                                  chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
+                                }
+                              }
+                            } else {
+                              // Just update the state if no validation needed
+                              setCompliance(newCompliance);
+                            }
+                          }}
+                          className="w-full px-4 py-3 bg-white/60 backdrop-blur-sm border-2 border-slate-200 rounded-xl text-slate-900 text-base focus:border-purple-500 focus:ring-2 focus:ring-purple-500/30 focus:outline-none transition-all duration-300 font-medium cursor-pointer"
+                        >
+                          {complianceFrameworks.map(framework => (
+                            <option key={framework.value} value={framework.value}>
+                              {framework.label}
+                            </option>
+                          ))}
+                        </select>
+                        <p className="text-xs text-slate-500 font-medium">
+                          {compliance === 'general' 
+                            ? 'Select a framework to validate your policy' 
+                            : `Validating against ${complianceFrameworks.find(f => f.value === compliance)?.label}`}
+                        </p>
+                      </div>
+
+                      {/* Quick Action Buttons */}
+                      <div className="space-y-2">
+                        <label className="block text-slate-700 text-sm font-semibold">
+                          <Lightbulb className="w-4 h-4 inline mr-2 text-purple-600" />
+                          Quick Actions
+                        </label>
+                        <div className="grid grid-cols-2 gap-2">
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              // Auto-send the explain message
+                              if (!conversationId) {
+                                setError('Please generate a policy first');
+                                return;
+                              }
+                              
+                              setIsChatbotOpen(true);
+                              setIsRefining(true);
+                              
+                              const explainMessage = 'Explain this policy in detail';
+                              
+                              // Add user message to chat
+                              const userMessage: ChatMessage = {
+                                role: 'user',
+                                content: explainMessage,
+                                timestamp: new Date().toISOString()
+                              };
+                              setChatHistory(prev => [...prev, userMessage]);
+                              
+                              // Auto-send the message
+                              try {
+                                setLoading(true);
+                                setError(null);
+                                
+                                const result = await sendFollowUp(
+                                  explainMessage,
+                                  conversationId
+                                );
+                                
+                                if (!result) {
+                                  throw new Error('No response received from server');
+                                }
+                                
+                                // Add assistant response to chat
+                                const assistantMessage: ChatMessage = {
+                                  role: 'assistant',
+                                  content: result.final_answer || result.explanation || 'I received your explanation request.',
+                                  timestamp: new Date().toISOString()
+                                };
+                                setChatHistory(prev => [...prev, assistantMessage]);
+                                
+                                // Update response state (preserve policies and scores)
+                                setResponse(prev => {
+                                  if (!prev) return result as any;
+                                  return {
+                                    ...prev,
+                                    final_answer: result.final_answer || prev.final_answer,
+                                    explanation: result.explanation || prev.explanation,
+                                    conversation_history: result.conversation_history || prev.conversation_history
+                                  };
+                                });
+                                
+                                setError(null);
+                              } catch (err: any) {
+                                console.error('Error sending explain request:', err);
+                                setError(err.message || 'Failed to get explanation. Please try again.');
+                                
+                                // Add error message to chat
+                                const errorMessage: ChatMessage = {
+                                  role: 'assistant',
+                                  content: `Sorry, I encountered an error: ${err.message || 'Failed to get explanation. Please try again.'}`,
+                                  timestamp: new Date().toISOString()
+                                };
+                                setChatHistory(prev => [...prev, errorMessage]);
+                              } finally {
+                                setLoading(false);
+                                setIsRefining(false);
+                                if (chatEndRef.current) {
+                                  chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
+                                }
+                              }
+                            }}
+                            className="px-4 py-2.5 bg-gradient-to-r from-blue-500/10 to-blue-600/10 hover:from-blue-500/20 hover:to-blue-600/20 border-2 border-blue-200/50 hover:border-blue-300 rounded-xl text-blue-700 hover:text-blue-800 text-sm font-semibold transition-all duration-300 flex items-center justify-center space-x-2"
+                          >
+                            <BookOpen className="w-4 h-4" />
+                            <span>Explain</span>
+                          </button>
+                          
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              // Auto-send the compliance help message
+                              if (!conversationId) {
+                                setError('Please generate a policy first');
+                                return;
+                              }
+                              
+                              setIsChatbotOpen(true);
+                              setIsRefining(true);
+                              
+                              const complianceMessage = 'What compliance requirements should I consider for this policy?';
+                              
+                              // Add user message to chat
+                              const userMessage: ChatMessage = {
+                                role: 'user',
+                                content: complianceMessage,
+                                timestamp: new Date().toISOString()
+                              };
+                              setChatHistory(prev => [...prev, userMessage]);
+                              
+                              // Auto-send the message
+                              try {
+                                setLoading(true);
+                                setError(null);
+                                
+                                const result = await sendFollowUp(
+                                  complianceMessage,
+                                  conversationId
+                                );
+                                
+                                if (!result) {
+                                  throw new Error('No response received from server');
+                                }
+                                
+                                // Add assistant response to chat
+                                const assistantMessage: ChatMessage = {
+                                  role: 'assistant',
+                                  content: result.final_answer || result.explanation || 'I received your compliance question.',
+                                  timestamp: new Date().toISOString()
+                                };
+                                setChatHistory(prev => [...prev, assistantMessage]);
+                                
+                                // Update response state (preserve policies)
+                                setResponse(prev => {
+                                  if (!prev) return result as any;
+                                  return {
+                                    ...prev,
+                                    final_answer: result.final_answer || prev.final_answer,
+                                    explanation: result.explanation || prev.explanation,
+                                    conversation_history: result.conversation_history || prev.conversation_history
+                                  };
+                                });
+                                
+                                setError(null);
+                              } catch (err: any) {
+                                console.error('Error sending compliance help:', err);
+                                setError(err.message || 'Failed to get compliance help. Please try again.');
+                                
+                                // Add error message to chat
+                                const errorMessage: ChatMessage = {
+                                  role: 'assistant',
+                                  content: `Sorry, I encountered an error: ${err.message || 'Failed to get compliance help. Please try again.'}`,
+                                  timestamp: new Date().toISOString()
+                                };
+                                setChatHistory(prev => [...prev, errorMessage]);
+                              } finally {
+                                setLoading(false);
+                                setIsRefining(false);
+                                if (chatEndRef.current) {
+                                  chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
+                                }
+                              }
+                            }}
+                            className="px-4 py-2.5 bg-gradient-to-r from-purple-500/10 to-purple-600/10 hover:from-purple-500/20 hover:to-purple-600/20 border-2 border-purple-200/50 hover:border-purple-300 rounded-xl text-purple-700 hover:text-purple-800 text-sm font-semibold transition-all duration-300 flex items-center justify-center space-x-2"
+                          >
+                            <FileCheck className="w-4 h-4" />
+                            <span>Compliance Help</span>
+                          </button>
+                          
+                          <button
+                            type="button"
+                            onClick={() => {
+                              // Scroll to refinements section - find by text content
+                              const allHeadings = Array.from(document.querySelectorAll('h3'));
+                              const refinementsHeading = allHeadings.find(h => 
+                                h.textContent?.includes('Refinement') || h.textContent?.includes('Refinements')
+                              );
+                              if (refinementsHeading) {
+                                refinementsHeading.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                              } else {
+                                // Fallback: scroll to security scores section
+                                const scoresHeading = allHeadings.find(h => h.textContent?.includes('Security Scores'));
+                                scoresHeading?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                              }
+                            }}
+                            className="px-4 py-2.5 bg-gradient-to-r from-pink-500/10 to-pink-600/10 hover:from-pink-500/20 hover:to-pink-600/20 border-2 border-pink-200/50 hover:border-pink-300 rounded-xl text-pink-700 hover:text-pink-800 text-sm font-semibold transition-all duration-300 flex items-center justify-center space-x-2"
+                          >
+                            <Target className="w-4 h-4" />
+                            <span>Refinements</span>
+                          </button>
+                          
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setFollowUpMessage('Show me both policies in JSON format');
+                              setIsChatbotOpen(true);
+                              setTimeout(() => {
+                                const chatbotInput = document.querySelector('textarea[placeholder*="Ask me"]') as HTMLTextAreaElement;
+                                chatbotInput?.focus();
+                              }, 300);
+                            }}
+                            className="px-4 py-2.5 bg-gradient-to-r from-emerald-500/10 to-emerald-600/10 hover:from-emerald-500/20 hover:to-emerald-600/20 border-2 border-emerald-200/50 hover:border-emerald-300 rounded-xl text-emerald-700 hover:text-emerald-800 text-sm font-semibold transition-all duration-300 flex items-center justify-center space-x-2"
+                          >
+                            <Copy className="w-4 h-4" />
+                            <span>Get JSON</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
@@ -1683,8 +3228,8 @@ What would you like to do?`,
                 {/* Premium Subsection Header */}
                 <div className="mb-6">
                   <h3 className="text-3xl font-bold text-slate-900 tracking-tight flex items-center space-x-3 mb-2">
-                    <MessageSquare className="w-7 h-7 text-blue-600" />
-                    <span>Refine Your Policy</span>
+                    <HeadingBadge Icon={MessageSquare} gradient="from-blue-500 to-purple-500" />
+                  <span>Refine Your Policy</span>
                   </h3>
                   <p className="text-slate-600 text-sm font-medium">Use AI to improve your policies</p>
                 </div>
@@ -1692,8 +3237,8 @@ What would you like to do?`,
                 {/* Content Card */}
                 <div className="bg-white/80 backdrop-blur-xl border-2 border-blue-200/50 rounded-2xl p-8 shadow-xl">
                   <p className="text-slate-600 text-sm mb-6 font-medium">
-                    Ask questions or request changes to improve your policy
-                  </p>
+                  Ask questions or request changes to improve your policy
+                </p>
                 
                 <form onSubmit={handleFollowUp} className="space-y-4">
                   <textarea
@@ -1771,6 +3316,11 @@ What would you like to do?`,
               </div>
 
               <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50/30">
+                {chatHistory.length === 0 && !loading && (
+                  <div className="text-center text-slate-500 text-sm py-8">
+                    No messages yet. Start a conversation!
+                  </div>
+                )}
                 {chatHistory.map((msg, idx) => {
                   // Extract JSON blocks from markdown-style responses (```json ... ```)
                   const jsonBlockRegex = /```json\s*([\s\S]*?)```/g;
@@ -1791,7 +3341,7 @@ What would you like to do?`,
                   const hasJSON = jsonBlocks.length > 0;
                   
                   return (
-                    <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                    <div key={`msg-${msg.timestamp || idx}-${msg.role}`} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                       <div className={`max-w-[85%] ${
                         msg.role === 'user' 
                           ? 'bg-gradient-to-br from-blue-500/20 to-purple-500/20 border-2 border-blue-200/50' 
@@ -1802,9 +3352,155 @@ What would you like to do?`,
                             <Bot className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
                           )}
                           <div className="flex-1 space-y-3">
-                            {/* Text explanation (if any) */}
+                            {/* Text explanation (if any) - with markdown formatting */}
                             {hasText && (
-                              <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap font-medium">{textContent}</p>
+                              <div className="text-sm text-slate-700 leading-relaxed prose prose-sm max-w-none space-y-1">
+                                {textContent.split('\n').map((line, lineIdx) => {
+                                  // Parse markdown headers
+                                  if (line.match(/^##\s+/)) {
+                                    const headerText = line.replace(/^##\s+/, '').trim();
+                                    // Check if next non-empty line is JSON block or another header
+                                    const nextNonEmptyLine = textContent.split('\n').slice(lineIdx + 1).find(l => l.trim());
+                                    const isFollowedByJSON = nextNonEmptyLine?.includes('```json') || nextNonEmptyLine?.includes('{');
+                                    return (
+                                      <h3 key={lineIdx} className={`text-base font-bold text-slate-900 ${lineIdx === 0 ? 'mt-0' : 'mt-4'} ${isFollowedByJSON ? 'mb-1' : 'mb-2'}`}>
+                                        {headerText}
+                                      </h3>
+                                    );
+                                  }
+                                  if (line.match(/^###\s+/)) {
+                                    const headerText = line.replace(/^###\s+/, '').trim();
+                                    return (
+                                      <h4 key={lineIdx} className="text-sm font-bold text-slate-800 mt-3 mb-1.5">
+                                        {headerText}
+                                      </h4>
+                                    );
+                                  }
+                                  // Parse bold text (**text**)
+                                  if (line.includes('**')) {
+                                    const parts = line.split(/(\*\*[^*]+\*\*)/g);
+                                    return (
+                                      <p key={lineIdx} className="mb-2">
+                                        {parts.map((part, partIdx) => {
+                                          if (part.startsWith('**') && part.endsWith('**')) {
+                                            return <strong key={partIdx} className="font-bold text-slate-900">{part.slice(2, -2)}</strong>;
+                                          }
+                                          return <span key={partIdx}>{part}</span>;
+                                        })}
+                                      </p>
+                                    );
+                                  }
+                                  // Parse bullet points (- or •)
+                                  if (line.match(/^[-•*]\s+/)) {
+                                    const bulletText = line.replace(/^[-•*]\s+/, '').trim();
+                                    // Check if bullet text contains bold (**text**)
+                                    if (bulletText.includes('**')) {
+                                      const parts = bulletText.split(/(\*\*[^*]+\*\*)/g);
+                                    return (
+                                        <div key={lineIdx} className="flex items-start mb-2">
+                                          <span className="text-slate-500 mr-2 mt-0.5 flex-shrink-0">•</span>
+                                          <span className="flex-1">
+                                            {parts.map((part, partIdx) => {
+                                              if (part.startsWith('**') && part.endsWith('**')) {
+                                                return <strong key={partIdx} className="font-semibold text-slate-900">{part.slice(2, -2)}</strong>;
+                                              }
+                                              return <span key={partIdx}>{part}</span>;
+                                            })}
+                                          </span>
+                                        </div>
+                                      );
+                                    }
+                                    return (
+                                      <div key={lineIdx} className="flex items-start mb-2">
+                                        <span className="text-slate-500 mr-2 mt-0.5 flex-shrink-0">•</span>
+                                        <span className="flex-1">{bulletText}</span>
+                                      </div>
+                                    );
+                                  }
+                                  // Parse numbered lists (1. 2. etc.)
+                                  if (line.match(/^\d+\.\s+/)) {
+                                    const listText = line.replace(/^\d+\.\s+/, '').trim();
+                                    const number = line.match(/^\d+/)?.[0];
+                                    // Check if list text contains bold (**text**)
+                                    if (listText.includes('**')) {
+                                      const parts = listText.split(/(\*\*[^*]+\*\*)/g);
+                                    return (
+                                        <div key={lineIdx} className="flex items-start mb-2">
+                                          <span className="text-slate-500 mr-2 mt-0.5 font-semibold flex-shrink-0">{number}.</span>
+                                          <span className="flex-1">
+                                            {parts.map((part, partIdx) => {
+                                              if (part.startsWith('**') && part.endsWith('**')) {
+                                                return <strong key={partIdx} className="font-semibold text-slate-900">{part.slice(2, -2)}</strong>;
+                                              }
+                                              return <span key={partIdx}>{part}</span>;
+                                            })}
+                                          </span>
+                                        </div>
+                                      );
+                                    }
+                                    return (
+                                      <div key={lineIdx} className="flex items-start mb-2">
+                                        <span className="text-slate-500 mr-2 mt-0.5 font-semibold flex-shrink-0">{number}.</span>
+                                        <span className="flex-1">{listText}</span>
+                                      </div>
+                                    );
+                                  }
+                                  // Parse horizontal rules (---)
+                                  if (line.trim() === '---' || line.trim().match(/^-{3,}$/)) {
+                                    return (
+                                      <hr key={lineIdx} className="my-4 border-t-2 border-slate-200" />
+                                    );
+                                  }
+                                  // Regular paragraph
+                                  if (line.trim()) {
+                                    // Check if this is a numbered list item (1., 2., etc.) or bullet point
+                                    const isNumberedList = /^\d+\.\s+/.test(line.trim());
+                                    const isBulletPoint = /^[-•*]\s+/.test(line.trim());
+                                    const isBoldText = line.includes('**');
+                                    
+                                    if (isBoldText) {
+                                      // Parse bold text
+                                      const parts = line.split(/(\*\*[^*]+\*\*)/g);
+                                      return (
+                                        <p key={lineIdx} className="mb-2 last:mb-0 text-slate-700 leading-relaxed">
+                                          {parts.map((part, partIdx) => {
+                                            if (part.startsWith('**') && part.endsWith('**')) {
+                                              return <strong key={partIdx} className="font-bold text-slate-900">{part.slice(2, -2)}</strong>;
+                                            }
+                                            return <span key={partIdx}>{part}</span>;
+                                          })}
+                                        </p>
+                                      );
+                                    }
+                                    
+                                    if (isNumberedList || isBulletPoint) {
+                                      // Already handled above, but keep as fallback
+                                    return (
+                                      <p key={lineIdx} className="mb-2 last:mb-0 text-slate-700 leading-relaxed">
+                                        {line}
+                                      </p>
+                                    );
+                                  }
+                                    
+                                    return (
+                                      <p key={lineIdx} className="mb-2 last:mb-0 text-slate-700 leading-relaxed">
+                                        {line}
+                                      </p>
+                                    );
+                                  }
+                                  // Empty line - skip if previous line was a header or if next line is JSON
+                                  const prevLine = lineIdx > 0 ? textContent.split('\n')[lineIdx - 1] : '';
+                                  const nextLine = textContent.split('\n')[lineIdx + 1] || '';
+                                  const isAfterHeader = prevLine.match(/^##\s+/);
+                                  const isBeforeJSON = nextLine.includes('```json') || nextLine.trim().startsWith('{');
+                                  // Skip empty lines after headers or before JSON to prevent gaps
+                                  if (isAfterHeader || isBeforeJSON) {
+                                    return null;
+                                  }
+                                  // Only add spacing for meaningful empty lines
+                                  return <br key={lineIdx} />;
+                                })}
+                              </div>
                             )}
                             
                             {/* JSON blocks (both policies) */}
@@ -1813,8 +3509,8 @@ What would you like to do?`,
                                 const parsed = JSON.parse(jsonBlock);
                                 const isTrustPolicy = JSON.stringify(parsed).includes('"Principal"');
                                 return (
-                                  <div key={jsonIdx} className="bg-slate-100 rounded-lg p-3 border border-slate-200">
-                                    <div className="flex items-center justify-between mb-2">
+                                  <div key={jsonIdx} className={`bg-slate-100 rounded-lg p-3 border border-slate-200 ${jsonIdx === 0 ? 'mt-1' : 'mt-3'}`}>
+                                <div className="flex items-center justify-between mb-2">
                                       <span className="text-xs text-slate-500 font-mono font-semibold">
                                         {isTrustPolicy ? 'Trust Policy' : 'Permissions Policy'}
                                       </span>
@@ -1923,7 +3619,7 @@ What would you like to do?`,
               </div>
 
               <div className="p-4 border-t-2 border-slate-200/50 bg-white/80">
-                <form onSubmit={handleFollowUp} className="space-y-2">
+                <form onSubmit={(e) => handleFollowUp(e, true)} className="space-y-2">
                   <textarea
                     value={followUpMessage}
                     onChange={(e) => setFollowUpMessage(e.target.value)}

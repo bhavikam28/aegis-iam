@@ -11,9 +11,9 @@ import boto3
 from botocore.exceptions import ClientError, NoCredentialsError
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
-from fastmcp_client import get_mcp_client
-from security_validator import SecurityValidator
-from policy_scorer import calculate_policy_scores, generate_security_recommendations
+from core.fastmcp_client import get_mcp_client
+from features.validation.security_validator import SecurityValidator
+from features.validation.policy_scorer import calculate_policy_scores, generate_security_recommendations
 
 logging.basicConfig(level=logging.INFO)
 

@@ -54,6 +54,7 @@ export interface GeneratePolicyResponse {
   conversation_history?: ChatMessage[];
   is_question?: boolean;
   compliance_status?: Record<string, ComplianceFramework>;
+  security_findings?: SecurityFinding[];
   reasoning?: {
     plan: string;
     actions: string[];

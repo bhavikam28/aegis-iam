@@ -3,6 +3,7 @@ import TopNavbar from './TopNavbar';
 import GeneratePolicy from '../Pages/GeneratePolicy';
 import ValidatePolicy from '../Pages/ValidatePolicy';
 import AuditAccount from '../Pages/AuditAccount';
+import CICDIntegration from '../Pages/CICDIntegration';
 
 const Dashboard: React.FC<{ onReturnHome: () => void }> = ({ onReturnHome }) => {
   const [activeSection, setActiveSection] = useState('generate');
@@ -15,6 +16,8 @@ const Dashboard: React.FC<{ onReturnHome: () => void }> = ({ onReturnHome }) => 
         return <ValidatePolicy />;
       case 'audit':
         return <AuditAccount />;
+      case 'cicd':
+        return <CICDIntegration />;
       default:
         return <GeneratePolicy />;
     }

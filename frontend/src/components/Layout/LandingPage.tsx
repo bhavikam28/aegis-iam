@@ -98,30 +98,30 @@ const LandingPage: React.FC = () => {
               <span className="bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent text-xs sm:text-sm font-semibold uppercase tracking-wide">
                 AI-Powered IAM Security Platform
               </span>
-          </div>
+            </div>
 
             {/* Main Headline */}
             <h2 className="text-5xl sm:text-6xl lg:text-7xl xl:text-8xl font-extrabold mb-6 sm:mb-8 leading-tight tracking-tight">
               <span className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 bg-clip-text text-transparent">
                 Securing AWS IAM
               </span>
-            <br />
-              <span 
+              <br />
+              <span
                 className="bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent"
                 style={{
                   backgroundPosition: `${mousePosition.x * 0.01}% ${mousePosition.y * 0.01}%`,
                 }}
               >
                 Made Simple
-            </span>
-          </h2>
+              </span>
+            </h2>
 
             {/* Sub-headline */}
             <p className="text-lg sm:text-xl lg:text-2xl text-slate-600 max-w-3xl mx-auto mb-10 sm:mb-12 leading-relaxed font-medium">
               Prioritize and remediate IAM risks in your AWS account faster with the Aegis IAM Security Platform. 
               Generate secure policies, validate compliance, and autonomously audit your entire infrastructure—all powered by agentic AI.
             </p>
-
+ 
             {/* CTA Buttons */}
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-12 sm:mb-16">
               <button

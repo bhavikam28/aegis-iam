@@ -2,7 +2,7 @@ import logging
 import boto3
 import json
 from strands import tool
-from service_utils import get_service_principal, detect_service_from_description
+from utils.service_utils import get_service_principal, detect_service_from_description
 
 logging.basicConfig(level=logging.INFO)
 
@@ -20,10 +20,28 @@ def get_bedrock_client():
 
 
 @tool
-def generate_policy_from_bedrock(description: str, service: str) -> str:
-    """Generate IAM policies with GUARANTEED scoring - Direct Bedrock approach"""
+def generate_policy_from_bedrock(description: str, service: str, compliance: str = 'general') -> str:
+    """Generate IAM policies with GUARANTEED scoring - Direct Bedrock approach
+    
+    Args:
+        description: User's policy requirements description
+        service: AWS service (e.g., lambda, ec2, s3)
+        compliance: Compliance framework (general, pci-dss, hipaa, sox, gdpr, cis)
+    """
     
     bedrock = get_bedrock_client()
+    
+    # Compliance framework requirements mapping
+    compliance_requirements = {
+        'general': 'Follow AWS security best practices and least-privilege principles.',
+        'pci-dss': 'PCI DSS Compliance Requirements:\n- Implement least-privilege access (Requirement 7.1.2)\n- Require MFA for sensitive operations (Requirement 8.3)\n- Enable access logging and monitoring (Requirement 10)\n- Restrict access to cardholder data environments\n- Use resource-level permissions and conditions\n- Implement network segmentation principles',
+        'hipaa': 'HIPAA Compliance Requirements:\n- Implement access controls (164.308(a)(4))\n- Require encryption in transit and at rest (164.312(a)(2)(iv), 164.312(e)(2)(ii))\n- Enable audit logging and monitoring (164.312(b))\n- Restrict access to PHI (Protected Health Information)\n- Use least-privilege principles\n- Implement audit controls for access to ePHI',
+        'sox': 'SOX Compliance Requirements:\n- Implement access controls and segregation of duties\n- Enable comprehensive audit logging\n- Restrict access to financial data and systems\n- Require MFA for sensitive operations\n- Implement change management controls\n- Use least-privilege access principles',
+        'gdpr': 'GDPR Compliance Requirements:\n- Implement data minimization principles (Article 5)\n- Restrict access to personal data\n- Enable audit logging for data access\n- Use encryption for data protection\n- Implement access controls (Article 32)\n- Ensure data subject rights can be exercised',
+        'cis': 'CIS AWS Benchmarks Compliance:\n- Follow CIS Benchmark recommendations for IAM\n- Implement least-privilege access\n- Enable CloudTrail logging\n- Require MFA for sensitive operations\n- Use resource-level permissions\n- Implement security best practices'
+    }
+    
+    compliance_guidance = compliance_requirements.get(compliance.lower().replace('_', '-'), compliance_requirements['general'])
     
     # System prompt - Optimized for speed (reduced verbosity)
     system_prompt = """You are an AWS IAM policy generator. Generate secure IAM policies efficiently.
@@ -37,7 +55,8 @@ CRITICAL RULES:
 6. For S3: Separate bucket operations (ListBucket) and object operations (GetObject) into TWO statements
 7. Add CloudWatch Logs permissions for Lambda/ECS services
 8. Use {{ACCOUNT_ID}}, {{REGION}} placeholders when values not provided
-9. Be concise but complete - focus on essential information"""
+9. Be concise but complete - focus on essential information
+10. **CRITICAL**: Adhere to compliance framework requirements when specified"""
 
     # User prompt - Dynamic based on actual request
     user_prompt = f"""🚨🚨🚨 CRITICAL: YOU MUST RETURN BOTH POLICIES 🚨🚨🚨
@@ -59,8 +78,19 @@ Generate an IAM policy based on this request:
 
 **User Request:** {description}
 **AWS Service:** {service}
+**Compliance Framework:** {compliance.upper() if compliance != 'general' else 'General Security'}
 
-Analyze the request and generate appropriate policies.
+**Compliance Requirements:**
+{compliance_guidance}
+
+**CRITICAL**: The generated policy MUST adhere to the compliance framework requirements above. Include:
+- Appropriate condition keys (MFA, encryption, logging) as required
+- Least-privilege access controls
+- Resource-level restrictions
+- Audit logging permissions where needed
+- Any framework-specific security controls
+
+Analyze the request and generate appropriate policies that comply with the specified framework.
 
 🚨 REMINDER: YOU MUST INCLUDE BOTH PERMISSIONS POLICY **AND** TRUST POLICY 🚨
   "Version": "2012-10-17",
@@ -243,7 +273,7 @@ CRITICAL REMINDERS:
 
     body = json.dumps({
         "anthropic_version": "bedrock-2023-05-31",
-        "max_tokens": 4000,  # Optimized for speed (reduced from 8000 to 4000 - still sufficient for complete policies)
+        "max_tokens": 8000,  # Increased to ensure complete compliance responses and detailed explanations
         "system": system_prompt,  # Add system prompt here
         "messages": [{"role": "user", "content": [{"type": "text", "text": user_prompt}]}],
         "temperature": 0.1  # Low temperature for consistent, fast responses
@@ -282,7 +312,7 @@ CRITICAL REMINDERS:
         logging.info(f"   Output tokens: {output_tokens:,} → ${output_cost:.6f}")
         logging.info(f"   💵 ESTIMATED COST: ${total_cost:.6f} per request")
         logging.info(f"   Response length: {len(raw_response_text):,} chars")
-        logging.info(f"   Note: max_tokens={4000} is a LIMIT, not actual usage. You pay for {output_tokens:,} tokens generated.")
+        logging.info(f"   Note: max_tokens=8000 is a LIMIT, not actual usage. You pay for {output_tokens:,} tokens generated.")
         logging.info("CHECKING FOR REQUIRED SECTIONS:")
         logging.info("  Has Permissions Policy: {}".format("## Permissions Policy" in raw_response_text))
         logging.info("  Has Trust Policy: {}".format("## Trust Policy" in raw_response_text))
@@ -364,7 +394,7 @@ If user wants changes: Update the policy and output the SAME format as before wi
 
     body = json.dumps({
         "anthropic_version": "bedrock-2023-05-31",
-        "max_tokens": 4000,
+        "max_tokens": 8000,  # Increased to ensure complete compliance responses and detailed explanations
         "messages": [{"role": "user", "content": [{"type": "text", "text": prompt}]}],
         "temperature": 0.1
     })

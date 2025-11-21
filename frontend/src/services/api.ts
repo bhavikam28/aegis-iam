@@ -171,7 +171,8 @@ export const generatePolicy = async (
   }
 
   // Log response for debugging
-  console.log('Backend response text (first 500 chars):', responseText.substring(0, 500));
+  console.log('📥 Backend response text (first 1000 chars):', responseText.substring(0, 1000));
+  console.log('📥 Backend response length:', responseText.length);
   
   // Check if response is empty or null
   if (!responseText || responseText.trim() === '' || responseText.trim() === 'null') {
@@ -197,8 +198,10 @@ export const generatePolicy = async (
     throw new Error("Backend returned null or empty response. The server may have encountered an error. Please check backend logs.");
   }
   
-  console.log('Backend response parsed successfully:', {
+  console.log('✅ Backend response parsed successfully:', {
     hasFinalAnswer: !!backendResponse.final_answer,
+    finalAnswerLength: backendResponse.final_answer?.length || 0,
+    finalAnswerPreview: backendResponse.final_answer?.substring(0, 200) || 'EMPTY',
     hasPolicy: !!backendResponse.policy,
     hasTrustPolicy: !!backendResponse.trust_policy,
     conversationId: backendResponse.conversation_id
@@ -223,7 +226,9 @@ export const generatePolicy = async (
     throw new Error("No response received from the agent backend.");
   }
 
-  if (backendResponse.is_question || !backendResponse.policy) {
+  // Only treat as question if explicitly marked as question AND no policies
+  // Explanation responses have is_question: false and should preserve policies
+  if (backendResponse.is_question === true && !backendResponse.policy && !backendResponse.trust_policy) {
     return {
       conversation_id: backendResponse.conversation_id,
       final_answer: messageContent,
@@ -264,7 +269,9 @@ export const generatePolicy = async (
     score_breakdown: backendResponse.score_breakdown || { permissions: { positive: [], improvements: [] }, trust: { positive: [], improvements: [] } },
     security_features: backendResponse.security_features || { permissions: [], trust: [] },
     refinement_suggestions: backendResponse.refinement_suggestions || { permissions: [], trust: [] },
-    conversation_history: backendResponse.conversation_history || []
+    conversation_history: backendResponse.conversation_history || [],
+    compliance_status: backendResponse.compliance_status || {},
+    security_findings: backendResponse.security_findings || []
   };
 };
 

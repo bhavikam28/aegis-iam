@@ -1,0 +1,141 @@
+name: IAM Policy Security Check
+
+on:
+  pull_request:
+    paths:
+      - '**/*.tf'
+      - '**/*.yaml'
+      - '**/*.yml'
+      - '**/*.json'
+      - '**/*.ts'
+      - '**/*.py'
+
+jobs:
+  check-iam-policies:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # Fetch full history for diff
+
+      - name: Get changed files
+        id: changed-files
+        uses: tj-actions/changed-files@v35
+        with:
+          files: |
+            **/*.tf
+            **/*.yaml
+            **/*.yml
+            **/*.json
+            **/*.ts
+            **/*.py
+
+      - name: Analyze IAM Policies
+        id: analyze
+        uses: actions/github-script@v6
+        env:
+          AEGIS_API_URL: ${{ secrets.AEGIS_API_URL }}
+        with:
+          script: |
+            const fs = require('fs');
+            const changedFiles = '${{ steps.changed-files.outputs.all_changed_files }}'.split(' ').filter(f => f);
+            
+            const files = [];
+            for (const file of changedFiles) {
+              if (file && fs.existsSync(file)) {
+                try {
+                  const content = fs.readFileSync(file, 'utf8');
+                  files.push({
+                    path: file,
+                    content: content,
+                    status: 'modified'
+                  });
+                } catch (e) {
+                  console.log(`Skipping ${file}: ${e.message}`);
+                }
+              }
+            }
+            
+            if (files.length === 0) {
+              console.log('No IAM policy files changed');
+              core.setOutput('analysis', JSON.stringify({ success: false, message: 'No IAM policy files found' }));
+              return;
+            }
+            
+            const response = await fetch(process.env.AEGIS_API_URL + '/api/cicd/analyze', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                changed_files: files,
+                lookback_days: 90,
+                aws_region: 'us-east-1'
+              })
+            });
+            
+            const analysis = await response.json();
+            core.setOutput('analysis', JSON.stringify(analysis));
+
+      - name: Generate PR Comment
+        uses: actions/github-script@v6
+        env:
+          ANALYSIS: ${{ steps.analyze.outputs.analysis }}
+          AEGIS_API_URL: ${{ secrets.AEGIS_API_URL }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const analysis = JSON.parse(process.env.ANALYSIS);
+            
+            if (!analysis.success && analysis.message) {
+              console.log('Skipping comment generation:', analysis.message);
+              return;
+            }
+            
+            const commentResponse = await fetch(process.env.AEGIS_API_URL + '/api/cicd/generate-comment', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ analysis })
+            });
+            
+            const { comment } = await commentResponse.json();
+            
+            // Check if comment already exists
+            const existingComments = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number
+            });
+            
+            const botComment = existingComments.data.find(c => 
+              c.user.type === 'Bot' && c.body.includes('IAM Policy Security Analysis')
+            );
+            
+            if (botComment) {
+              // Update existing comment
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: comment
+              });
+            } else {
+              // Create new comment
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: comment
+              });
+            }
+            
+            // Check for critical issues and fail if found
+            const analysisData = analysis.analysis || {};
+            const hasCritical = analysisData.has_critical_issues || false;
+            const riskScore = analysisData.risk_score || 0;
+            
+            if (hasCritical) {
+              core.setFailed('🚨 BLOCKING: Critical security issues detected. This PR cannot be merged until issues are resolved.');
+            } else if (riskScore >= 70) {
+              core.setFailed('⚠️ High-risk issues detected. Please review and address before merging.');
+            }
+

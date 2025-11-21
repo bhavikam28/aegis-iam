@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Shield, Search, Scan, Menu, X, Home } from 'lucide-react';
+import { Shield, Search, Scan, Menu, X, Home, GitBranch } from 'lucide-react';
 import PremiumLogo from '../UI/PremiumLogo';
 
 interface TopNavbarProps {
@@ -35,6 +35,11 @@ const TopNavbar: React.FC<TopNavbarProps> = ({ activeSection, onSectionChange, o
       id: 'audit',
       title: 'Audit Account',
       icon: Scan,
+    },
+    {
+      id: 'cicd',
+      title: 'CI/CD Integration',
+      icon: GitBranch,
     }
   ];
 
@@ -83,7 +88,7 @@ const TopNavbar: React.FC<TopNavbarProps> = ({ activeSection, onSectionChange, o
                     key={section.id}
                     onClick={() => handleSectionChange(section.id)}
                     className={`
-                      relative px-6 py-3 rounded-xl font-bold text-sm
+                      relative px-4 py-3 rounded-xl font-bold text-xs whitespace-nowrap
                       transition-all duration-300 flex items-center space-x-2.5 group
                       ${isActive
                         ? 'bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white shadow-2xl shadow-purple-500/40 scale-105'
@@ -141,7 +146,7 @@ const TopNavbar: React.FC<TopNavbarProps> = ({ activeSection, onSectionChange, o
                     key={section.id}
                     onClick={() => handleSectionChange(section.id)}
                     className={`
-                      w-full px-5 py-4 rounded-xl font-bold text-base
+                      w-full px-5 py-4 rounded-xl font-bold text-sm whitespace-nowrap
                       transition-all duration-300 flex items-center space-x-3 group
                       ${isActive
                         ? 'bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white shadow-2xl shadow-purple-500/40'

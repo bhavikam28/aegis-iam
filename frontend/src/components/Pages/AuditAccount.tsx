@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Scan, Shield, Activity, Database, Users, Lock, AlertTriangle, CheckCircle, Zap, Target, TrendingUp, Clock, Play, ChevronRight, XCircle, AlertCircle, Download, RefreshCw, Code, Eye, Settings, Info } from 'lucide-react';
+import { saveToStorage, loadFromStorage, STORAGE_KEYS } from '../../utils/persistence';
 
 interface AuditSummary {
   total_roles: number;
@@ -67,6 +68,57 @@ const AuditAccount: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [findingsPerPage] = useState(25);
   const [groupBy, setGroupBy] = useState<'none' | 'severity' | 'role'>('severity');
+
+  // ============================================
+  // PERSISTENCE: Load saved state on mount
+  // ============================================
+  useEffect(() => {
+    const saved = loadFromStorage<{
+      auditResults: AuditResponse | null;
+      chatMessages: Array<{role: 'user' | 'assistant', content: string}>;
+      selectedFindings: number[];
+      severityFilter: string;
+      roleFilter: string;
+      searchQuery: string;
+      viewMode: 'detailed' | 'compact';
+      currentPage: number;
+      groupBy: 'none' | 'severity' | 'role';
+    }>(STORAGE_KEYS.AUDIT_ACCOUNT);
+
+    if (saved) {
+      console.log('🔄 Restoring saved Audit Account state');
+      setAuditResults(saved.auditResults);
+      setChatMessages(saved.chatMessages || []);
+      setSelectedFindings(new Set(saved.selectedFindings || []));
+      setSeverityFilter(saved.severityFilter || 'all');
+      setRoleFilter(saved.roleFilter || 'all');
+      setSearchQuery(saved.searchQuery || '');
+      setViewMode(saved.viewMode || 'compact');
+      setCurrentPage(saved.currentPage || 1);
+      setGroupBy(saved.groupBy || 'severity');
+    }
+  }, []); // Only run on mount
+
+  // ============================================
+  // PERSISTENCE: Save state whenever it changes
+  // ============================================
+  useEffect(() => {
+    // Only save if we have meaningful data (audit results or chat)
+    if (auditResults || chatMessages.length > 0) {
+      const stateToSave = {
+        auditResults,
+        chatMessages,
+        selectedFindings: Array.from(selectedFindings),
+        severityFilter,
+        roleFilter,
+        searchQuery,
+        viewMode,
+        currentPage,
+        groupBy
+      };
+      saveToStorage(STORAGE_KEYS.AUDIT_ACCOUNT, stateToSave, 24); // 24 hours expiry
+    }
+  }, [auditResults, chatMessages, selectedFindings, severityFilter, roleFilter, searchQuery, viewMode, currentPage, groupBy]);
 
   const handleStartAudit = async () => {
     setIsAuditing(true);

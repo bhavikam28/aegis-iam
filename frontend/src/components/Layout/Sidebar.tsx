@@ -1,5 +1,5 @@
 import React from 'react';
-import { Shield, Search, Scan } from 'lucide-react';
+import { Shield, Search, Scan, GitBranch } from 'lucide-react';
 
 interface SidebarProps {
   activeSection: string;
@@ -23,6 +23,11 @@ const Sidebar: React.FC<SidebarProps> = ({ activeSection, onSectionChange, onRet
       id: 'audit',
       title: 'Audit Account',
       icon: Scan,
+    },
+    {
+      id: 'cicd',
+      title: 'CI/CD Integration',
+      icon: GitBranch,
     }
   ];
 

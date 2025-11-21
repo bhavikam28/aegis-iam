@@ -2,18 +2,29 @@
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, JSONResponse
 from pydantic import BaseModel, field_validator
-from typing import Optional, List, Dict
-from policy_agent import PolicyAgent
-from validator_agent import ValidatorAgent
-from audit_agent import AuditAgent
-from service_utils import validate_service, detect_service_from_description
-from aws_validator import extract_and_validate_aws_values, validate_aws_region, validate_account_id
+from typing import Optional, List, Dict, Any
+# Feature imports
+from features.policy_generation.policy_agent import PolicyAgent
+from features.validation.validator_agent import ValidatorAgent
+from features.audit.audit_agent import AuditAgent
+from features.cicd.cicd_analyzer import CICDAnalyzer
+from features.cicd.pr_comment_generator import PRCommentGenerator
+from features.cicd.webhook_manager import webhook_manager
+from features.cicd.github_app import github_app
+from features.cicd.github_client import GitHubClient
+
+# Utility imports
+from utils.service_utils import validate_service, detect_service_from_description
+from utils.aws_validator import extract_and_validate_aws_values, validate_aws_region, validate_account_id
+from features.validation.policy_scorer import calculate_policy_scores, generate_score_breakdown, generate_security_recommendations
+
+# Standard library imports
 import uuid
 import json
 import re
 import logging
 import asyncio
-from policy_scorer import calculate_policy_scores, generate_score_breakdown, generate_security_recommendations
+import os
 
 logging.basicConfig(level=logging.INFO)
 
@@ -101,16 +112,114 @@ def extract_score_breakdown(text: str) -> dict:
                     if line.strip() and (line.strip().startswith('-') or line.strip().startswith('•'))
                 ]
         
-        logging.info(f"✅ Score breakdown extracted:")
-        logging.info(f"   Permissions Positive: {len(breakdown['permissions']['positive'])} items")
-        logging.info(f"   Permissions Improvements: {len(breakdown['permissions']['improvements'])} items")
-        logging.info(f"   Trust Positive: {len(breakdown['trust']['positive'])} items")
-        logging.info(f"   Trust Improvements: {len(breakdown['trust']['improvements'])} items")
+        logging.debug(f"✅ Score breakdown extracted:")
+        logging.debug(f"   Permissions Positive: {len(breakdown['permissions']['positive'])} items")
+        logging.debug(f"   Permissions Improvements: {len(breakdown['permissions']['improvements'])} items")
+        logging.debug(f"   Trust Positive: {len(breakdown['trust']['positive'])} items")
+        logging.debug(f"   Trust Improvements: {len(breakdown['trust']['improvements'])} items")
             
     except Exception as e:
         logging.error(f"❌ Error extracting score breakdown: {e}")
     
     return breakdown
+
+def generate_permissions_explanation(policy: dict) -> str:
+    """Generate a well-formatted, readable text explanation of a permissions policy"""
+    if not policy or 'Statement' not in policy:
+        return "No permissions policy provided."
+    
+    explanations = []
+    for idx, statement in enumerate(policy.get('Statement', []), 1):
+        sid = statement.get('Sid', f'Statement{idx}')
+        effect = statement.get('Effect', 'Allow')
+        actions = statement.get('Action', [])
+        resources = statement.get('Resource', [])
+        conditions = statement.get('Condition', {})
+        
+        if isinstance(actions, str):
+            actions = [actions]
+        if isinstance(resources, str):
+            resources = [resources]
+        
+        # Format actions nicely
+        if len(actions) <= 3:
+            action_str = ', '.join(actions)
+        else:
+            action_str = ', '.join(actions[:3]) + f', and {len(actions) - 3} more action(s)'
+        
+        # Format resources nicely
+        resource_display = []
+        for r in resources[:3]:
+            if isinstance(r, str):
+                if 'arn:aws:' in r:
+                    # Extract meaningful part
+                    parts = r.split(':')
+                    if len(parts) >= 6:
+                        service = parts[2]
+                        resource_type = parts[5].split('/')[0] if '/' in parts[5] else parts[5]
+                        resource_display.append(f"{service} {resource_type}")
+                    else:
+                        resource_display.append(r.split('/')[-1] if '/' in r else r)
+                else:
+                    resource_display.append(r)
+        
+        if len(resources) > 3:
+            resource_str = ', '.join(resource_display) + f', and {len(resources) - 3} more resource(s)'
+        else:
+            resource_str = ', '.join(resource_display) if resource_display else 'specified resources'
+        
+        # Build readable explanation
+        explanation = f"""**{idx}. {sid}**
+
+**Permissions:** {action_str}
+
+**Resources:** {resource_str}
+
+**Purpose:** This statement allows {effect.lower()} access to perform the specified actions on the listed resources."""
+        
+        if conditions:
+            explanation += f"\n\n**Conditions:** Additional security conditions are applied to restrict when these permissions can be used."
+        
+        explanations.append(explanation)
+    
+    header = "## Permissions Policy Explanation\n\nThis policy defines what actions can be performed and on which resources. Here's what each statement does:\n\n"
+    return header + '\n\n---\n\n'.join(explanations) if explanations else "No statements found in policy."
+
+
+def generate_trust_explanation(trust_policy: dict) -> str:
+    """Generate a well-formatted, readable text explanation of a trust policy"""
+    if not trust_policy or 'Statement' not in trust_policy:
+        return "No trust policy provided."
+    
+    statement = trust_policy.get('Statement', [{}])[0]
+    principal = statement.get('Principal', {})
+    conditions = statement.get('Condition', {})
+    
+    if isinstance(principal, dict):
+        service = principal.get('Service', 'Unknown service')
+        if isinstance(service, list):
+            service = service[0] if service else 'Unknown service'
+    else:
+        service = str(principal)
+    
+    explanation = f"""## Trust Policy Explanation
+
+**Trusted Entity:** {service}
+
+**What This Means:** Only the {service} service can assume this IAM role and use the permissions defined in the permissions policy. This is a critical security control that prevents other AWS services, external entities, or unauthorized accounts from using these permissions.
+
+**How It Works:** When you associate this role with a resource (like a Lambda function), AWS automatically handles the role assumption process when that resource executes. The resource receives temporary credentials with the permissions defined in the permissions policy.
+
+**Security Benefits:** 
+- Prevents unauthorized access: Even if someone obtained credentials, they cannot assume this role unless they are the {service} service
+- Enforces service boundaries: Only the intended AWS service can use these permissions
+- Reduces attack surface: Limits who can potentially use these permissions"""
+    
+    if conditions:
+        explanation += f"\n\n**Additional Security Conditions:** This trust policy includes conditions that further restrict when and how the role can be assumed."
+    
+    return explanation
+
 
 def fix_s3_statement_separation(policy: dict) -> dict:
     """
@@ -163,7 +272,7 @@ def fix_s3_statement_separation(policy: dict) -> dict:
                 if statement.get('Condition'):
                     bucket_statement['Condition'] = statement['Condition']
                 fixed_statements.append(bucket_statement)
-                logging.info(f"✅ Created separate bucket statement: {bucket_statement['Sid']} with {len(bucket_actions)} actions")
+                logging.debug(f"✅ Created separate bucket statement: {bucket_statement['Sid']} with {len(bucket_actions)} actions")
             
             # Object statement - Preserve ALL object-related actions
             if object_resources:
@@ -185,7 +294,7 @@ def fix_s3_statement_separation(policy: dict) -> dict:
                 if statement.get('Condition'):
                     object_statement['Condition'] = statement['Condition']
                 fixed_statements.append(object_statement)
-                logging.info(f"✅ Created separate object statement: {object_statement['Sid']} with {len(object_actions)} actions")
+                logging.debug(f"✅ Created separate object statement: {object_statement['Sid']} with {len(object_actions)} actions")
         else:
             # No mixing, keep as is
             fixed_statements.append(statement)
@@ -239,6 +348,7 @@ class AuditRequest(BaseModel):
     compliance_frameworks: Optional[List[str]] = ["pci_dss", "hipaa", "sox", "gdpr", "cis"]
 
 conversations: Dict[str, List[Dict]] = {}
+conversation_cache: Dict[str, Dict[str, Any]] = {}
 aegis_agent = PolicyAgent()
 validator_agent = ValidatorAgent()
 
@@ -251,15 +361,36 @@ def health():
         "features": ["policy_generation", "validation", "autonomous_audit"]
     }
 
+@app.get("/test-response")
+def test_response():
+    """Test endpoint to verify JSONResponse works"""
+    test_data = {
+        "conversation_id": "test-123",
+        "final_answer": "This is a test response",
+        "message_count": 1,
+        "policy": None,
+        "trust_policy": None
+    }
+    logging.info(f"🧪 Test endpoint returning: {test_data}")
+    return JSONResponse(content=test_data)
+
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
-    logging.info(f"Incoming request: {request.method} {request.url}")
+    logging.info(f"📥 Incoming request: {request.method} {request.url}")
     try:
         response = await call_next(request)
-        logging.info(f"Response status: {response.status_code}")
+        logging.info(f"📤 Outgoing response: status={response.status_code}, type={type(response)}")
+        # Log response body size if it's a JSONResponse
+        if hasattr(response, 'body'):
+            try:
+                body_size = len(response.body) if response.body else 0
+                logging.info(f"   Response body size: {body_size} bytes")
+            except:
+                pass
         return response
     except Exception as e:
-        logging.error(f"Request failed: {str(e)}")
+        logging.error(f"❌ Request failed: {str(e)}")
+        logging.exception(e)
         raise
 
 # ============================================
@@ -269,6 +400,311 @@ async def log_requests(request: Request, call_next):
 @app.post("/generate")
 async def generate(request: GenerationRequest):
     """Generate IAM policy with separate scoring for permissions and trust policies"""
+    logging.info(f"🚀 /generate endpoint called")
+    logging.info(f"   Request description length: {len(request.description)}")
+    logging.info(f"   Is followup: {request.is_followup}")
+    logging.info(f"   Conversation ID: {request.conversation_id}")
+    
+    # CRITICAL: Wrap entire function to ensure we always return a response
+    try:
+        result = await _generate_internal(request)
+        logging.info(f"✅ _generate_internal returned, type: {type(result)}")
+        if isinstance(result, JSONResponse):
+            logging.info(f"   JSONResponse status: {result.status_code}")
+        return result
+    except Exception as outer_error:
+        logging.error(f"❌ CRITICAL: Outer exception handler caught error: {outer_error}")
+        logging.exception(outer_error)
+        # Return guaranteed minimal response as plain dict (let FastAPI serialize)
+        error_response = {
+            "conversation_id": str(uuid.uuid4()),
+            "final_answer": f"An error occurred: {str(outer_error)[:200]}. Please try again.",
+            "error": str(outer_error)[:200],
+            "message_count": 1,
+            "policy": None,
+            "trust_policy": None
+        }
+        logging.info(f"⚠️ Returning error response from outer handler: {error_response}")
+        return error_response  # Return dict, not JSONResponse - let FastAPI handle it
+
+def _ensure_list(value: Any) -> List[Any]:
+    if isinstance(value, list):
+        return value
+    if value is None:
+        return []
+    return [value]
+
+
+def _policy_has_condition(policy: Optional[Dict[str, Any]], condition_key: str) -> bool:
+    if not policy:
+        return False
+    statements = _ensure_list(policy.get("Statement", []))
+    for statement in statements:
+        conditions = statement.get("Condition", {})
+        if not isinstance(conditions, dict):
+            continue
+        for condition_type, entries in conditions.items():
+            if isinstance(entries, dict):
+                for key, value in entries.items():
+                    if key.lower() == condition_key.lower():
+                        # Treat both string and list values
+                        if isinstance(value, str):
+                            if value.lower() in ("true", "1", "required", "enabled"):
+                                return True
+                        else:
+                            return True
+    return False
+
+
+def _policy_has_action(policy: Optional[Dict[str, Any]], service_prefix: str) -> bool:
+    if not policy:
+        return False
+    statements = _ensure_list(policy.get("Statement", []))
+    for statement in statements:
+        actions = statement.get("Action")
+        for action in _ensure_list(actions):
+            if isinstance(action, str) and action.lower().startswith(service_prefix.lower()):
+                return True
+    return False
+
+
+def _trust_policy_has_condition(trust_policy: Optional[Dict[str, Any]], condition_key: str) -> bool:
+    if not trust_policy:
+        return False
+    statements = _ensure_list(trust_policy.get("Statement", []))
+    for statement in statements:
+        conditions = statement.get("Condition", {})
+        if not isinstance(conditions, dict):
+            continue
+        for _, entries in conditions.items():
+            if isinstance(entries, dict):
+                for key, _ in entries.items():
+                    if key.lower() == condition_key.lower():
+                        return True
+    return False
+
+
+def _extract_account_id_from_policy(policy: Optional[Dict[str, Any]]) -> Optional[str]:
+    if not policy:
+        return None
+    statements = _ensure_list(policy.get("Statement", []))
+    for statement in statements:
+        resources = statement.get("Resource")
+        for resource in _ensure_list(resources):
+            if isinstance(resource, str):
+                match = re.match(r"arn:aws:[^:]+:[^:]*:(\d{12}):", resource)
+                if match:
+                    return match.group(1)
+    return None
+
+
+def _extract_region_from_policy(policy: Optional[Dict[str, Any]]) -> Optional[str]:
+    if not policy:
+        return None
+    statements = _ensure_list(policy.get("Statement", []))
+    for statement in statements:
+        resources = statement.get("Resource")
+        for resource in _ensure_list(resources):
+            if isinstance(resource, str):
+                match = re.match(r"arn:aws:[^:]+:([a-z0-9-]+):\d{12}:", resource)
+                if match:
+                    return match.group(1)
+    return None
+
+
+def build_compliance_help_text(
+    policy: Dict[str, Any],
+    trust_policy: Dict[str, Any],
+    compliance_status: Dict[str, Any],
+    selected_framework: Optional[str] = None,
+) -> str:
+    account_id = _extract_account_id_from_policy(policy) or "{{ACCOUNT_ID}}"
+    region = _extract_region_from_policy(policy) or "{{REGION}}"
+
+    secure_transport = _policy_has_condition(policy, "aws:SecureTransport")
+    source_account = _trust_policy_has_condition(trust_policy, "aws:SourceAccount")
+    encryption_at_rest = (
+        _policy_has_condition(policy, "dynamodb:EncryptionType")
+        or _policy_has_condition(policy, "kms:ViaService")
+        or _policy_has_condition(policy, "kms:EncryptionContext")
+    )
+    region_restriction = _policy_has_condition(policy, "aws:RequestedRegion")
+    audit_logging = _policy_has_action(policy, "cloudtrail:")
+
+    improvements = [
+        {
+            "title": "Enforce Encryption in Transit",
+            "details": (
+                "Current DynamoDB and CloudWatch statements do not require TLS. "
+                "Add a Bool or BoolIfExists condition such as `\"aws:SecureTransport\": \"true\"` "
+                "to every statement so traffic is forced over HTTPS and aligns with PCI DSS requirement 4.2."
+            )
+            if not secure_transport
+            else "You already enforce `aws:SecureTransport` in at least one statement. Double-check every data path, especially DynamoDB and logging APIs, to keep TLS mandatory.",
+        },
+        {
+            "title": "Add Source Account Restriction to Trust Policy",
+            "details": (
+                f"The current trust policy allows ecs-tasks.amazonaws.com to assume the role without verifying the account. "
+                f"Add a `StringEquals` condition for `\"aws:SourceAccount\": \"{account_id}\"` to prevent cross-account abuse and satisfy CIS controls."
+            )
+            if not source_account
+            else f"`aws:SourceAccount` is already present. Confirm it matches `{account_id}` and consider pairing it with `aws:SourceArn` for specific ECS services.",
+        },
+        {
+            "title": "Add Encryption at Rest Requirements",
+            "details": (
+                "DynamoDB access is not tied to a KMS key or encryption condition. "
+                "Use `dynamodb:EncryptionType` or enforce an AWS KMS key ARN so data stored in `user-sessions` remains encrypted at rest per GDPR/HIPAA."
+            )
+            if not encryption_at_rest
+            else "Encryption conditions are already referenced. Ensure the KMS keys are customer managed and mapped to the tables handling sensitive data.",
+        },
+        {
+            "title": "Region Restriction for Geographical Compliance",
+            "details": (
+                f"Calls can be made from any region today. Add an `aws:RequestedRegion` condition locked to `{region}` (or approved regions) "
+                "to satisfy residency requirements such as GDPR Article 44 and limit blast radius."
+            )
+            if not region_restriction
+            else f"`aws:RequestedRegion` conditions exist. Review them when granting multi-region failover so they always reflect the approved footprint ({region}).",
+        },
+        {
+            "title": "Enhance Audit Logging",
+            "details": (
+                "Grant read-only CloudTrail permissions (for example `cloudtrail:LookupEvents`) or send events to a dedicated logging role "
+                "so you can demonstrate traceability for SOX and SOC 2. Pair this with the existing CloudWatch Logs statements."
+            )
+            if not audit_logging
+            else "CloudTrail permissions are already scoped. Confirm trails cover DynamoDB data events and retain logs per your compliance window.",
+        },
+    ]
+
+    lines = ["## Key Policy Improvements for Compliance", ""]
+    for idx, item in enumerate(improvements, 1):
+        lines.append(f"{idx}. {item['title']}")
+        lines.append(item["details"])
+        lines.append("")
+
+    if compliance_status:
+        lines.append("### Current Compliance Status Snapshot")
+        lines.append(format_compliance_status(compliance_status))
+        lines.append("")
+
+    if selected_framework and selected_framework != "general":
+        lines.append(
+            f"These recommendations align with the {selected_framework.upper()} control set you selected. "
+            "Apply them via the Refine Policy section or ask for an automatic update."
+        )
+    else:
+        lines.append(
+            "Select a framework in Quick Actions to validate these improvements against PCI DSS, HIPAA, SOX, GDPR, or CIS."
+        )
+
+    return "\n".join(line for line in lines if line is not None).strip()
+
+
+def build_compliance_help_followup(
+    conversation_id: str,
+    cached: Dict[str, Any],
+    previous_response: Optional[Dict[str, Any]],
+    request: GenerationRequest,
+) -> Dict[str, Any]:
+    # Get policies from cache - try both cached and previous_response
+    policy = None
+    trust_policy = None
+    if cached:
+        policy = cached.get("policy")
+        trust_policy = cached.get("trust_policy")
+    if not policy and previous_response:
+        policy = previous_response.get("policy")
+    if not trust_policy and previous_response:
+        trust_policy = previous_response.get("trust_policy")
+    
+    # Log for debugging
+    logging.debug(f"🔍 Compliance help - Policy found: {policy is not None}, Trust policy found: {trust_policy is not None}")
+    logging.debug(f"   Cached keys: {list(cached.keys()) if cached else 'No cache'}")
+    logging.debug(f"   Previous response keys: {list(previous_response.keys()) if previous_response else 'No previous response'}")
+
+    if not policy:
+        final_text = (
+            "I need a generated policy before I can map compliance controls. "
+            "Please run Generate Policy first, then ask for compliance help again."
+        )
+    else:
+        compliance_status = cached.get("compliance_status", {})
+        if not compliance_status and previous_response:
+            compliance_status = previous_response.get("compliance_status", {})
+        selected_framework = (
+            (request.compliance if hasattr(request, "compliance") else None)
+            or cached.get("selected_compliance")
+            or (previous_response.get("selected_compliance") if previous_response else None)
+            or "general"
+        )
+        final_text = build_compliance_help_text(
+            policy,
+            trust_policy or {},
+            compliance_status or {},
+            selected_framework,
+        )
+
+    permissions_score = cached.get("permissions_score", 0)
+    trust_score = cached.get("trust_score", 0)
+    overall_score = cached.get("overall_score", 0)
+    if previous_response:
+        permissions_score = permissions_score or previous_response.get("permissions_score", 0)
+        trust_score = trust_score or previous_response.get("trust_score", 0)
+        overall_score = overall_score or previous_response.get("overall_score", 0)
+
+    assistant_message = {
+        "role": "assistant",
+        "content": final_text,
+        "timestamp": str(uuid.uuid4()),
+    }
+    conversations.setdefault(conversation_id, []).append(assistant_message)
+
+    compliance_status_payload = cached.get("compliance_status", {})
+    if not compliance_status_payload and previous_response:
+        compliance_status_payload = previous_response.get("compliance_status", {})
+
+    return {
+        "conversation_id": conversation_id,
+        "final_answer": final_text,
+        "message_count": len(conversations.get(conversation_id, [])),
+        "policy": policy,
+        "trust_policy": trust_policy,
+        "explanation": cached.get("explanation", previous_response.get("explanation") if previous_response else ""),
+        "trust_explanation": cached.get(
+            "trust_explanation",
+            previous_response.get("trust_explanation") if previous_response else "",
+        ),
+        "permissions_score": permissions_score,
+        "trust_score": trust_score,
+        "overall_score": overall_score,
+        "security_notes": cached.get(
+            "security_notes",
+            previous_response.get("security_notes", {"permissions": [], "trust": []}) if previous_response else {"permissions": [], "trust": []},
+        ),
+        "score_breakdown": cached.get(
+            "score_breakdown",
+            previous_response.get("score_breakdown", {}) if previous_response else {},
+        ),
+        "security_features": cached.get(
+            "security_features",
+            previous_response.get("security_features", {"permissions": [], "trust": []}) if previous_response else {"permissions": [], "trust": []},
+        ),
+        "refinement_suggestions": cached.get(
+            "refinement_suggestions",
+            previous_response.get("refinement_suggestions", {"permissions": [], "trust": []}) if previous_response else {"permissions": [], "trust": []},
+        ),
+        "is_question": False,
+        "conversation_history": conversations.get(conversation_id, []),
+        "compliance_status": compliance_status_payload,
+    }
+
+
+async def _generate_internal(request: GenerationRequest):
+    """Internal generate function - actual implementation"""
     # Initialize variables to ensure they exist
     conversation_id = None
     final_message = ""
@@ -303,24 +739,30 @@ async def generate(request: GenerationRequest):
     }
     
     try:
-        logging.info(f"🚀 GENERATE ENDPOINT STARTED - Request validation passed")
-        logging.info(f"   Request object type: {type(request)}")
-        logging.info(f"   Request description length: {len(request.description) if request.description else 0}")
-        logging.info(f"   Request service: {request.service}")
-        logging.info(f"🚀 GENERATE ENDPOINT CALLED")
-        logging.info(f"   ├─ Description: {request.description[:100]}...")
-        logging.info(f"   ├─ Service (initial): {request.service}")
-        logging.info(f"   ├─ Is followup: {request.is_followup}")
+        conversation_id = request.conversation_id or str(uuid.uuid4())
+        logging.info(
+            "generate request received: conversation_id=%s service=%s followup=%s description_len=%s",
+            conversation_id,
+            request.service,
+            request.is_followup,
+            len(request.description) if request.description else 0,
+        )
+
+        previous_response = conversation_cache.get(conversation_id)
         
-        # Auto-detect service if not provided or invalid
+        # For follow-up requests, preserve the original service from cache instead of re-detecting
+        if request.is_followup and previous_response:
+            cached_service = previous_response.get("service")
+            if cached_service and validate_service(cached_service):
+                request.service = cached_service
+                logging.debug("✅ Using cached service from previous request: %s", request.service)
+        
+        # Auto-detect service if not provided or invalid (only for new requests or if cache doesn't have service)
         if not request.service or request.service == 'lambda' or not validate_service(request.service):
             detected_service = detect_service_from_description(request.description)
             if detected_service and detected_service != request.service:
                 request.service = detected_service
-                logging.info(f"   ├─ Service (detected): {request.service}")
-        
-        conversation_id = request.conversation_id or str(uuid.uuid4())
-        logging.info(f"   └─ Conversation ID: {conversation_id}")
+                logging.debug("service auto-detected as %s", request.service)
         
         if conversation_id not in conversations:
             conversations[conversation_id] = []
@@ -337,230 +779,539 @@ async def generate(request: GenerationRequest):
         # REMOVED: "More Details" page - Always generate policies with placeholders if details are missing
         # The AI agent will automatically use {{ACCOUNT_ID}} and {{REGION}} placeholders when needed
         # This prevents user frustration and keeps the flow smooth
-        logging.info(f"✅ Proceeding with policy generation - AI will use placeholders if account/region not provided")
+        logging.debug("proceeding with policy generation using placeholders when needed")
         
         # Build prompt - if followup, use conversation context
         # Let the AI agent intelligently interpret user intent (no hardcoded phrase matching!)
         prompt = request.description
-        logging.info(f"📝 Initial prompt: {prompt[:100]}...")
-        logging.info(f"📝 is_followup: {request.is_followup}, conversation length: {len(conversations[conversation_id])}")
+        logging.debug("prompt preview: %s", prompt[:100] if prompt else "")
+        logging.debug("conversation length=%s is_followup=%s", len(conversations[conversation_id]), request.is_followup)
         
         if request.is_followup and len(conversations[conversation_id]) > 1:
-            logging.info(f"📝 Follow-up request detected - building conversation context")
-            # Build full conversation context for AI agent to interpret
-            # The agent is smart enough to understand:
-            # - "no" / "dont know" → proceed with placeholders
-            # - "please proceed" / "continue" → proceed with placeholders
-            # - "use placeholders" → use placeholders
-            # - Actual account/region values → use those values
+            logging.debug("📝 Follow-up request detected - letting agent handle dynamically")
+            
+            # Get cached data for context
+            cached = conversation_cache.get(conversation_id, {})
+            has_existing_policies = bool(cached.get("policy") or (previous_response and previous_response.get("policy")))
+            conversation_history = conversations.get(conversation_id, [])
+
+            user_intent = (request.description or "").lower()
+            is_compliance_help_request = any(
+                phrase in user_intent
+                for phrase in [
+                    "compliance help",
+                    "compliance requirements",
+                    "what compliance requirements",
+                    "compliance considerations",
+                ]
+            )
+            if is_compliance_help_request:
+                logging.info("⚙️ Handling compliance help follow-up without invoking the agent")
+                return build_compliance_help_followup(conversation_id, cached, previous_response, request)
+            
+            # Build conversation context for the agent
             context = "\n".join([
                 f"{msg['role']}: {msg['content']}" 
-                for msg in conversations[conversation_id][-5:]
-            ])
-            # Extract and validate AWS values from user input
-            validation_result = extract_and_validate_aws_values(request.description)
-            validation_context = ""
-            if validation_result['errors']:
-                validation_context = f"\n\n⚠️ VALIDATION ISSUES DETECTED:\n" + "\n".join(validation_result['errors']) + "\n\nIMPORTANT: DO NOT use invalid values. Explain the error to the user and offer to use placeholders instead."
-            
-            # Check if user is asking to explain existing policies
-            user_lower = request.description.lower()
-            is_explanation_request = any(phrase in user_lower for phrase in [
-                "explain", "what does", "describe", "tell me about", "how does", "why"
+                for msg in conversation_history[-10:]  # Last 10 messages
             ])
             
-            # Check if policies exist in conversation
-            has_existing_policies = any(
-                "policy" in str(msg.get('content', '')).lower() or 
-                '"Version"' in str(msg.get('content', '')) or
-                '"Statement"' in str(msg.get('content', ''))
-                for msg in conversations[conversation_id]
-            )
+            # Get current policies for context - try multiple sources
+            current_policy = None
+            current_trust = None
             
-            if is_explanation_request and has_existing_policies:
-                # User wants explanation of existing policies - DO NOT call tool
-                explanation_instruction = """
-🚨🚨🚨 **CRITICAL: USER WANTS EXPLANATION OF EXISTING POLICIES** 🚨🚨🚨
-
-**DO NOT CALL THE TOOL `generate_policy_from_bedrock`**
-**DO NOT GENERATE NEW POLICIES**
-
-**YOU MUST:**
-1. Look at the policies in the conversation history above
-2. Provide a TEXT EXPLANATION in plain English explaining what the policy does
-3. Explain what each statement means in conversational language
-4. THEN include the existing policies in JSON format for reference
-
-**CORRECT RESPONSE FORMAT:**
-This policy allows your Lambda function to read files from the S3 bucket 'customer-uploads' and write logs to CloudWatch.
-
-Here's what each statement does:
-
-Statement 1 (S3BucketOperations): This gives your Lambda permission to see what files are in the bucket and find where the bucket is located. This is needed before you can actually read files.
-
-Statement 2 (S3ObjectOperations): This is the core permission - it lets your Lambda actually read and download files from the bucket. Without this, you can't access the file contents.
-
-Statement 3 (CloudWatchLogsAccess): This allows your Lambda to create log groups and write log messages. This is important for debugging and monitoring your function.
-
-Here are the current policies for reference:
-
-## Permissions Policy
-```json
-[copy the existing permissions policy from conversation]
-```
-
-## Trust Policy
-```json
-[copy the existing trust policy from conversation]
-```
-
-**WRONG (DO NOT DO THIS):**
-- Just returning JSON without explanation
-- Calling the tool to generate new policies
-- Skipping the text explanation
-"""
-            else:
-                explanation_instruction = ""
+            # First try cache
+            if cached:
+                current_policy = cached.get("policy")
+                current_trust = cached.get("trust_policy")
             
-            prompt = f"""Previous conversation:
+            # Fallback to previous_response
+            if not current_policy and previous_response:
+                current_policy = previous_response.get("policy")
+            if not current_trust and previous_response:
+                current_trust = previous_response.get("trust_policy")
+            
+            # Log for debugging
+            logging.debug(f"🔍 Follow-up request - Policy found: {current_policy is not None}, Trust policy found: {current_trust is not None}")
+            logging.debug(f"   Cached exists: {cached is not None}, Previous response exists: {previous_response is not None}")
+            if cached:
+                logging.debug(f"   Cached keys: {list(cached.keys())}")
+            if previous_response:
+                logging.debug(f"   Previous response keys: {list(previous_response.keys())}")
+            
+            # Build intelligent prompt with full context - let the agent decide what to do
+            if current_policy:
+                # Include compliance framework if specified
+                compliance_note = ""
+                if hasattr(request, 'compliance') and request.compliance and request.compliance != 'general':
+                    compliance_note = f"\nCompliance Framework: {request.compliance.upper()}"
+                
+                # Detect if this is a compliance validation request
+                is_compliance_validation = (
+                    "validate" in request.description.lower() and "compliance" in request.description.lower()
+                ) or (
+                    hasattr(request, 'compliance') and request.compliance and request.compliance != 'general'
+                )
+                
+                # Get the original service from cache or detect from trust policy
+                original_service = cached.get("service") or request.service
+                if current_trust:
+                    # Try to detect service from trust policy principal
+                    trust_str = json.dumps(current_trust)
+                    if "ecs-tasks.amazonaws.com" in trust_str:
+                        original_service = "ecs"
+                    elif "lambda.amazonaws.com" in trust_str:
+                        original_service = "lambda"
+                    elif "ec2.amazonaws.com" in trust_str:
+                        original_service = "ec2"
+                
+                # Provide full context and let agent intelligently respond
+                service_context = f"\n**IMPORTANT: This is an {original_service.upper()} role policy** (not Lambda). The user's original request was for {original_service.upper()}."
+                
+                compliance_context = ""
+                if is_compliance_validation:
+                    compliance_context = f"\n\n**CRITICAL: The user wants to VALIDATE the EXISTING policies below against {request.compliance.upper() if hasattr(request, 'compliance') and request.compliance != 'general' else 'compliance'} requirements. DO NOT ask for the policy - it's already provided below. Analyze the existing policies and provide compliance validation results.**"
+                
+                prompt = f"""Previous conversation context:
 {context}
 
-User's current response: {request.description}
-{validation_context}
-{explanation_instruction}
+User's current request: {request.description}{compliance_note}{service_context}{compliance_context}
 
-🚨🚨🚨 **CRITICAL INSTRUCTIONS - READ THIS FIRST AND FOLLOW IT** 🚨🚨🚨
+Current Permissions Policy (ALREADY EXISTS - DO NOT ASK FOR IT):
+{json.dumps(current_policy, indent=2)}
 
-**YOU ARE A CONVERSATIONAL AI ASSISTANT - NOT JUST A CODE GENERATOR**
+Current Trust Policy (ALREADY EXISTS - DO NOT ASK FOR IT):
+{json.dumps(current_trust, indent=2) if current_trust else 'None'}
 
-**STEP 1: ANALYZE USER INTENT - THIS IS THE MOST IMPORTANT STEP**
+Current Security Scores:
+- Permissions Score: {cached.get("permissions_score", previous_response.get("permissions_score", 0) if previous_response else 0)}/100
+- Trust Score: {cached.get("trust_score", previous_response.get("trust_score", 0) if previous_response else 0)}/100
+- Overall Score: {cached.get("overall_score", previous_response.get("overall_score", 0) if previous_response else 0)}/100
 
-**A. IF USER SAYS "explain" or "explain this policy" or "explain this pls" or "expalin this":**
-   → **USER WANTS TEXT EXPLANATION IN PLAIN ENGLISH**
-   → **YOU MUST START YOUR RESPONSE WITH A CONVERSATIONAL EXPLANATION**
-   → Explain what the policy does and what each statement means
-   → **DO NOT skip this! DO NOT just return JSON!**
-   → **DO NOT call the tool if policies already exist in conversation!**
-   → THEN include BOTH policies in JSON format for reference
-   
-   **CORRECT FORMAT:**
-   "This policy allows your Lambda function to read files from the S3 bucket 'customer-uploads' and write logs to CloudWatch.
-   
-   Here's what each statement does:
-   - Statement 1 (S3BucketOperations): Lets your Lambda see what files are in the bucket...
-   - Statement 2 (S3ObjectOperations): Gives permission to actually read files...
-   - Statement 3 (CloudWatchLogsAccess): Allows your Lambda to write logs...
-   
-   Here are the current policies for reference:
-   [JSON policies]"
-
-   **WRONG FORMAT (DO NOT DO THIS):**
-   "[Just JSON without explanation]"
-
-**B. IF USER SAYS "give me trust policy" or "show trust policy" or "trust policy" or "give trsust polcy":**
-   → **USER SPECIFICALLY WANTS TRUST POLICY**
-   → Return TRUST policy prominently (NOT permissions policy!)
-   → You can mention "Permissions policy also exists" but focus on trust
-   → **CRITICAL: DO NOT return permissions policy when they asked for trust!**
-
-**C. IF USER SAYS "add region ch-896765" or "add region ch-989" or "account id 1344":**
-   → **VALIDATE THE INPUT FIRST** before using it
-   → "ch-896765" is NOT a valid AWS region!
-   → "1344" is NOT a valid account ID (needs 12 digits)!
-   → **YOU MUST:**
-     1. Explain the error clearly: "I notice 'ch-896765' is not a valid AWS region format."
-     2. Show correct format: "AWS regions follow the pattern [area]-[direction]-[number] like 'us-east-1'"
-     3. Offer placeholder: "I'll keep using the {{REGION}} placeholder for now."
-     4. Be helpful: "Please provide a valid AWS region if you'd like me to update it."
-   → **DO NOT silently use invalid values!**
-   → **DO NOT just return JSON without explaining the validation error!**
-
-**D. IF USER SAYS "modify" or "add" or "change":**
-   → Return BOTH updated policies in JSON format
-   → Explain what changed
-
-**STEP 2: BE CONVERSATIONAL AND HELPFUL**
-- Respond naturally, as if talking to a colleague
-- Use friendly, clear, conversational language
-- If explaining, be thorough but not overwhelming
-- If validation fails, be helpful and educational (not just error messages)
-- Greet the user warmly and be professional
-
-**STEP 3: ALWAYS VALIDATE BEFORE USING**
-- Extract AWS values (region, account ID) from user input
-- Validate format using AWS rules
-- If invalid → Explain clearly with examples, don't use it
-- If valid → Use it in policies
-
-**STEP 4: POLICY RETURN RULES**
-- "explain" → **TEXT EXPLANATION FIRST**, then both policies in JSON
-- "trust policy" → **TRUST POLICY** (not permissions!)
-- "both policies" → Both policies in JSON
-- "modify/add" → Both updated policies in JSON
-
-**CRITICAL REMINDERS - THESE ARE MANDATORY:**
-- 🚨 **NEVER skip text explanation when user asks "explain"** - This is the #1 priority
-- 🚨 **NEVER return permissions when user asks for trust policy** - Give what they asked for
-- 🚨 **NEVER use invalid AWS values** - Always validate and explain errors
-- 🚨 **ALWAYS be conversational** - Not just code, but helpful explanations
-- 🚨 **ALWAYS validate inputs** - Check format before using values"""
-            logging.info("✅ Using AI agent to interpret user intent (no hardcoded phrase matching)")
+Please respond to the user's request intelligently. Analyze what they're asking for and provide an appropriate response:
+- If they want explanation → Provide clear text explanation first, then include policies
+- If they want to modify → Update policies and explain changes
+- If they want validation → Analyze security and compliance
+- If they ask questions → Answer helpfully and relate to their policies
+- Always validate any AWS values (regions, account IDs) before using them
+- Always preserve existing policies unless explicitly asked to change them
+- If compliance framework is specified, ensure any policy modifications maintain compliance
+"""
+            else:
+                # No policies found in cache - this shouldn't happen for follow-ups, but handle gracefully
+                # Try to get service from cache or detect from description
+                original_service = cached.get("service") if cached else request.service
+                if not original_service or original_service == 'lambda':
+                    # Try to detect from conversation history or description
+                    original_service = detect_service_from_description(request.description) or request.service
+                
+                service_context = f"\n**IMPORTANT: This is an {original_service.upper()} role policy** (not Lambda)."
+                
+                # Check if this is a compliance validation request
+                is_compliance_validation = (
+                    "validate" in request.description.lower() and "compliance" in request.description.lower()
+                ) or (
+                    hasattr(request, 'compliance') and request.compliance and request.compliance != 'general'
+                )
+                
+                compliance_context = ""
+                if is_compliance_validation:
+                    compliance_context = f"\n\n**WARNING: You requested compliance validation, but I don't see existing policies in the conversation cache. Please ensure policies were generated first, or provide the policy JSON for validation.**"
+                
+                # Include compliance framework in prompt if specified
+                compliance_note = ""
+                if hasattr(request, 'compliance') and request.compliance and request.compliance != 'general':
+                    compliance_note = f"\nCompliance Framework: {request.compliance.upper()}"
+                
+                prompt = f"{request.description}{service_context}{compliance_note}{compliance_context}"
+        
+        # Now call the agent with the prompt (whether followup or not)
+        # The agent's system prompt already has comprehensive instructions
+        # Let it handle all scenarios dynamically - no hardcoded routing!
+        
+        logging.debug(f"🤖 Calling agent with prompt (first 200 chars): {prompt[:200] if prompt else 'NONE'}...")
+        logging.debug(f"🤖 Service: {request.service}")
+        
+        # Initialize variables
+        final_message = ""
+        agent_result = None
+        
+        try:
+            # Call the agent - it will intelligently handle ANY request
+            # Pass compliance explicitly to help agent extract it
+            compliance_to_pass = request.compliance if hasattr(request, 'compliance') and request.compliance else None
+            agent_result = aegis_agent.run(user_request=prompt, service=request.service, compliance=compliance_to_pass)
+            logging.debug(f"✅ Agent call completed")
             
-            # If explanation requested and policies exist, generate explanation directly via Bedrock
-            if is_explanation_request and has_existing_policies:
-                logging.info("🔍 Explanation requested - generating explanation directly via Bedrock (bypassing tool)")
+            # Extract message from agent result - handle multiple formats
+            if agent_result and hasattr(agent_result, 'message'):
+                agent_msg = agent_result.message
                 
-                # Extract policies from conversation history - look for both permissions and trust policies
-                permissions_policy_text = ""
-                trust_policy_text = ""
+                # Try different extraction methods
+                if isinstance(agent_msg, str):
+                    final_message = agent_msg
+                elif isinstance(agent_msg, dict):
+                    # Try content blocks first
+                    content_blocks = agent_msg.get("content", [])
+                    if isinstance(content_blocks, list) and content_blocks:
+                        # Extract text from all blocks
+                        text_parts = []
+                        for block in content_blocks:
+                            if isinstance(block, dict):
+                                if block.get("type") == "text" and "text" in block:
+                                    text_parts.append(block["text"])
+                                elif "text" in block:
+                                    text_parts.append(block["text"])
+                        if text_parts:
+                            final_message = "\n".join(text_parts)
+                        else:
+                            final_message = str(agent_msg)
+                    elif isinstance(content_blocks, dict) and "text" in content_blocks:
+                        final_message = content_blocks["text"]
+                    elif "text" in agent_msg:
+                        final_message = agent_msg["text"]
+                    else:
+                        # Fallback: convert entire dict to string
+                        final_message = str(agent_msg)
+                else:
+                    # Fallback: convert to string
+                    final_message = str(agent_msg)
                 
-                for msg in reversed(conversations[conversation_id]):
-                    content = str(msg.get('content', ''))
-                    # Look for JSON blocks with policies
-                    json_blocks = re.findall(r'```json\s*([\s\S]*?)```', content, re.IGNORECASE)
-                    for json_block in json_blocks:
+                # Log the extracted message for debugging
+                logging.info(f"📝 Extracted final_message (length: {len(final_message) if final_message else 0})")
+                if final_message:
+                    logging.info(f"   First 300 chars: {final_message[:300]}")
+            else:
+                logging.warning("⚠️ Agent result has no message attribute")
+                final_message = ""
+        except Exception as e:
+            logging.error(f"❌ Agent call failed: {e}")
+            logging.exception(e)
+            final_message = f"I apologize, but I encountered an error processing your request. Please try again or rephrase your question."
+        
+        # CRITICAL: Ensure final_message is set for follow-up requests
+        if not final_message or (isinstance(final_message, str) and final_message.strip() == ''):
+            logging.error("❌ CRITICAL: final_message is empty after agent call for follow-up request")
+            logging.error(f"   agent_result type: {type(agent_result)}")
+            logging.error(f"   agent_result: {str(agent_result)[:500] if agent_result else 'None'}")
+            final_message = "I received your message, but I'm having trouble processing it. Please try rephrasing your question."
+        
+        # If we have a followup and policies exist, ensure we preserve them
+        if request.is_followup and len(conversations[conversation_id]) > 1:
+            cached = conversation_cache.get(conversation_id, {})
+            previous_response = conversation_cache.get(conversation_id)
+            
+            # CRITICAL: For followup requests, we need to build and return a response
+            # Add assistant message to conversation
+            assistant_message = {
+                "role": "assistant",
+                "content": final_message,
+                "timestamp": str(uuid.uuid4())
+            }
+            conversations[conversation_id].append(assistant_message)
+            logging.debug(f"✅ Added assistant message to conversation (total messages: {len(conversations[conversation_id])})")
+            
+            # Extract policies from final_message if agent generated new ones
+            policy = None
+            trust_policy = None
+            
+            # Try to extract permissions policy
+            permissions_patterns = [
+                r'##\s*(?:🔐\s*)?(?:Updated\s+)?Permissions\s+Policy[\s\S]*?```json\s*([\s\S]*?)```',
+                r'##\s*Permissions\s+Policy[\s\S]*?```json\s*([\s\S]*?)```',
+                r'Permissions\s+Policy[\s\S]*?```json\s*([\s\S]*?)```',
+                r'```json\s*(\{[^`]*"Version"[^`]*"Statement"[^`]*\})\s*```',
+            ]
+            
+            for pattern in permissions_patterns:
+                permissions_match = re.search(pattern, final_message, re.IGNORECASE | re.DOTALL)
+                if permissions_match:
+                    try:
+                        policy_json = permissions_match.group(1).strip()
+                        policy_json = re.sub(r'\}\s*[^}]*$', '}', policy_json, flags=re.DOTALL)
+                        policy_json = re.sub(r'\}\s*##', '}', policy_json)
+                        policy = json.loads(policy_json)
+                        logging.debug("✅ Found and parsed Permissions Policy in followup")
+                        break
+                    except json.JSONDecodeError:
+                        continue
+            
+            # Try to extract trust policy
+            trust_patterns = [
+                r'##\s*(?:🤝\s*)?(?:Updated\s+)?Trust\s+Policy[\s\S]*?```json\s*([\s\S]*?)```',
+                r'##\s*Trust\s+Policy[\s\S]*?```json\s*([\s\S]*?)```',
+                r'Trust\s+Policy[\s\S]*?```json\s*([\s\S]*?)```',
+                r'```json\s*(\{[^`]*"Principal"[^`]*"sts:AssumeRole"[^`]*\})\s*```',
+            ]
+            
+            for pattern in trust_patterns:
+                trust_match = re.search(pattern, final_message, re.IGNORECASE | re.DOTALL)
+                if trust_match:
+                    try:
+                        trust_json = trust_match.group(1).strip()
+                        trust_json = re.sub(r'\}\s*[^}]*$', '}', trust_json, flags=re.DOTALL)
+                        trust_json = re.sub(r'\}\s*##', '}', trust_json)
+                        parsed_trust = json.loads(trust_json)
+                        if "Principal" in str(parsed_trust) or any("Principal" in str(stmt) for stmt in parsed_trust.get('Statement', [])):
+                            trust_policy = parsed_trust
+                            logging.debug("✅ Found and parsed Trust Policy in followup")
+                            break
+                    except json.JSONDecodeError:
+                        continue
+            
+            # CRITICAL: Check if this is an explanation-only request (not a modification)
+            # If user asked to "explain", don't extract policies from response - they're just examples in the explanation
+            user_lower = request.description.lower()
+            is_explanation_only = any(keyword in user_lower for keyword in [
+                "explain", "what does", "how does", "tell me about", "describe", "break down",
+                "why", "what is", "what are", "help me understand", "show me", "can you explain",
+                "i don't understand", "expalin", "explain this", "explain the"
+            ])
+            
+            # For explanation-only requests, NEVER extract policies from agent response
+            # The agent might show individual statements as examples, but we must preserve the full cached policy
+            if is_explanation_only:
+                logging.info("📝 Explanation-only request detected - preserving cached policies, not extracting from response")
+                policy = cached.get("policy") if cached else (previous_response.get("policy") if previous_response else None)
+                trust_policy = cached.get("trust_policy") if cached else (previous_response.get("trust_policy") if previous_response else None)
+            else:
+                # For modification requests, try to extract policies from response
+                # Fallback: try to extract from all JSON blocks
+                if not policy or not trust_policy:
+                    all_json_blocks = re.findall(r'```json\s*([\s\S]*?)```', final_message, re.IGNORECASE)
+                    if len(all_json_blocks) >= 1 and not policy:
                         try:
-                            parsed = json.loads(json_block.strip())
-                            # Check if it's a permissions policy (has Action/Resource, no Principal)
-                            if '"Version"' in json_block and '"Statement"' in json_block:
-                                if '"Principal"' not in json_block and ('"Action"' in json_block or '"Resource"' in json_block):
-                                    if not permissions_policy_text:
-                                        permissions_policy_text = json_block.strip()
-                                elif '"Principal"' in json_block:
-                                    if not trust_policy_text:
-                                        trust_policy_text = json_block.strip()
-                        except:
+                            parsed_policy = json.loads(all_json_blocks[0].strip())
+                            # Only use if it's a complete policy with Version and Statement (not just a single statement)
+                            if "Version" in parsed_policy and "Statement" in parsed_policy and isinstance(parsed_policy.get("Statement"), list):
+                                policy = parsed_policy
+                                logging.debug("✅ Extracted Permissions Policy from first JSON block in followup")
+                        except json.JSONDecodeError:
                             pass
                     
-                    # Also check for policies in final_answer from previous responses
-                    if '"Version"' in content and '"Statement"' in content:
-                        # Try to extract JSON from the content
-                        json_match = re.search(r'\{[\s\S]*?"Version"[\s\S]*?"Statement"[\s\S]*?\}', content)
+                    if len(all_json_blocks) >= 2 and not trust_policy:
+                        try:
+                            parsed_trust = json.loads(all_json_blocks[1].strip())
+                            # Only use if it's a complete trust policy with Principal (not just a statement)
+                            if "Principal" in str(parsed_trust) or any("Principal" in str(stmt) for stmt in parsed_trust.get('Statement', [])):
+                                if "Version" in parsed_trust and "Statement" in parsed_trust:
+                                    trust_policy = parsed_trust
+                                    logging.debug("✅ Extracted Trust Policy from second JSON block in followup")
+                        except json.JSONDecodeError:
+                            pass
+                
+                # Use existing policies if agent didn't generate new ones
+                if not policy:
+                    policy = cached.get("policy") if cached else (previous_response.get("policy") if previous_response else None)
+                if not trust_policy:
+                    trust_policy = cached.get("trust_policy") if cached else (previous_response.get("trust_policy") if previous_response else None)
+            
+            # CRITICAL: If agent generated new policies, ALWAYS recalculate everything
+            has_new_policy = policy and (not cached.get("policy") or json.dumps(policy, sort_keys=True) != json.dumps(cached.get("policy"), sort_keys=True))
+            has_new_trust_policy = trust_policy and (not cached.get("trust_policy") or json.dumps(trust_policy, sort_keys=True) != json.dumps(cached.get("trust_policy"), sort_keys=True))
+            
+            if has_new_policy or has_new_trust_policy:
+                # New policy generated - recalculate everything
+                logging.info("🔄 New policy detected in followup - recalculating scores and security features")
+                permissions_score, trust_score, overall_score = calculate_policy_scores(policy, trust_policy)
+                
+                # Recalculate security features and breakdown (functions already imported at top of file)
+                score_breakdown = generate_score_breakdown(policy, trust_policy, permissions_score, trust_score)
+                recommendations_raw = generate_security_recommendations(policy, trust_policy, permissions_score, trust_score)
+                
+                # Regenerate explanations for new policies
+                explanation_text = generate_permissions_explanation(policy) if policy else ""
+                trust_explanation_text = generate_trust_explanation(trust_policy) if trust_policy else ""
+                
+                # Convert recommendations to security_features format (list of strings)
+                security_features = {"permissions": [], "trust": []}
+                security_notes = {"permissions": [], "trust": []}
+                
+                # Split recommendations into permissions and trust
+                for rec in recommendations_raw:
+                    if any(word in rec.lower() for word in ["trust", "principal", "assume", "sourceaccount", "sourcearn"]):
+                        security_features["trust"].append(rec)
+                    else:
+                        security_features["permissions"].append(rec)
+                
+                # Generate refinement suggestions from score breakdown improvements
+                refinement_suggestions = {
+                    "permissions": score_breakdown.get("permissions", {}).get("improvements", [])[:5],
+                    "trust": score_breakdown.get("trust", {}).get("improvements", [])[:5]
+                }
+                
+                logging.info(f"✅ Recalculated: permissions_score={permissions_score}, trust_score={trust_score}, overall_score={overall_score}")
+                logging.info(f"✅ Regenerated explanations: permissions={len(explanation_text)} chars, trust={len(trust_explanation_text)} chars")
+            else:
+                # No new policy - use cached scores
+                permissions_score = cached.get("permissions_score", previous_response.get("permissions_score", 0) if previous_response else 0) if cached else (previous_response.get("permissions_score", 0) if previous_response else 0)
+                trust_score = cached.get("trust_score", previous_response.get("trust_score", 0) if previous_response else 0) if cached else (previous_response.get("trust_score", 0) if previous_response else 0)
+                overall_score = cached.get("overall_score", previous_response.get("overall_score", 0) if previous_response else 0) if cached else (previous_response.get("overall_score", 0) if previous_response else 0)
+                
+                # Calculate scores if not available
+                if (permissions_score == 0 or trust_score == 0) and (policy or trust_policy):
+                    permissions_score, trust_score, overall_score = calculate_policy_scores(policy, trust_policy)
+                
+                # Use cached breakdown and features
+                score_breakdown = cached.get("score_breakdown", previous_response.get("score_breakdown", {}) if previous_response else {}) if cached else (previous_response.get("score_breakdown", {}) if previous_response else {})
+                security_features = cached.get("security_features", previous_response.get("security_features", {"permissions": [], "trust": []}) if previous_response else {"permissions": [], "trust": []}) if cached else (previous_response.get("security_features", {"permissions": [], "trust": []}) if previous_response else {"permissions": [], "trust": []})
+                security_notes = cached.get("security_notes", previous_response.get("security_notes", {"permissions": [], "trust": []}) if previous_response else {"permissions": [], "trust": []}) if cached else (previous_response.get("security_notes", {"permissions": [], "trust": []}) if previous_response else {"permissions": [], "trust": []})
+                refinement_suggestions = cached.get("refinement_suggestions", previous_response.get("refinement_suggestions", {"permissions": [], "trust": []}) if previous_response else {"permissions": [], "trust": []}) if cached else (previous_response.get("refinement_suggestions", {"permissions": [], "trust": []}) if previous_response else {"permissions": [], "trust": []})
+                
+                # Initialize explanation variables for else branch
+                explanation_text = ""
+                trust_explanation_text = ""
+            
+            # Build conversation history
+            conversation_history = []
+            for msg in conversations.get(conversation_id, []):
+                content = msg.get("content", "")
+                if not isinstance(content, str):
+                    content = str(content) if content is not None else ""
+                if msg.get("role") == "assistant":
+                    has_policy_json = bool(re.search(r'```json[\s\S]*?```', content))
+                    if has_policy_json:
+                        json_match = re.search(r'(```json[\s\S]*?```)', content)
                         if json_match:
-                            try:
-                                parsed = json.loads(json_match.group(0))
-                                if '"Principal"' not in json_match.group(0):
-                                    if not permissions_policy_text:
-                                        permissions_policy_text = json_match.group(0)
-                                else:
-                                    if not trust_policy_text:
-                                        trust_policy_text = json_match.group(0)
-                            except:
-                                pass
+                            content = json_match.group(1)
+                    else:
+                        content = re.sub(r'```json[\s\S]*?```', '', content)
+                        content = re.sub(r'```[\s\S]*?```', '', content)
+                        content = re.sub(r'\{[\s\S]*?"Version"[\s\S]*?\}', '', content)
+                        policy_exp_start = re.search(r'##\s*(?:Permissions |Trust )?Policy', content, re.IGNORECASE)
+                        if policy_exp_start:
+                            content = content[:policy_exp_start.start()]
+                    content = ' '.join(content.split()).strip()
                 
-                # Combine both policies
-                policies_text = ""
-                if permissions_policy_text:
-                    policies_text += f"## Permissions Policy\n```json\n{permissions_policy_text}\n```\n\n"
-                if trust_policy_text:
-                    policies_text += f"## Trust Policy\n```json\n{trust_policy_text}\n```\n\n"
+                conversation_history.append({  
+                    "role": msg.get("role", "user"),
+                    "content": content,
+                    "timestamp": msg.get("timestamp", "")
+                })
+            
+            # Build response for followup request
+            # Use regenerated explanation if new policy, otherwise use cached or final_message
+            if has_new_policy or has_new_trust_policy:
+                # New policy - use regenerated explanations
+                followup_explanation = explanation_text if policy else (cached.get("explanation", final_message) if cached else final_message)
+                followup_trust_explanation = trust_explanation_text if trust_policy else (cached.get("trust_explanation", previous_response.get("trust_explanation", "") if previous_response else "") if cached else (previous_response.get("trust_explanation", "") if previous_response else ""))
+            else:
+                # No new policy - use cached or final_message
+                followup_explanation = cached.get("explanation", final_message) if cached else final_message
+                followup_trust_explanation = cached.get("trust_explanation", previous_response.get("trust_explanation", "") if previous_response else "") if cached else (previous_response.get("trust_explanation", "") if previous_response else "")
+            
+            followup_response = {
+                "conversation_id": conversation_id,
+                "final_answer": final_message,
+                "message_count": len(conversations.get(conversation_id, [])),
+                "policy": policy,
+                "trust_policy": trust_policy,
+                "explanation": followup_explanation,
+                "trust_explanation": followup_trust_explanation,
+                "permissions_score": permissions_score or 0,
+                "trust_score": trust_score or 0,
+                "overall_score": overall_score or 0,
+                "security_notes": security_notes if (has_new_policy or has_new_trust_policy) else (cached.get("security_notes", previous_response.get("security_notes", {"permissions": [], "trust": []}) if previous_response else {"permissions": [], "trust": []}) if cached else (previous_response.get("security_notes", {"permissions": [], "trust": []}) if previous_response else {"permissions": [], "trust": []})),
+                "security_features": security_features if (has_new_policy or has_new_trust_policy) else (cached.get("security_features", previous_response.get("security_features", {"permissions": [], "trust": []}) if previous_response else {"permissions": [], "trust": []}) if cached else (previous_response.get("security_features", {"permissions": [], "trust": []}) if previous_response else {"permissions": [], "trust": []})),
+                "score_breakdown": score_breakdown if (has_new_policy or has_new_trust_policy) else (cached.get("score_breakdown", previous_response.get("score_breakdown", {}) if previous_response else {}) if cached else (previous_response.get("score_breakdown", {}) if previous_response else {})),
+                "is_question": False,  # Followup requests are not questions
+                "conversation_history": conversation_history or [],
+                "refinement_suggestions": refinement_suggestions if (has_new_policy or has_new_trust_policy) else (cached.get("refinement_suggestions", previous_response.get("refinement_suggestions", {"permissions": [], "trust": []}) if previous_response else {"permissions": [], "trust": []}) if cached else (previous_response.get("refinement_suggestions", {"permissions": [], "trust": []}) if previous_response else {"permissions": [], "trust": []})),
+                "compliance_status": cached.get("compliance_status", previous_response.get("compliance_status", {}) if previous_response else {}) if cached else (previous_response.get("compliance_status", {}) if previous_response else {})
+            }
+            
+            # Update cache with new policies if agent generated them
+            if policy or trust_policy:
+                conversation_cache[conversation_id] = {
+                    "policy": policy or cached.get("policy"),
+                    "trust_policy": trust_policy or cached.get("trust_policy"),
+                    "service": request.service,  # Preserve service for follow-up requests
+                    "explanation": followup_explanation,
+                    "trust_explanation": followup_trust_explanation,
+                    "permissions_score": permissions_score or 0,
+                    "trust_score": trust_score or 0,
+                    "overall_score": overall_score or 0,
+                    "score_breakdown": score_breakdown if (has_new_policy or has_new_trust_policy) else followup_response.get("score_breakdown", {}),
+                    "security_features": security_features if (has_new_policy or has_new_trust_policy) else followup_response.get("security_features", {"permissions": [], "trust": []}),
+                    "security_notes": security_notes if (has_new_policy or has_new_trust_policy) else followup_response.get("security_notes", {"permissions": [], "trust": []}),
+                    "refinement_suggestions": refinement_suggestions if (has_new_policy or has_new_trust_policy) else followup_response.get("refinement_suggestions", {"permissions": [], "trust": []}),
+                    "compliance_status": followup_response.get("compliance_status", {}),
+                    "selected_compliance": (request.compliance if hasattr(request, "compliance") and request.compliance else cached.get("selected_compliance", "general")),
+                    "conversation_history": conversation_history or [],
+                    "last_updated": str(uuid.uuid4())
+                }
+                logging.debug("✅ Updated conversation cache with followup response")
+                logging.debug(f"   Score breakdown keys: {list(score_breakdown.keys()) if (has_new_policy or has_new_trust_policy) else 'using cached'}")
+                logging.debug(f"   Security features: {len(security_features.get('permissions', [])) if (has_new_policy or has_new_trust_policy) else 'cached'} permissions, {len(security_features.get('trust', [])) if (has_new_policy or has_new_trust_policy) else 'cached'} trust")
+                logging.debug(f"   Refinement suggestions: {len(refinement_suggestions.get('permissions', [])) if (has_new_policy or has_new_trust_policy) else 'cached'} permissions, {len(refinement_suggestions.get('trust', [])) if (has_new_policy or has_new_trust_policy) else 'cached'} trust")
+                logging.debug(f"   Explanation length: {len(followup_explanation)} chars")
+            
+            logging.info(f"✅ Returning followup response with conversation_id: {followup_response.get('conversation_id')}")
+            logging.info(f"   Final answer length: {len(followup_response.get('final_answer', ''))}")
+            logging.info(f"   Has policy: {followup_response.get('policy') is not None}")
+            logging.info(f"   Has trust_policy: {followup_response.get('trust_policy') is not None}")
+            
+            # Return the followup response
+            return followup_response
+        
+        # Continue with normal response parsing...
+        
+        logging.debug("✅ Using AI agent to interpret user intent (no hardcoded phrase matching)")
+        
+        # If explanation requested and policies exist, generate explanation directly via Bedrock
+        if is_explanation_request and has_existing_policies:
+            logging.debug("🔍 Explanation requested - generating explanation directly via Bedrock (bypassing tool)")
+            
+            # Extract policies from conversation history - look for both permissions and trust policies
+            permissions_policy_text = ""
+            trust_policy_text = ""
+            
+            for msg in reversed(conversations[conversation_id]):
+                content = str(msg.get('content', ''))
+                # Look for JSON blocks with policies
+                json_blocks = re.findall(r'```json\s*([\s\S]*?)```', content, re.IGNORECASE)
+                for json_block in json_blocks:
+                    try:
+                        parsed = json.loads(json_block.strip())
+                        # Check if it's a permissions policy (has Action/Resource, no Principal)
+                        if '"Version"' in json_block and '"Statement"' in json_block:
+                            if '"Principal"' not in json_block and ('"Action"' in json_block or '"Resource"' in json_block):
+                                if not permissions_policy_text:
+                                    permissions_policy_text = json_block.strip()
+                            elif '"Principal"' in json_block:
+                                if not trust_policy_text:
+                                    trust_policy_text = json_block.strip()
+                    except:
+                        pass
                 
-                if policies_text:
-                    # Generate explanation directly using Bedrock
-                    import boto3
-                    bedrock_runtime = boto3.client(service_name='bedrock-runtime', region_name='us-east-1')
-                    
-                    explanation_prompt = f"""You are explaining an existing IAM policy to a user. The user asked you to explain what this policy does.
+                # Also check for policies in final_answer from previous responses
+                if '"Version"' in content and '"Statement"' in content:
+                    # Try to extract JSON from the content
+                    json_match = re.search(r'\{[\s\S]*?"Version"[\s\S]*?"Statement"[\s\S]*?\}', content)
+                    if json_match:
+                        try:
+                            parsed = json.loads(json_match.group(0))
+                            if '"Principal"' not in json_match.group(0):
+                                if not permissions_policy_text:
+                                    permissions_policy_text = json_match.group(0)
+                            else:
+                                if not trust_policy_text:
+                                    trust_policy_text = json_match.group(0)
+                        except:
+                            pass
+            
+            # Combine both policies
+            policies_text = ""
+            if permissions_policy_text:
+                policies_text += f"## Permissions Policy\n```json\n{permissions_policy_text}\n```\n\n"
+            if trust_policy_text:
+                policies_text += f"## Trust Policy\n```json\n{trust_policy_text}\n```\n\n"
+            
+            if policies_text:
+                # Generate explanation directly using Bedrock
+                import boto3
+                bedrock_runtime = boto3.client(service_name='bedrock-runtime', region_name='us-east-1')
+                
+                explanation_prompt = f"""You are explaining an existing IAM policy to a user. The user asked you to explain what this policy does.
 
 Here are the policies from the conversation:
 
@@ -607,89 +1358,121 @@ Let me know if you have any questions!
 - Start with conversational explanation FIRST
 - Then include policies in JSON format
 - Be helpful and clear"""
-                    
-                    body = json.dumps({
-                        "anthropic_version": "bedrock-2023-05-31",
-                        "max_tokens": 2000,
-                        "messages": [{"role": "user", "content": [{"type": "text", "text": explanation_prompt}]}],
-                        "temperature": 0.3
-                    })
-                    
-                    try:
-                        response = bedrock_runtime.invoke_model(
-                            body=body,
-                            modelId="us.anthropic.claude-3-7-sonnet-20250219-v1:0"
-                        )
-                        body_bytes = response.get('body').read()
-                        response_body = json.loads(body_bytes)
-                        final_message = response_body.get('content', [{}])[0].get('text', '')
-                        logging.info("✅ Generated explanation directly via Bedrock")
-                    except Exception as e:
-                        logging.error(f"❌ Failed to generate explanation: {e}")
-                        # Fallback to agent
-                        async with asyncio.timeout(45):
-                            logging.info(f"🤖 Fallback: Calling agent with prompt: {prompt[:100]}...")
-                            agent_result = aegis_agent.run(user_request=prompt, service=request.service)
-                            final_message = str(agent_result.message)
-                            if isinstance(agent_result.message, dict):
-                                if "content" in agent_result.message and isinstance(agent_result.message["content"], list):
-                                    if len(agent_result.message["content"]) > 0 and "text" in agent_result.message["content"][0]:
-                                        final_message = agent_result.message["content"][0]["text"]
-                else:
-                    # No policies found, use agent
-                    async with asyncio.timeout(45):
-                        logging.info(f"🤖 Calling agent with prompt: {prompt[:100]}...")
-                        agent_result = aegis_agent.run(user_request=prompt, service=request.service)
-                        final_message = str(agent_result.message)
-                        if isinstance(agent_result.message, dict):
-                            if "content" in agent_result.message and isinstance(agent_result.message["content"], list):
-                                if len(agent_result.message["content"]) > 0 and "text" in agent_result.message["content"][0]:
-                                    final_message = agent_result.message["content"][0]["text"]
-        
+                
+                body = json.dumps({
+                    "anthropic_version": "bedrock-2023-05-31",
+                    "max_tokens": 8000,  # Increased to ensure complete explanations and compliance responses
+                    "messages": [{"role": "user", "content": [{"type": "text", "text": explanation_prompt}]}],
+                    "temperature": 0.3
+                })
+                
+                try:
+                    response = bedrock_runtime.invoke_model(
+                        body=body,
+                        modelId="us.anthropic.claude-3-7-sonnet-20250219-v1:0"
+                    )
+                    body_bytes = response.get('body').read()
+                    response_body = json.loads(body_bytes)
+                    final_message = response_body.get('content', [{}])[0].get('text', '')
+                    logging.debug("✅ Generated explanation directly via Bedrock")
+                except Exception as e:
+                    logging.error(f"❌ Failed to generate explanation: {e}")
+                    # Fallback to agent
+                    logging.debug(f"🤖 Fallback: Calling agent with prompt: {prompt[:100]}...")
+                    agent_result = aegis_agent.run(user_request=prompt, service=request.service)
+                    final_message = str(agent_result.message)
+                    if isinstance(agent_result.message, dict):
+                        if "content" in agent_result.message and isinstance(agent_result.message["content"], list):
+                            if len(agent_result.message["content"]) > 0 and "text" in agent_result.message["content"][0]:
+                                final_message = agent_result.message["content"][0]["text"]
+            else:
+                # No policies found, use agent
+                logging.debug(f"🤖 Calling agent with prompt: {prompt[:100]}...")
+                agent_result = aegis_agent.run(user_request=prompt, service=request.service)
+                final_message = str(agent_result.message)
+                if isinstance(agent_result.message, dict):
+                    if "content" in agent_result.message and isinstance(agent_result.message["content"], list):
+                        if len(agent_result.message["content"]) > 0 and "text" in agent_result.message["content"][0]:
+                            final_message = agent_result.message["content"][0]["text"]
+            
         # Normal flow - use agent (for non-followup requests)
         if not request.is_followup or len(conversations[conversation_id]) <= 1:
-            logging.info(f"📝 Non-followup request - proceeding with normal flow")
-            logging.info(f"📝 Prompt length: {len(prompt) if prompt else 0} chars")
-            logging.info(f"📝 Service: {request.service}")
-            logging.info(f"📝 Prompt value (first 200 chars): {prompt[:200] if prompt else 'PROMPT IS NONE!'}")
+            logging.debug(f"📝 Non-followup request - proceeding with normal flow")
+            logging.debug(f"📝 Prompt length: {len(prompt) if prompt else 0} chars")
+            logging.debug(f"📝 Service: {request.service}")
+            logging.debug(f"📝 Prompt value (first 200 chars): {prompt[:200] if prompt else 'PROMPT IS NONE!'}")
             
             # Initialize final_message to ensure it exists
             final_message = ""
             agent_result = None
             
             try:
-                logging.info(f"🤖 About to call agent...")
-                logging.info(f"🤖 Agent type: {type(aegis_agent)}")
-                logging.info(f"🤖 Prompt type: {type(prompt)}")
-                logging.info(f"🤖 Service type: {type(request.service)}")
+                logging.debug(f"🤖 About to call agent...")
+                logging.debug(f"🤖 Agent type: {type(aegis_agent)}")
+                logging.debug(f"🤖 Prompt type: {type(prompt)}")
+                logging.debug(f"🤖 Service type: {type(request.service)}")
                 
-                async with asyncio.timeout(45):  # Increased timeout for complex policies (was 30)
-                    logging.info(f"🤖 Calling agent with prompt: {prompt[:100] if prompt else 'NONE'}...")
-                    logging.info(f"🤖 Service parameter: {request.service}")
-                    agent_result = aegis_agent.run(user_request=prompt, service=request.service)
-                    logging.info(f"✅ Agent call completed successfully")
-                    logging.info(f"✅ Agent result type: {type(agent_result)}")
-                    logging.info(f"✅ Agent result: {str(agent_result)[:200] if agent_result else 'NONE'}")
-                    
-                    if agent_result:
-                        logging.info(f"✅ Agent result has message: {hasattr(agent_result, 'message')}")
-                        if hasattr(agent_result, 'message'):
-                            logging.info(f"✅ Agent message type: {type(agent_result.message)}")
-                            final_message = str(agent_result.message)
-                            if isinstance(agent_result.message, dict):
-                                logging.info(f"📝 Agent message is a dict, extracting text...")
-                                if "content" in agent_result.message and isinstance(agent_result.message["content"], list):
-                                    if len(agent_result.message["content"]) > 0 and "text" in agent_result.message["content"][0]:
-                                        final_message = agent_result.message["content"][0]["text"]
-                                        logging.info(f"✅ Extracted text from dict content")
-                    else:
-                        logging.error(f"❌ CRITICAL: agent_result is None!")
-                        final_message = "An error occurred: The AI agent returned None."
-                    
-                    logging.info(f"✅ Extracted final_message (length: {len(final_message) if final_message else 0})")
-                    if not final_message or final_message.strip() == '':
-                        logging.error(f"❌ CRITICAL: final_message is empty after agent call!")
-                        final_message = "An error occurred: The AI agent returned an empty response."
+                logging.debug(f"🤖 Calling agent with prompt: {prompt[:100] if prompt else 'NONE'}...")
+                logging.debug(f"🤖 Service parameter: {request.service}")
+                agent_result = aegis_agent.run(user_request=prompt, service=request.service)
+                logging.debug(f"✅ Agent call completed successfully")
+                logging.debug(f"✅ Agent result type: {type(agent_result)}")
+                logging.debug(f"✅ Agent result: {str(agent_result)[:200] if agent_result else 'NONE'}")
+                
+                if agent_result and hasattr(agent_result, 'message'):
+                    logging.debug(f"✅ Agent message type: {type(agent_result.message)}")
+                    final_message = str(agent_result.message)
+                    if isinstance(agent_result.message, dict):
+                        logging.debug("📝 Agent message is a dict, extracting text...")
+                        content_blocks = agent_result.message.get("content", [])
+                        if isinstance(content_blocks, list) and content_blocks:
+                            first_block = content_blocks[0]
+                            if isinstance(first_block, dict) and first_block.get("type") == "text":
+                                final_message = first_block.get("text", final_message)
+                            elif isinstance(first_block, dict) and "text" in first_block:
+                                final_message = first_block["text"]
+                        elif isinstance(content_blocks, dict):
+                            if "text" in content_blocks:
+                                final_message = content_blocks["text"]
+                else:
+                    logging.warning("⚠️ Agent returned no message; using cached response if available")
+                    cached = conversation_cache.get(conversation_id)
+                    if cached:
+                        final_message = build_final_message_from_cache(cached)
+                        policy = cached.get("policy")
+                        trust_policy = cached.get("trust_policy")
+                        permissions_score = cached.get("permissions_score", 0)
+                        trust_score = cached.get("trust_score", 0)
+                        overall_score = cached.get("overall_score", 0)
+                        security_notes = cached.get("security_notes", {"permissions": [], "trust": []})
+                        security_features = cached.get("security_features", {"permissions": [], "trust": []})
+                        explanation = cached.get("explanation", "") or generate_permissions_explanation(policy)
+                        trust_explanation = cached.get("trust_explanation", "") or generate_trust_explanation(trust_policy)
+                        refinement_suggestions = cached.get("refinement_suggestions", {"permissions": [], "trust": []})
+                        compliance_status = cached.get("compliance_status", {})
+                        score_breakdown = cached.get("score_breakdown", {"permissions": {"positive": [], "improvements": []}, "trust": {"positive": [], "improvements": []}})
+                        cached_response = {
+                            "conversation_id": conversation_id,
+                            "final_answer": final_message,
+                            "message_count": len(conversations.get(conversation_id, [])),
+                            "policy": policy,
+                            "trust_policy": trust_policy,
+                            "explanation": explanation,
+                            "trust_explanation": trust_explanation,
+                            "permissions_score": permissions_score,
+                            "trust_score": trust_score,
+                            "overall_score": overall_score,
+                            "security_notes": security_notes,
+                            "security_features": security_features,
+                            "score_breakdown": score_breakdown,
+                            "is_question": False,
+                            "conversation_history": conversations[conversation_id][-10:],
+                            "refinement_suggestions": refinement_suggestions,
+                            "compliance_status": compliance_status,
+                        }
+                        logging.info("✅ Returning cached follow-up response")
+                        # Return as dict, not JSONResponse - let FastAPI handle serialization
+                        return cached_response
             except asyncio.TimeoutError as timeout_error:
                 logging.error(f"❌ CRITICAL: Agent call timed out: {timeout_error}")
                 logging.exception(timeout_error)
@@ -714,17 +1497,18 @@ Let me know if you have any questions!
                 "timestamp": str(uuid.uuid4())
             }
             conversations[conversation_id].append(assistant_message)
-            logging.info(f"✅ Added assistant message to conversation (total messages: {len(conversations[conversation_id])})")
+            logging.debug(f"✅ Added assistant message to conversation (total messages: {len(conversations[conversation_id])})")
             
             # DEBUG: Log what Bedrock returned
-            logging.info("=" * 80)
-            logging.info("🔍 BEDROCK RAW RESPONSE (first 2000 chars):")
-            logging.info(final_message[:2000] if final_message else "EMPTY MESSAGE!")
-            logging.info("=" * 80)
+            logging.debug("=" * 80)
+            logging.debug("🔍 BEDROCK RAW RESPONSE (first 2000 chars):")
+            logging.debug(final_message[:2000] if final_message else "EMPTY MESSAGE!")
+            logging.debug("=" * 80)
             
             # For explanation requests, return the explanation as-is without extracting policies
+            logging.info(f"🔍 Checking explanation request: is_explanation_request={is_explanation_request}, has_existing_policies={has_existing_policies}")
             if is_explanation_request and has_existing_policies:
-                logging.info("✅ Explanation request - returning explanation text as final_answer")
+                logging.info("✅ Explanation request detected - returning explanation text as final_answer")
                 logging.info(f"   Conversation has {len(conversations[conversation_id])} messages")
                 logging.info(f"   Final message length: {len(final_message)} chars")
                 explanation_response = {
@@ -749,7 +1533,11 @@ Let me know if you have any questions!
                 logging.info(f"✅ Returning explanation response with conversation_id: {explanation_response.get('conversation_id')}")
                 logging.info(f"   Conversation history length: {len(explanation_response.get('conversation_history', []))}")
                 logging.info(f"   Final answer length: {len(explanation_response.get('final_answer', ''))}")
-                return JSONResponse(content=explanation_response)
+                logging.info(f"   About to return explanation_response (type: {type(explanation_response)})")
+                # Return as dict, not JSONResponse - let FastAPI handle serialization
+                result = explanation_response
+                logging.info(f"✅ EXPLANATION PATH: Returning explanation_response")
+                return result
             
             policy = None
             trust_policy = None
@@ -762,7 +1550,7 @@ Let me know if you have any questions!
             security_features = {"permissions": [], "trust": []}
             is_question = True
             
-            logging.info(f"📝 Parsing agent response (length: {len(final_message)} chars)")
+            logging.debug(f"📝 Parsing agent response (length: {len(final_message)} chars)")
             
             # Extract Permissions Policy - Improved regex patterns with multiple fallbacks
             permissions_patterns = [
@@ -777,13 +1565,12 @@ Let me know if you have any questions!
                 if permissions_match:
                     try:
                         policy_json = permissions_match.group(1).strip()
-                        # Clean up any trailing text after closing brace or before next section
                         policy_json = re.sub(r'\}\s*[^}]*$', '}', policy_json, flags=re.DOTALL)
-                        policy_json = re.sub(r'\}\s*##', '}', policy_json)  # Remove section headers
+                        policy_json = re.sub(r'\}\s*##', '}', policy_json)
                         policy = json.loads(policy_json)
                         is_question = False
-                        logging.info("✅ Found and parsed Permissions Policy")
-                        logging.info(f"   Policy has {len(policy.get('Statement', []))} statements")
+                        logging.debug("✅ Found and parsed Permissions Policy")
+                        logging.debug(f"   Policy has {len(policy.get('Statement', []))} statements")
                         break
                     except json.JSONDecodeError as e:
                         logging.warning(f"❌ Permissions Policy JSON parse error with pattern: {str(e)[:100]}")
@@ -802,15 +1589,13 @@ Let me know if you have any questions!
                 if trust_match:
                     try:
                         trust_json = trust_match.group(1).strip()
-                        # Clean up any trailing text after closing brace or before next section
                         trust_json = re.sub(r'\}\s*[^}]*$', '}', trust_json, flags=re.DOTALL)
-                        trust_json = re.sub(r'\}\s*##', '}', trust_json)  # Remove section headers
+                        trust_json = re.sub(r'\}\s*##', '}', trust_json)
                         parsed_trust = json.loads(trust_json)
-                        # VALIDATE: Trust policy must have "Principal" field, not "Resource" or "Action" like permissions
                         if "Principal" in str(parsed_trust) or any("Principal" in str(stmt) for stmt in parsed_trust.get('Statement', [])):
                             trust_policy = parsed_trust
-                            logging.info("✅ Found and parsed Trust Policy")
-                            logging.info(f"   Trust policy has {len(trust_policy.get('Statement', []))} statements")
+                            logging.debug("✅ Found and parsed Trust Policy")
+                            logging.debug(f"   Trust policy has {len(trust_policy.get('Statement', []))} statements")
                             break
                         else:
                             logging.warning("❌ Trust Policy JSON doesn't contain 'Principal' - likely permissions policy")
@@ -826,28 +1611,28 @@ Let me know if you have any questions!
                     try:
                         policy = json.loads(all_json_blocks[0].strip())
                         is_question = False
-                        logging.info("✅ Extracted Permissions Policy from first JSON block")
+                        logging.debug("✅ Extracted Permissions Policy from first JSON block")
                     except json.JSONDecodeError:
                         logging.warning("❌ Failed to parse first JSON block")
                 
                 if len(all_json_blocks) >= 2 and not trust_policy:
                     try:
                         parsed_trust = json.loads(all_json_blocks[1].strip())
-                        # VALIDATE: Trust policy must have "Principal" field
                         if "Principal" in str(parsed_trust) or any("Principal" in str(stmt) for stmt in parsed_trust.get('Statement', [])):
                             trust_policy = parsed_trust
-                            logging.info("✅ Extracted Trust Policy from second JSON block")
+                            logging.debug("✅ Extracted Trust Policy from second JSON block")
                         else:
                             logging.warning("❌ Second JSON block doesn't contain 'Principal' - likely not a trust policy, trying next block")
-                            # Try third block if available
                             if len(all_json_blocks) >= 3:
                                 try:
                                     parsed_trust = json.loads(all_json_blocks[2].strip())
                                     if "Principal" in str(parsed_trust) or any("Principal" in str(stmt) for stmt in parsed_trust.get('Statement', [])):
                                         trust_policy = parsed_trust
-                                        logging.info("✅ Extracted Trust Policy from third JSON block")
-                                except:
-                                    pass
+                                        logging.debug("✅ Extracted Trust Policy from third JSON block")
+                                    else:
+                                        logging.warning("❌ Third JSON block doesn't contain 'Principal' - fallback failed")
+                                except json.JSONDecodeError:
+                                    logging.warning("❌ Failed to parse third JSON block")
                     except json.JSONDecodeError:
                         logging.warning("❌ Failed to parse second JSON block")
             
@@ -864,7 +1649,7 @@ Let me know if you have any questions!
             )
             if perm_score_match:
                 permissions_score = int(perm_score_match.group(1))
-                logging.info(f"✅ Permissions Score: {permissions_score}")
+                logging.debug(f"✅ Permissions Score: {permissions_score}")
             else:
                 logging.warning(f"⚠️ Could not extract permissions score from response")
             
@@ -875,7 +1660,7 @@ Let me know if you have any questions!
             )
             if trust_score_match:
                 trust_score = int(trust_score_match.group(1))
-                logging.info(f"✅ Trust Score: {trust_score}")
+                logging.debug(f"✅ Trust Score: {trust_score}")
             else:
                 logging.warning(f"⚠️ Could not extract trust score from response")
             
@@ -886,18 +1671,18 @@ Let me know if you have any questions!
             )
             if overall_score_match:
                 overall_score = int(overall_score_match.group(1))
-                logging.info(f"✅ Overall Score: {overall_score}")
+                logging.debug(f"✅ Overall Score: {overall_score}")
             else:
                 # Calculate if not found
                 if permissions_score > 0 and trust_score > 0:
                     overall_score = int((permissions_score * 0.7) + (trust_score * 0.3))
-                    logging.info(f"✅ Calculated Overall Score: {overall_score}")
+                    logging.debug(f"✅ Calculated Overall Score: {overall_score}")
             
             # FALLBACK: Use policy_scorer if Bedrock didn't provide scores
             if permissions_score == 0 or trust_score == 0:
                 logging.warning(f"⚠️ Using fallback scorer (permissions={permissions_score}, trust={trust_score})")
                 permissions_score, trust_score, overall_score = calculate_policy_scores(policy, trust_policy)
-                logging.info(f"✅ Calculated fallback scores: permissions={permissions_score}, trust={trust_score}, overall={overall_score}")
+                logging.debug(f"✅ Calculated fallback scores: permissions={permissions_score}, trust={trust_score}, overall={overall_score}")
 
             # Extract SEPARATE security features for permissions policy
             perm_features_section = re.search(
@@ -912,7 +1697,7 @@ Let me know if you have any questions!
                     for line in features_text.split('\n')
                     if line.strip() and (line.strip().startswith('-') or line.strip().startswith('•') or line.strip().startswith('✅'))
                 ]
-                logging.info(f"✅ Extracted {len(security_features['permissions'])} permissions features")
+                logging.debug(f"✅ Extracted {len(security_features['permissions'])} permissions features")
             
             # Extract SEPARATE security features for trust policy
             trust_features_section = re.search(
@@ -927,7 +1712,7 @@ Let me know if you have any questions!
                     for line in features_text.split('\n')
                     if line.strip() and (line.strip().startswith('-') or line.strip().startswith('•') or line.strip().startswith('✅'))
                 ]
-                logging.info(f"✅ Extracted {len(security_features['trust'])} trust features")
+                logging.debug(f"✅ Extracted {len(security_features['trust'])} trust features")
             
             # Extract SEPARATE security considerations for permissions policy
             perm_notes_section = re.search(
@@ -942,7 +1727,7 @@ Let me know if you have any questions!
                     for line in notes_text.split('\n')
                     if line.strip() and (line.strip().startswith('-') or line.strip().startswith('•'))
                 ]
-                logging.info(f"✅ Extracted {len(security_notes['permissions'])} permissions considerations")
+                logging.debug(f"✅ Extracted {len(security_notes['permissions'])} permissions considerations")
             
             # Extract SEPARATE security considerations for trust policy
             trust_notes_section = re.search(
@@ -957,7 +1742,7 @@ Let me know if you have any questions!
                     for line in notes_text.split('\n')
                     if line.strip() and (line.strip().startswith('-') or line.strip().startswith('•'))
                 ]
-                logging.info(f"✅ Extracted {len(security_notes['trust'])} trust considerations")
+                logging.debug(f"✅ Extracted {len(security_notes['trust'])} trust considerations")
             
             # Extract permissions policy explanation (new format)
             explanation_text = ""
@@ -968,9 +1753,13 @@ Let me know if you have any questions!
             )
             if explanation_match:
                 explanation_text = explanation_match.group(1).strip()
-                logging.info(f"✅ Extracted permissions explanation ({len(explanation_text)} chars)")
+                logging.debug(f"✅ Extracted permissions explanation ({len(explanation_text)} chars)")
             else:
                 logging.warning("⚠️ No Permissions Policy Explanation section found")
+                if policy:
+                    explanation_text = generate_permissions_explanation(policy)
+                    if explanation_text:
+                        logging.debug("✅ Generated fallback permissions explanation")
             
             # Extract trust policy explanation
             trust_explanation_text = ""
@@ -981,18 +1770,25 @@ Let me know if you have any questions!
             )
             if trust_explanation_match:
                 trust_explanation_text = trust_explanation_match.group(1).strip()
-                logging.info(f"✅ Extracted trust explanation ({len(trust_explanation_text)} chars)")
+                logging.debug(f"✅ Extracted trust explanation ({len(trust_explanation_text)} chars)")
             else:
                 logging.warning("⚠️ No Trust Policy Explanation section found")
+                if trust_policy:
+                    trust_explanation_text = generate_trust_explanation(trust_policy)
+                    if trust_explanation_text:
+                        logging.debug("✅ Generated fallback trust explanation")
 
             # Extract score breakdown (separate for permissions and trust)
             score_breakdown = extract_score_breakdown(final_message)
-            logging.info(f"✅ Score breakdown extraction complete")
+            logging.debug(f"✅ Score breakdown extraction complete")
             
             # FALLBACK: Use policy_scorer if Bedrock didn't provide breakdown
-            if not score_breakdown["permissions"]["positive"] and not score_breakdown["permissions"]["improvements"]:
+            # CRITICAL: Always generate score breakdown if we have policies but breakdown is empty (needed for refinement suggestions)
+            has_permissions_breakdown = bool(score_breakdown.get("permissions", {}).get("positive") or score_breakdown.get("permissions", {}).get("improvements"))
+            has_trust_breakdown = bool(score_breakdown.get("trust", {}).get("positive") or score_breakdown.get("trust", {}).get("improvements"))
+            if (policy or trust_policy) and (not has_permissions_breakdown or not has_trust_breakdown):
                 score_breakdown = generate_score_breakdown(policy, trust_policy, permissions_score, trust_score)
-                logging.info(f"✅ Generated fallback score breakdown")
+                logging.debug(f"✅ Generated/updated score breakdown (needed for refinement suggestions)")
             
             # FIX S3 STATEMENT SEPARATION - Do this BEFORE building response
             if policy:
@@ -1004,7 +1800,7 @@ Let me know if you have any questions!
             # Make it non-blocking to improve response time
             if hasattr(request, 'compliance') and request.compliance and request.compliance != 'general' and policy:
                 try:
-                    logging.info(f"🔍 Validating compliance against: {request.compliance}")
+                    logging.debug(f"🔍 Validating compliance against: {request.compliance}")
                     # Convert compliance format (e.g., 'pci-dss' -> 'pci_dss')
                     compliance_framework = request.compliance.replace('-', '_')
                     compliance_frameworks = [compliance_framework]
@@ -1019,7 +1815,7 @@ Let me know if you have any questions!
                     # Extract compliance status from validation result
                     if isinstance(validation_result, dict):
                         compliance_status = validation_result.get('compliance_status', {})
-                        logging.info(f"✅ Compliance validation complete: {len(compliance_status)} frameworks checked")
+                        logging.debug(f"✅ Compliance validation complete: {len(compliance_status)} frameworks checked")
                     else:
                         logging.warning("⚠️ Compliance validation returned unexpected format")
                 except Exception as e:
@@ -1046,19 +1842,23 @@ Let me know if you have any questions!
             
             if perm_refinement_match:
                 perm_text = perm_refinement_match.group(1)
-                logging.info(f"📝 Found Permissions Refinement section, length: {len(perm_text)} chars")
-                logging.info(f"📝 First 200 chars: {perm_text[:200]}")
+                logging.debug(f"📝 Found Permissions Refinement section, length: {len(perm_text)} chars")
+                logging.debug(f"📝 First 200 chars: {perm_text[:200]}")
                 # Extract bullet points
                 perm_suggestions = re.findall(r'(?:^|\n)\s*[-•*]\s*(.+?)(?=\n|$)', perm_text, re.MULTILINE)
                 refinement_suggestions["permissions"] = [s.strip() for s in perm_suggestions if s.strip() and len(s.strip()) > 10]
-                logging.info(f"✅ Extracted {len(refinement_suggestions['permissions'])} permissions refinement suggestions")
+                logging.debug(f"✅ Extracted {len(refinement_suggestions['permissions'])} permissions refinement suggestions")
                 if len(refinement_suggestions['permissions']) > 0:
-                    logging.info(f"   First suggestion: {refinement_suggestions['permissions'][0][:100]}")
+                    logging.debug(f"   First suggestion: {refinement_suggestions['permissions'][0][:100]}")
             else:
                 logging.warning("⚠️ No Permissions Policy Refinement Suggestions section found")
                 # Log what sections ARE present
                 sections = re.findall(r'##\s*([^\n]+)', final_message)
                 logging.warning(f"   Sections found: {sections}")
+                # FALLBACK: Generate refinement suggestions from score breakdown
+                if policy and score_breakdown.get("permissions", {}).get("improvements"):
+                    refinement_suggestions["permissions"] = score_breakdown["permissions"]["improvements"][:5]
+                    logging.debug(f"✅ Generated {len(refinement_suggestions['permissions'])} fallback permissions refinement suggestions from score breakdown")
             
             # Look for Trust Policy Refinement Suggestions section (try multiple variations)
             trust_refinement_match = re.search(
@@ -1076,22 +1876,30 @@ Let me know if you have any questions!
             
             if trust_refinement_match:
                 trust_text = trust_refinement_match.group(1)
-                logging.info(f"📝 Found Trust Refinement section, length: {len(trust_text)} chars")
-                logging.info(f"📝 First 200 chars: {trust_text[:200]}")
+                logging.debug(f"📝 Found Trust Refinement section, length: {len(trust_text)} chars")
+                logging.debug(f"📝 First 200 chars: {trust_text[:200]}")
                 # Extract bullet points
                 trust_suggestions = re.findall(r'(?:^|\n)\s*[-•*]\s*(.+?)(?=\n|$)', trust_text, re.MULTILINE)
                 refinement_suggestions["trust"] = [s.strip() for s in trust_suggestions if s.strip() and len(s.strip()) > 10]
-                logging.info(f"✅ Extracted {len(refinement_suggestions['trust'])} trust refinement suggestions")
+                logging.debug(f"✅ Extracted {len(refinement_suggestions['trust'])} trust refinement suggestions")
                 if len(refinement_suggestions['trust']) > 0:
-                    logging.info(f"   First suggestion: {refinement_suggestions['trust'][0][:100]}")
+                    logging.debug(f"   First suggestion: {refinement_suggestions['trust'][0][:100]}")
             else:
                 logging.warning("⚠️ No Trust Policy Refinement Suggestions section found")
+                # FALLBACK: Generate refinement suggestions from score breakdown
+                if trust_policy and score_breakdown.get("trust", {}).get("improvements"):
+                    refinement_suggestions["trust"] = score_breakdown["trust"]["improvements"][:5]
+                    logging.debug(f"✅ Generated {len(refinement_suggestions['trust'])} fallback trust refinement suggestions from score breakdown")
             
             # Build conversation history
             try:
+                # Build conversation history - ensure all values are JSON-serializable
                 conversation_history = []
                 for msg in conversations.get(conversation_id, []):
+                    # Ensure content is a string (not an object)
                     content = msg.get("content", "")
+                    if not isinstance(content, str):
+                        content = str(content) if content is not None else ""
                     if msg.get("role") == "assistant":
                         has_policy_json = bool(re.search(r'```json[\s\S]*?```', content))
                         if has_policy_json:
@@ -1105,14 +1913,14 @@ Let me know if you have any questions!
                             policy_exp_start = re.search(r'##\s*(?:Permissions |Trust )?Policy', content, re.IGNORECASE)
                             if policy_exp_start:
                                 content = content[:policy_exp_start.start()]
-                    content = ' '.join(content.split()).strip()
+                        content = ' '.join(content.split()).strip()
                     
                     conversation_history.append({  
                         "role": msg.get("role", "user"),
                         "content": content,
                         "timestamp": msg.get("timestamp", "")
                     })
-                logging.info(f"✅ Built conversation history ({len(conversation_history)} messages)")
+                logging.debug(f"✅ Built conversation history ({len(conversation_history)} messages)")
             except Exception as history_error:
                 logging.error(f"❌ Error building conversation history: {history_error}")
                 conversation_history = []
@@ -1130,7 +1938,10 @@ Let me know if you have any questions!
             
             # Ensure explanation_text is never empty
             if not explanation_text or (isinstance(explanation_text, str) and explanation_text.strip() == ''):
-                explanation_text = final_message
+                if previous_response and previous_response.get("explanation"):
+                    explanation_text = previous_response["explanation"]
+                else:
+                    explanation_text = final_message
             
             # Validate all required fields exist
             if not conversation_id:
@@ -1138,16 +1949,21 @@ Let me know if you have any questions!
                 conversation_id = str(uuid.uuid4())
             
             # Log that we're about to build the response
-            logging.info(f"🔨 Building response object...")
-            logging.info(f"   ├─ conversation_id: {conversation_id}")
-            logging.info(f"   ├─ final_message length: {len(final_message) if final_message else 0}")
-            logging.info(f"   ├─ has policy: {policy is not None}")
-            logging.info(f"   ├─ has trust_policy: {trust_policy is not None}")
+            logging.debug(f"🔨 Building response object...")
+            logging.debug(f"   ├─ conversation_id: {conversation_id}")
+            logging.debug(f"   ├─ final_message length: {len(final_message) if final_message else 0}")
+            logging.debug(f"   ├─ has policy: {policy is not None}")
+            logging.debug(f"   ├─ has trust_policy: {trust_policy is not None}")
+            
+            # CRITICAL: Ensure final_message is never empty
+            if not final_message or (isinstance(final_message, str) and final_message.strip() == ''):
+                logging.warning("⚠️ final_message is empty, using explanation or fallback")
+                final_message = explanation_text or trust_explanation_text or "Policy generation completed. Please check the policies below."
             
             # Build response object
             response = {
                 "conversation_id": conversation_id,
-                "final_answer": final_message or "Policy generation completed.",
+                "final_answer": final_message,
                 "message_count": len(conversations.get(conversation_id, [])),
                 "policy": policy,
                 "trust_policy": trust_policy,
@@ -1164,7 +1980,34 @@ Let me know if you have any questions!
                 "refinement_suggestions": refinement_suggestions or {"permissions": [], "trust": []},
                 "compliance_status": compliance_status or {}
             }
-            logging.info(f"✅ Response object created successfully")
+            logging.info(
+                "generate response ready: conversation_id=%s permissions_score=%s trust_score=%s overall_score=%s",
+                conversation_id,
+                permissions_score,
+                trust_score,
+                overall_score,
+            )
+            
+            # Update conversation cache with latest policies and data
+            if policy or trust_policy:
+                conversation_cache[conversation_id] = {
+                    "policy": policy,
+                    "trust_policy": trust_policy,
+                    "explanation": explanation_text or "",
+                    "trust_explanation": trust_explanation_text or "",
+                    "permissions_score": permissions_score or 0,
+                    "trust_score": trust_score or 0,
+                    "overall_score": overall_score or 0,
+                    "score_breakdown": score_breakdown or {"permissions": {"positive": [], "improvements": []}, "trust": {"positive": [], "improvements": []}},
+                    "security_features": security_features or {"permissions": [], "trust": []},
+                    "security_notes": security_notes or {"permissions": [], "trust": []},
+                    "refinement_suggestions": refinement_suggestions or {"permissions": [], "trust": []},
+                    "compliance_status": compliance_status or {},
+                    "selected_compliance": (request.compliance if hasattr(request, "compliance") and request.compliance else "general"),
+                    "conversation_history": conversation_history or [],
+                    "last_updated": str(uuid.uuid4())
+                }
+                logging.debug("✅ Updated conversation cache with latest policies")
             
             # Validate response before returning - ensure it's never None or missing critical fields
             if not response.get("final_answer"):
@@ -1175,22 +2018,22 @@ Let me know if you have any questions!
                 logging.error("❌ Response missing conversation_id, adding fallback")
                 response["conversation_id"] = str(uuid.uuid4())
             
-            logging.info(f"📤 RESPONSE SUMMARY:")
-            logging.info(f"   ├─ is_question: {is_question}")
-            logging.info(f"   ├─ has_policy: {policy is not None}")
-            logging.info(f"   ├─ has_trust_policy: {trust_policy is not None}")
-            logging.info(f"   ├─ permissions_score: {permissions_score}")
-            logging.info(f"   ├─ trust_score: {trust_score}")
-            logging.info(f"   ├─ overall_score: {overall_score}")
-            logging.info(f"   ├─ score_breakdown[permissions][positive]: {len(score_breakdown['permissions']['positive'])}")
-            logging.info(f"   ├─ score_breakdown[permissions][improvements]: {len(score_breakdown['permissions']['improvements'])}")
-            logging.info(f"   ├─ score_breakdown[trust][positive]: {len(score_breakdown['trust']['positive'])}")
-            logging.info(f"   ├─ score_breakdown[trust][improvements]: {len(score_breakdown['trust']['improvements'])}")
-            logging.info(f"   ├─ permissions_features: {len(security_features['permissions'])} items")
-            logging.info(f"   ├─ trust_features: {len(security_features['trust'])} items")
-            logging.info(f"   ├─ permissions_suggestions: {len(refinement_suggestions['permissions'])} items")
-            logging.info(f"   ├─ trust_suggestions: {len(refinement_suggestions['trust'])} items")
-            logging.info(f"   └─ conversation_history: {len(conversation_history)} messages")
+            logging.debug(f"📤 RESPONSE SUMMARY:")
+            logging.debug(f"   ├─ is_question: {is_question}")
+            logging.debug(f"   ├─ has_policy: {policy is not None}")
+            logging.debug(f"   ├─ has_trust_policy: {trust_policy is not None}")
+            logging.debug(f"   ├─ permissions_score: {permissions_score}")
+            logging.debug(f"   ├─ trust_score: {trust_score}")
+            logging.debug(f"   ├─ overall_score: {overall_score}")
+            logging.debug(f"   ├─ score_breakdown[permissions][positive]: {len(score_breakdown['permissions']['positive'])}")
+            logging.debug(f"   ├─ score_breakdown[permissions][improvements]: {len(score_breakdown['permissions']['improvements'])}")
+            logging.debug(f"   ├─ score_breakdown[trust][positive]: {len(score_breakdown['trust']['positive'])}")
+            logging.debug(f"   ├─ score_breakdown[trust][improvements]: {len(score_breakdown['trust']['improvements'])}")
+            logging.debug(f"   ├─ permissions_features: {len(security_features['permissions'])} items")
+            logging.debug(f"   ├─ trust_features: {len(security_features['trust'])} items")
+            logging.debug(f"   ├─ permissions_suggestions: {len(refinement_suggestions['permissions'])} items")
+            logging.debug(f"   ├─ trust_suggestions: {len(refinement_suggestions['trust'])} items")
+            logging.debug(f"   └─ conversation_history: {len(conversation_history)} messages")
             
             # Ensure response is valid before returning - NEVER return None
             if not response or not isinstance(response, dict):
@@ -1256,10 +2099,10 @@ Let me know if you have any questions!
             if not response.get("final_answer"):
                 response["final_answer"] = final_message or "Policy generation completed."
             
-            logging.info(f"✅ Returning response with conversation_id: {response.get('conversation_id')}")
-            logging.info(f"✅ Response has final_answer: {bool(response.get('final_answer'))}")
-            logging.info(f"✅ Response type: {type(response)}")
-            logging.info(f"✅ Response keys: {list(response.keys())}")
+            logging.debug(f"✅ Returning response with conversation_id: {response.get('conversation_id')}")
+            logging.debug(f"✅ Response has final_answer: {bool(response.get('final_answer'))}")
+            logging.debug(f"✅ Response type: {type(response)}")
+            logging.debug(f"✅ Response keys: {list(response.keys())}")
             
             # CRITICAL: Use JSONResponse to ensure proper serialization (prevents null responses)
             # Ensure response dict is not None before passing to JSONResponse
@@ -1267,12 +2110,12 @@ Let me know if you have any questions!
                 logging.error("❌ CRITICAL: response is None - using default_error_response")
                 response = default_error_response
             
-            logging.info(f"🔍 Final response check before JSONResponse:")
-            logging.info(f"   ├─ response type: {type(response)}")
-            logging.info(f"   ├─ response is None: {response is None}")
-            logging.info(f"   ├─ response is dict: {isinstance(response, dict)}")
-            logging.info(f"   ├─ conversation_id: {response.get('conversation_id') if isinstance(response, dict) else 'N/A'}")
-            logging.info(f"   ├─ final_answer: {response.get('final_answer')[:100] if isinstance(response, dict) and response.get('final_answer') else 'N/A'}")
+            logging.debug(f"🔍 Final response check before JSONResponse:")
+            logging.debug(f"   ├─ response type: {type(response)}")
+            logging.debug(f"   ├─ response is None: {response is None}")
+            logging.debug(f"   ├─ response is dict: {isinstance(response, dict)}")
+            logging.debug(f"   ├─ conversation_id: {response.get('conversation_id') if isinstance(response, dict) else 'N/A'}")
+            logging.debug(f"   ├─ final_answer: {response.get('final_answer')[:100] if isinstance(response, dict) and response.get('final_answer') else 'N/A'}")
             
             # FINAL SAFETY: Ensure response is a valid dict with required fields
             if not isinstance(response, dict):
@@ -1291,6 +2134,7 @@ Let me know if you have any questions!
             logging.info(f"📤 FINAL RESPONSE BEING RETURNED:")
             logging.info(f"   ├─ conversation_id: {response.get('conversation_id')}")
             logging.info(f"   ├─ final_answer length: {len(response.get('final_answer', ''))}")
+            logging.info(f"   ├─ final_answer preview: {response.get('final_answer', '')[:300] if response.get('final_answer') else 'EMPTY'}")
             logging.info(f"   ├─ has policy: {response.get('policy') is not None}")
             logging.info(f"   ├─ has trust_policy: {response.get('trust_policy') is not None}")
             
@@ -1300,16 +2144,162 @@ Let me know if you have any questions!
                 response = default_error_response.copy()
             
             try:
-                json_response = JSONResponse(content=response)
-                logging.info(f"✅ Successfully created JSONResponse")
-                return json_response
+                # CRITICAL: Ensure all values in response are JSON-serializable
+                # Convert any non-serializable objects to strings
+                serializable_response = {}
+                for key, value in response.items():
+                    try:
+                        # Special handling for conversation_history - ensure it's a list of dicts with string values
+                        if key == "conversation_history" and isinstance(value, list):
+                            serialized_history = []
+                            for msg in value:
+                                if isinstance(msg, dict):
+                                    serialized_msg = {}
+                                    for msg_key, msg_value in msg.items():
+                                        if not isinstance(msg_value, (str, int, float, bool, type(None))):
+                                            serialized_msg[msg_key] = str(msg_value) if msg_value is not None else None
+                                        else:
+                                            serialized_msg[msg_key] = msg_value
+                                    serialized_history.append(serialized_msg)
+                                else:
+                                    serialized_history.append({"role": "user", "content": str(msg)})
+                            serializable_response[key] = serialized_history
+                        else:
+                            # Try to serialize the value to ensure it's JSON-compatible
+                            json.dumps(value)
+                            serializable_response[key] = value
+                    except (TypeError, ValueError) as e:
+                        # If not serializable, convert to string
+                        logging.warning(f"⚠️ Converting non-serializable value for key '{key}' to string: {e}")
+                        serializable_response[key] = str(value) if value is not None else None
+                
+                # Double-check: try to serialize the entire response
+                try:
+                    test_serialization = json.dumps(serializable_response)
+                    logging.debug(f"✅ Test serialization successful: {len(test_serialization)} bytes")
+                except Exception as test_error:
+                    logging.error(f"❌ Test serialization failed: {test_error}")
+                    # Remove problematic keys and try again
+                    for key in list(serializable_response.keys()):
+                        try:
+                            json.dumps(serializable_response[key])
+                        except:
+                            logging.warning(f"⚠️ Removing problematic key '{key}' from response")
+                            del serializable_response[key]
+                
+                # Final serialization check
+                try:
+                    serialized_json = json.dumps(serializable_response)
+                    logging.info(f"📦 Final serialized response size: {len(serialized_json)} bytes")
+                    logging.info(f"📦 Response preview (first 500 chars): {serialized_json[:500]}")
+                    logging.info(f"📦 Response keys: {list(serializable_response.keys())}")
+                except Exception as final_error:
+                    logging.error(f"❌ CRITICAL: Final serialization failed: {final_error}")
+                    # Return minimal error response
+                    return {
+                        "conversation_id": response.get("conversation_id", str(uuid.uuid4())),
+                        "final_answer": "An error occurred while processing your request. Please try again.",
+                        "error": f"Serialization error: {str(final_error)}",
+                        "message_count": response.get("message_count", 1),
+                        "policy": None,
+                        "trust_policy": None
+                    }
+                
+                # Return dict directly - FastAPI will automatically serialize it to JSON
+                # This is more reliable than JSONResponse for ensuring the body is sent
+                logging.info(f"✅ Returning serializable response dict")
+                logging.info(f"   Final check - response type: {type(serializable_response)}")
+                logging.info(f"   Final check - response is dict: {isinstance(serializable_response, dict)}")
+                logging.info(f"   Final check - response keys count: {len(serializable_response.keys())}")
+                
+                # CRITICAL: Wrap in try-except to catch any last-minute errors
+                try:
+                    # One final serialization test before returning
+                    final_test = json.dumps(serializable_response)
+                    logging.info(f"✅ Final serialization test passed: {len(final_test)} bytes")
+                    
+                    # CRITICAL: Try returning as plain dict first (like test endpoint but simpler)
+                    # FastAPI will automatically serialize dicts to JSON
+                    logging.info(f"✅ About to return response")
+                    logging.info(f"   Response has {len(serializable_response.keys())} keys")
+                    logging.info(f"   final_answer present: {bool(serializable_response.get('final_answer'))}")
+                    logging.info(f"   final_answer length: {len(serializable_response.get('final_answer', ''))}")
+                    logging.info(f"   Returning as dict (FastAPI will serialize automatically)")
+                    
+                    # Return as dict - FastAPI handles serialization automatically
+                    # This is simpler and more reliable than JSONResponse
+                    return serializable_response
+                except Exception as final_return_error:
+                    logging.error(f"❌ CRITICAL: Error during final return: {final_return_error}")
+                    import traceback
+                    logging.error(f"   Traceback: {traceback.format_exc()}")
+                    # Return minimal guaranteed response using JSONResponse
+                    minimal_response = {
+                        "conversation_id": serializable_response.get("conversation_id", str(uuid.uuid4())),
+                        "final_answer": serializable_response.get("final_answer", "Response generated successfully.")[:500] if serializable_response.get("final_answer") else "Response generated successfully.",
+                        "message_count": serializable_response.get("message_count", 1),
+                        "policy": serializable_response.get("policy"),
+                        "trust_policy": serializable_response.get("trust_policy")
+                    }
+                    # Return as dict, not JSONResponse
+                    return minimal_response
             except Exception as json_error:
-                logging.error(f"❌ CRITICAL: Failed to create JSONResponse: {json_error}")
-                logging.error(f"   Response content: {str(response)[:500]}")
-                # Return error response as fallback
-                error_fallback = default_error_response.copy()
-                error_fallback["error"] = f"Failed to serialize response: {str(json_error)}"
-                return JSONResponse(content=error_fallback)
+                logging.error(f"❌ CRITICAL: Failed to serialize response: {json_error}")
+                logging.error(f"   Exception type: {type(json_error).__name__}")
+                logging.error(f"   Exception details: {str(json_error)}")
+                logging.error(f"   Response keys: {list(response.keys()) if isinstance(response, dict) else 'N/A'}")
+                import traceback
+                logging.error(f"   Traceback: {traceback.format_exc()}")
+                
+                # Return minimal, guaranteed-serializable error response
+                error_fallback = {
+                    "conversation_id": response.get("conversation_id", str(uuid.uuid4())) if isinstance(response, dict) else str(uuid.uuid4()),
+                    "final_answer": f"An error occurred while processing your request: {str(json_error)[:200]}. Please try again.",
+                    "error": f"Serialization error: {str(json_error)[:200]}",
+                    "message_count": response.get("message_count", 1) if isinstance(response, dict) else 1,
+                    "policy": None,
+                    "trust_policy": None,
+                    "permissions_score": 0,
+                    "trust_score": 0,
+                    "overall_score": 0,
+                    "explanation": "",
+                    "trust_explanation": "",
+                    "security_notes": {"permissions": [], "trust": []},
+                    "score_breakdown": {},
+                    "security_features": {"permissions": [], "trust": []},
+                    "refinement_suggestions": {"permissions": [], "trust": []},
+                    "is_question": False,
+                    "conversation_history": [],
+                    "compliance_status": {}
+                }
+                
+                # Ensure even the error response is serializable
+                try:
+                    json.dumps(error_fallback)
+                    logging.error(f"❌ Returning error fallback response (guaranteed serializable)")
+                    return error_fallback
+                except Exception as fallback_error:
+                    logging.error(f"❌ CRITICAL: Even error fallback failed to serialize: {fallback_error}")
+                    # Last resort: return absolute minimal response
+                    return {
+                        "conversation_id": str(uuid.uuid4()),
+                        "final_answer": "An error occurred. Please try again.",
+                        "error": "Serialization error"
+                    }
+            
+            # CRITICAL: Final safety check - if we somehow reach here without returning, return default
+            # This should NEVER happen, but if it does, we'll return a safe response
+            if 'response' not in locals() or response is None:
+                logging.error("❌ CRITICAL: Reached end of _generate_internal without response!")
+                logging.error(f"   response defined: {'response' in locals()}")
+                logging.error(f"   response is None: {response is None if 'response' in locals() else 'N/A'}")
+                return default_error_response.copy()
+            
+            # If we have a response but somehow didn't return it, return it now
+            logging.warning("⚠️ Reached end of try block - returning response dict directly")
+            logging.info(f"   Response type: {type(response)}")
+            logging.info(f"   Response has final_answer: {bool(response.get('final_answer'))}")
+            return response
             
     except asyncio.TimeoutError:
         logging.error("⏱️ Request timed out after 45 seconds")
@@ -1336,7 +2326,8 @@ Let me know if you have any questions!
             "error": error_message
         }
         logging.info(f"✅ Returning timeout error response with conversation_id: {error_response.get('conversation_id')}")
-        return JSONResponse(content=error_response)
+        # Return as dict, not JSONResponse
+        return error_response
     except Exception as e:
         logging.exception("❌ Error in generate endpoint")
         error_message = f"Error generating policy: {str(e)}"
@@ -1344,13 +2335,30 @@ Let me know if you have any questions!
         logging.error(f"   Error conversation_id: {error_conversation_id}")
         logging.error(f"   Error type: {type(e).__name__}")
         logging.error(f"   Error message: {str(e)}")
+        
+        # Ensure conversation_history is serializable
+        try:
+            error_history = conversations.get(error_conversation_id, [])[-10:]
+            # Clean history to ensure it's JSON-serializable
+            clean_history = []
+            for msg in error_history:
+                if isinstance(msg, dict):
+                    clean_msg = {
+                        "role": str(msg.get("role", "user")),
+                        "content": str(msg.get("content", "")) if msg.get("content") else "",
+                        "timestamp": str(msg.get("timestamp", "")) if msg.get("timestamp") else ""
+                    }
+                    clean_history.append(clean_msg)
+        except:
+            clean_history = []
+        
         error_response = {
-            "conversation_id": error_conversation_id,
-            "final_answer": error_message,
+            "conversation_id": str(error_conversation_id),
+            "final_answer": str(error_message)[:500],
             "message_count": len(conversations.get(error_conversation_id, [])),
             "policy": None,
             "trust_policy": None,
-            "explanation": error_message,
+            "explanation": str(error_message)[:500],
             "trust_explanation": "",
             "permissions_score": 0,
             "trust_score": 0,
@@ -1360,14 +2368,28 @@ Let me know if you have any questions!
             "security_features": {"permissions": [], "trust": []},
             "refinement_suggestions": {"permissions": [], "trust": []},
             "is_question": False,
-            "conversation_history": conversations.get(error_conversation_id, [])[-10:],
+            "conversation_history": clean_history,
             "compliance_status": {},
-            "error": str(e)
+            "error": str(e)[:200]
         }
-        logging.info(f"✅ Returning exception error response with conversation_id: {error_response.get('conversation_id')}")
-        logging.info(f"✅ Error response type: {type(error_response)}")
-        logging.info(f"✅ Error response has final_answer: {bool(error_response.get('final_answer'))}")
-        return JSONResponse(content=error_response)
+        
+        # Ensure error response is serializable
+        try:
+            json.dumps(error_response)
+            logging.info(f"✅ Returning exception error response with conversation_id: {error_response.get('conversation_id')}")
+            logging.info(f"✅ Error response type: {type(error_response)}")
+            logging.info(f"✅ Error response has final_answer: {bool(error_response.get('final_answer'))}")
+            # Return as dict, not JSONResponse
+            return error_response
+        except Exception as serialization_error:
+            logging.error(f"❌ CRITICAL: Error response itself failed to serialize: {serialization_error}")
+            # Return absolute minimal response as dict
+            minimal = {
+                "conversation_id": str(error_conversation_id),
+                "final_answer": "An error occurred. Please try again.",
+                "error": "Serialization error"
+            }
+            return minimal
 
 # Add FastAPI exception handler to catch any unhandled exceptions
 @app.exception_handler(Exception)
@@ -1399,9 +2421,9 @@ async def global_exception_handler(request: Request, exc: Exception):
             "error": str(exc)
         }
         
-        logging.info(f"✅ Global exception handler returning error response")
-        logging.info(f"   Error response type: {type(error_response)}")
-        logging.info(f"   Error response keys: {list(error_response.keys())}")
+        logging.debug(f"✅ Global exception handler returning error response")
+        logging.debug(f"   Error response type: {type(error_response)}")
+        logging.debug(f"   Error response keys: {list(error_response.keys())}")
         return JSONResponse(status_code=500, content=error_response)
     except Exception as handler_error:
         # If even the exception handler fails, return a minimal response
@@ -1445,7 +2467,7 @@ async def validate_policy(request: ValidationRequest):
                 "success": False
             }
         
-        logging.info(f"🔍 Starting validation in {request.mode} mode")
+        logging.debug(f"🔍 Starting validation in {request.mode} mode")
         
         async with asyncio.timeout(120):
             result = validator_agent.validate_policy(
@@ -1462,19 +2484,126 @@ async def validate_policy(request: ValidationRequest):
                 }
             
             validation_data = result.get("validation", {})
-            risk_score = validation_data.get("risk_score", 50)
+            
+            # DEBUG: Log the structure of validation_data
+            logging.info(f"🔍 RAW validation_data type: {type(validation_data)}")
+            logging.info(f"🔍 RAW validation_data keys: {list(validation_data.keys()) if isinstance(validation_data, dict) else 'NOT A DICT'}")
+            logging.info(f"🔍 RAW validation_data.risk_score: {validation_data.get('risk_score') if isinstance(validation_data, dict) else 'N/A'}")
+            if isinstance(validation_data, dict):
+                findings_raw = validation_data.get('findings', [])
+                logging.info(f"🔍 RAW validation_data.findings type: {type(findings_raw)}, length: {len(findings_raw) if isinstance(findings_raw, list) else 'N/A'}")
+                compliance_raw = validation_data.get('compliance_status', {})
+                logging.info(f"🔍 RAW validation_data.compliance_status type: {type(compliance_raw)}, keys: {list(compliance_raw.keys()) if isinstance(compliance_raw, dict) else 'N/A'}")
+                quick_wins_raw = validation_data.get('quick_wins', [])
+                logging.info(f"🔍 RAW validation_data.quick_wins type: {type(quick_wins_raw)}, length: {len(quick_wins_raw) if isinstance(quick_wins_raw, list) else 'N/A'}")
+                recs_raw = validation_data.get('recommendations', [])
+                logging.info(f"🔍 RAW validation_data.recommendations type: {type(recs_raw)}, length: {len(recs_raw) if isinstance(recs_raw, list) else 'N/A'}")
+            else:
+                logging.error(f"❌ validation_data is NOT a dict! It's: {type(validation_data)}")
+                logging.error(f"   Full validation_data: {str(validation_data)[:500]}")
+            
+            # Extract findings - ensure it's a list
             findings = validation_data.get("findings", [])
+            if not isinstance(findings, list):
+                findings = []
+            logging.info(f"📊 Extracted {len(findings)} findings from validation_data")
+            
+            # Extract risk_score - use the one from validation_data (agent's response)
+            # CRITICAL: Use the actual risk_score from agent, don't override it
+            risk_score = validation_data.get("risk_score")
+            
+            # Only calculate if risk_score is None or invalid (0 or negative)
+            if risk_score is None or risk_score <= 0:
+                # Calculate based on findings if not provided
+                if len(findings) == 0:
+                    risk_score = 5  # Excellent security - no findings
+                    logging.info(f"📊 Calculated risk_score: {risk_score}/100 (no findings)")
+                else:
+                    # Calculate based on severity
+                    critical_count = sum(1 for f in findings if f.get('severity') == 'Critical')
+                    high_count = sum(1 for f in findings if f.get('severity') == 'High')
+                    medium_count = sum(1 for f in findings if f.get('severity') == 'Medium')
+                    low_count = sum(1 for f in findings if f.get('severity') == 'Low')
+                    
+                    risk_score = min(100, 
+                        critical_count * 40 + 
+                        high_count * 20 + 
+                        medium_count * 10 + 
+                        low_count * 5
+                    )
+                    logging.info(f"📊 Calculated risk_score: {risk_score}/100 based on findings (C:{critical_count}, H:{high_count}, M:{medium_count}, L:{low_count})")
+            else:
+                # Use the agent's risk_score (this is the correct value)
+                logging.info(f"📊 Using risk_score from validation_data: {risk_score}/100")
+            
+            # Extract compliance_status - ensure it's a dict
             compliance_status = validation_data.get("compliance_status", {})
-            recommendations = validation_data.get("security_improvements", [])
+            if not isinstance(compliance_status, dict):
+                compliance_status = {}
+            logging.info(f"📊 Extracted compliance_status with {len(compliance_status)} frameworks: {list(compliance_status.keys())}")
+            
+            # CRITICAL: Agent returns "recommendations" not "security_improvements"
+            recommendations = validation_data.get("recommendations", []) or validation_data.get("security_improvements", [])
+            if not isinstance(recommendations, list):
+                recommendations = []
+            logging.info(f"📊 Extracted {len(recommendations)} recommendations")
+            
             quick_wins = validation_data.get("quick_wins", [])
+            if not isinstance(quick_wins, list):
+                quick_wins = []
+            logging.info(f"📊 Extracted {len(quick_wins)} quick_wins")
+            
             audit_summary = validation_data.get("audit_summary")
             top_risks = validation_data.get("top_risks")
             
             logging.info(f"✅ Validation completed:")
             logging.info(f"   ├─ Risk Score: {risk_score}/100")
             logging.info(f"   ├─ Findings: {len(findings)}")
+            logging.info(f"   ├─ Compliance Status Keys: {list(compliance_status.keys())}")
+            logging.info(f"   ├─ Recommendations: {len(recommendations)}")
+            logging.info(f"   ├─ Quick Wins: {len(quick_wins)}")
             
-            return {
+            # Extract role details if validating via ARN - CRITICAL: Check multiple locations
+            role_details = None
+            if request.role_arn:
+                # Priority 1: Check top-level result (from class variable) - MOST RELIABLE
+                result_role_details = result.get("role_details")
+                if result_role_details:
+                    # Check if it has actual policy data (not just empty lists)
+                    attached_count = len(result_role_details.get("attached_policies", []))
+                    inline_count = len(result_role_details.get("inline_policies", []))
+                    if attached_count > 0 or inline_count > 0 or result_role_details.get("trust_policy"):
+                        role_details = result_role_details
+                        logging.info(f"✅ Found role_details at top level: {attached_count} attached, {inline_count} inline")
+                    else:
+                        logging.debug(f"⚠️ Top-level role_details exists but has no policies: {result_role_details}")
+                
+                # Priority 2: Check validation_data (from agent JSON response)
+                if not role_details and validation_data.get("role_details"):
+                    validation_data_role = validation_data.get("role_details", {})
+                    attached_count = len(validation_data_role.get("attached_policies", []))
+                    inline_count = len(validation_data_role.get("inline_policies", []))
+                    if attached_count > 0 or inline_count > 0 or validation_data_role.get("trust_policy"):
+                        role_details = validation_data_role
+                        logging.info(f"✅ Found role_details in validation_data: {attached_count} attached, {inline_count} inline")
+                    else:
+                        logging.debug(f"⚠️ validation_data role_details exists but has no policies: {validation_data_role}")
+                
+                # Priority 3: Fallback - build basic role_details (only if we truly have nothing)
+                if not role_details:
+                    role_name = request.role_arn.split(':role/')[-1].split('/')[-1]
+                    role_details = {
+                        "role_arn": request.role_arn,
+                        "role_name": role_name,
+                        "attached_policies": [],
+                        "inline_policies": []
+                    }
+                    logging.warning(f"⚠️ Using fallback role_details for {role_name} - no attached policies found in result or validation_data")
+                    logging.warning(f"   Top-level result.role_details: {result.get('role_details')}")
+                    logging.warning(f"   validation_data.role_details: {validation_data.get('role_details')}")
+            
+            # Build response dict
+            response_dict = {
                 "success": True,
                 "risk_score": risk_score,
                 "findings": findings,
@@ -1483,9 +2612,35 @@ async def validate_policy(request: ValidationRequest):
                 "quick_wins": quick_wins,
                 "audit_summary": audit_summary,
                 "top_risks": top_risks,
+                "role_details": role_details,
                 "raw_response": result.get("raw_response", ""),
                 "mcp_enabled": result.get("mcp_enabled", False)
             }
+            
+            # CRITICAL: Also include validation object for frontend fallback
+            # Frontend checks data.validation.* as fallback
+            response_dict["validation"] = {
+                "risk_score": risk_score,
+                "findings": findings,
+                "compliance_status": compliance_status,
+                "recommendations": recommendations,
+                "quick_wins": quick_wins,
+                "audit_summary": audit_summary,
+                "top_risks": top_risks,
+                "role_details": role_details
+            }
+            
+            # Log final response structure for debugging
+            logging.info(f"📤 FINAL RESPONSE STRUCTURE:")
+            logging.info(f"   ├─ risk_score: {response_dict.get('risk_score')}")
+            logging.info(f"   ├─ findings count: {len(response_dict.get('findings', []))}")
+            logging.info(f"   ├─ compliance_status keys: {list(response_dict.get('compliance_status', {}).keys())}")
+            logging.info(f"   ├─ recommendations count: {len(response_dict.get('recommendations', []))}")
+            logging.info(f"   ├─ quick_wins count: {len(response_dict.get('quick_wins', []))}")
+            logging.info(f"   ├─ role_details attached: {len(response_dict.get('role_details', {}).get('attached_policies', []))}")
+            logging.info(f"   └─ validation object present: {bool(response_dict.get('validation'))}")
+            
+            return response_dict
             
     except asyncio.TimeoutError:
         logging.error("⏱️ Validation timed out after 120 seconds")
@@ -1509,7 +2664,7 @@ async def validate_policy(request: ValidationRequest):
 async def autonomous_audit(request: AuditRequest):
     """Perform full autonomous IAM audit of entire AWS account"""
     try:
-        logging.info("🤖 AUTONOMOUS AUDIT MODE INITIATED")
+        logging.debug("🤖 AUTONOMOUS AUDIT MODE INITIATED")
         
         async with asyncio.timeout(300):
             result = validator_agent.validate_policy(
@@ -1629,15 +2784,17 @@ async def validate_quick(request: QuickValidateRequest):
     Matches frontend API call structure
     """
     try:
-        logging.info(f"🔍 Quick validation request: {request.input_type}")
+        logging.debug(f"🔍 Quick validation request: {request.input_type}")
         
         # Convert to ValidationRequest format
         validation_req = ValidationRequest(
             policy_json=request.input_value if request.input_type == 'policy' else None,
             role_arn=request.input_value if request.input_type == 'arn' else None,
-            compliance_frameworks=request.compliance_frameworks or ['pci_dss', 'hipaa', 'sox', 'gdpr'],
+            compliance_frameworks=request.compliance_frameworks if request.compliance_frameworks and len(request.compliance_frameworks) > 0 else [],
             mode='quick'
         )
+        
+        logging.info(f"📋 Quick validation request: {request.input_type}, frameworks: {validation_req.compliance_frameworks}")
         
         # Use existing validate endpoint
         result = await validate_policy(validation_req)
@@ -1827,7 +2984,7 @@ async def audit_account(request: AccountAuditRequest):
     Matches frontend API call structure
     """
     try:
-        logging.info(f"🤖 Account audit request: {request.mode} mode")
+        logging.debug(f"🤖 Account audit request: {request.mode} mode")
         
         # Convert to AuditRequest format
         audit_req = AuditRequest(
@@ -1839,7 +2996,7 @@ async def audit_account(request: AccountAuditRequest):
         audit_agent = AuditAgent()
         
         # Perform comprehensive audit using 3 MCP servers
-        logging.info(f"🔍 Starting audit for region: {audit_req.aws_region}")
+        logging.debug(f"🔍 Starting audit for region: {audit_req.aws_region}")
         result = audit_agent.audit_account(aws_region=audit_req.aws_region)
         
         if not result.get('success'):
@@ -1865,3 +3022,707 @@ async def audit_account(request: AccountAuditRequest):
             "error": str(e),
             "success": False
         }
+
+def _describe_actions(actions: List[str]) -> str:
+    return "\n".join(f"- {action}" for action in actions)
+
+def fill_refinement_suggestions_from_breakdown(refinement_suggestions: Dict[str, List[str]], score_breakdown: Dict[str, Dict[str, List[str]]]):
+    if not refinement_suggestions.get('permissions') and score_breakdown['permissions']['improvements']:
+        refinement_suggestions['permissions'] = score_breakdown['permissions']['improvements']
+    if not refinement_suggestions.get('trust') and score_breakdown['trust']['improvements']:
+        refinement_suggestions['trust'] = score_breakdown['trust']['improvements']
+
+def build_final_message_from_cache(cached: Dict[str, Any]) -> str:
+    policy = cached.get("policy")
+    trust_policy = cached.get("trust_policy")
+    explanation_text = cached.get("explanation") or generate_permissions_explanation(policy)
+    trust_explanation_text = cached.get("trust_explanation") or generate_trust_explanation(trust_policy)
+    refinement_suggestions = cached.get("refinement_suggestions", {"permissions": [], "trust": []})
+
+    sections: List[str] = []
+
+    if policy:
+        sections.append("## Permissions Policy\n```json\n" + json.dumps(policy, indent=2) + "\n```")
+    if trust_policy:
+        sections.append("## Trust Policy\n```json\n" + json.dumps(trust_policy, indent=2) + "\n```")
+
+    if explanation_text:
+        sections.append("## Permissions Policy Explanation\n" + explanation_text)
+    if trust_explanation_text:
+        sections.append("## Trust Policy Explanation\n" + trust_explanation_text)
+
+    perm_suggestions = refinement_suggestions.get("permissions") or []
+    trust_suggestions = refinement_suggestions.get("trust") or []
+
+    if perm_suggestions:
+        formatted = "\n".join(f"- {item}" for item in perm_suggestions)
+        sections.append("## Permissions Policy Refinement Suggestions\n" + formatted)
+    if trust_suggestions:
+        formatted = "\n".join(f"- {item}" for item in trust_suggestions)
+        sections.append("## Trust Policy Refinement Suggestions\n" + formatted)
+
+    if not sections:
+        return cached.get("final_answer", "") or "No policy details are available yet."
+
+    header = "Here are the current IAM policies and analysis you generated earlier:\n"
+    return header + "\n\n".join(sections)
+
+
+def detect_user_intent(user_message: str, has_existing_policies: bool, conversation_history: List[Dict]) -> str:
+    """
+    Intelligently detect user intent using AI-powered classification with fallback.
+    Returns: "explanation", "modification", "validation", "general_question", "policy_generation"
+    """
+    user_lower = user_message.lower().strip()
+    
+    # Strong modification signals (highest priority)
+    modification_keywords = [
+        "add", "remove", "update", "change", "modify", "edit", "include", "exclude",
+        "replace", "set", "make it", "make the", "update the", "change the",
+        "add account id", "add region", "add mfa", "restrict", "loosen", "tighten"
+    ]
+    if any(keyword in user_lower for keyword in modification_keywords):
+        logging.debug("🎯 Intent detected: MODIFICATION (keyword-based)")
+        return "modification"
+    
+    # Strong explanation signals (check BEFORE validation to catch "why security score")
+    explanation_keywords = [
+        "explain", "what does", "how does", "tell me about", "describe", "break down",
+        "why", "what is", "what are", "help me understand", "show me", "can you explain",
+        "i don't understand", "expalin", "explain this", "explain the", "why is", "why are"
+    ]
+    # Check if it's an explanation request (including "why security score")
+    if any(keyword in user_lower for keyword in explanation_keywords):
+        if has_existing_policies:
+            logging.debug("🎯 Intent detected: EXPLANATION (keyword-based)")
+            return "explanation"
+        else:
+            logging.debug("🎯 Intent detected: GENERAL_QUESTION (explanation but no policies)")
+            return "general_question"
+    
+    # Strong validation signals (only if NOT an explanation request)
+    validation_keywords = [
+        "validate", "check", "analyze", "audit", "review", "assess", "security issues",
+        "vulnerabilities", "compliance", "is this secure", "risk"
+    ]
+    # Only trigger validation if explicitly asking for validation/audit (not "why security score")
+    if any(keyword in user_lower for keyword in validation_keywords) and "why" not in user_lower:
+        logging.debug("🎯 Intent detected: VALIDATION (keyword-based)")
+        return "validation"
+    
+    # Policy generation signals (only if no existing policies)
+    generation_keywords = [
+        "generate", "create", "make", "build", "new policy", "i need", "i want"
+    ]
+    if not has_existing_policies and any(keyword in user_lower for keyword in generation_keywords):
+        logging.debug("🎯 Intent detected: POLICY_GENERATION (keyword-based)")
+        return "policy_generation"
+    
+    # Default: explanation if policies exist, general question otherwise
+    if has_existing_policies:
+        logging.debug("🎯 Intent detected: EXPLANATION (default - policies exist)")
+        return "explanation"
+    else:
+        logging.debug("🎯 Intent detected: GENERAL_QUESTION (default - no policies)")
+        return "general_question"
+
+
+def build_explanation_response(conversation_id: str, user_message: str, cached: Dict[str, Any]) -> Dict[str, Any]:
+    """Build response for explanation requests (no agent recall)"""
+    
+    if not cached.get("policy"):
+        return {
+            "conversation_id": conversation_id,
+            "final_answer": "I don't have any policies to explain yet. Please generate policies first using the form above.",
+            "error": "no_policies",
+            "policy": None,
+            "trust_policy": None,
+            "explanation": "",
+            "trust_explanation": "",
+            "permissions_score": 0,
+            "trust_score": 0,
+            "overall_score": 0,
+            "is_question": False,
+            "regenerate": False
+        }
+    
+    # Build comprehensive explanation
+    explanation_text = cached.get("explanation", "")
+    trust_explanation = cached.get("trust_explanation", "")
+    
+    # If user asks about security score, add score breakdown explanation
+    user_lower = user_message.lower()
+    score_explanation = ""
+    if "score" in user_lower or "security score" in user_lower:
+        logging.debug("📝 User asked about security score - adding score breakdown")
+        permissions_score = cached.get("permissions_score", 0)
+        trust_score = cached.get("trust_score", 0)
+        overall_score = cached.get("overall_score", 0)
+        score_breakdown = cached.get("score_breakdown", {})
+        
+        score_explanation = f"""## Security Score Explanation
+
+**Permissions Policy Score: {permissions_score}/100**
+"""
+        if score_breakdown.get("permissions", {}).get("positive"):
+            score_explanation += "\n**Positive Security Features:**\n"
+            for item in score_breakdown["permissions"]["positive"][:5]:
+                score_explanation += f"- ✅ {item}\n"
+        
+        if score_breakdown.get("permissions", {}).get("improvements"):
+            score_explanation += "\n**Areas for Improvement:**\n"
+            for item in score_breakdown["permissions"]["improvements"][:5]:
+                score_explanation += f"- ⚠️ {item}\n"
+        
+        score_explanation += f"""
+**Trust Policy Score: {trust_score}/100**
+"""
+        if score_breakdown.get("trust", {}).get("positive"):
+            score_explanation += "\n**Positive Security Features:**\n"
+            for item in score_breakdown["trust"]["positive"][:3]:
+                score_explanation += f"- ✅ {item}\n"
+        
+        if score_breakdown.get("trust", {}).get("improvements"):
+            score_explanation += "\n**Areas for Improvement:**\n"
+            for item in score_breakdown["trust"]["improvements"][:3]:
+                score_explanation += f"- ⚠️ {item}\n"
+        
+        score_explanation += f"""
+**Overall Security Score: {overall_score}/100**
+
+This score is calculated as: (Permissions Score × 70%) + (Trust Score × 30%)
+
+The score reflects how well your policies follow AWS security best practices:
+- **90-100**: Excellent - Follows all major best practices
+- **70-89**: Good - Minor improvements possible
+- **50-69**: Fair - Several security enhancements recommended
+- **Below 50**: Needs improvement - Significant security gaps
+
+"""
+    
+    # If user asks specific question, enhance explanation with Q&A
+    if "?" in user_message or any(word in user_message.lower() for word in ["what", "how", "why", "which", "when"]):
+        logging.debug("📝 User asked specific question - enhancing explanation")
+        # Use cached explanation but format it nicely
+        if not explanation_text:
+            explanation_text = generate_permissions_explanation(cached.get("policy"))
+        if not trust_explanation:
+            trust_explanation = generate_trust_explanation(cached.get("trust_policy"))
+    
+    # Build final message with both policies embedded - well-formatted and readable
+    final_message = f"""{score_explanation if score_explanation else ''}{explanation_text}
+
+---
+
+{trust_explanation}
+
+---
+
+## Current Policies (for reference)
+
+### Permissions Policy
+```json
+{json.dumps(cached['policy'], indent=2)}
+```
+
+### Trust Policy
+```json
+{json.dumps(cached['trust_policy'], indent=2)}
+```
+
+---
+
+Would you like me to:
+- Explain any specific part in more detail?
+- Make modifications to these policies?
+- Add security conditions or restrictions?
+- Answer questions about AWS IAM best practices?
+"""
+    
+    # Get current conversation history
+    current_history = conversations.get(conversation_id, [])
+    
+    # Add assistant response to conversation history
+    assistant_message = {
+        "role": "assistant",
+        "content": final_message,
+        "timestamp": str(uuid.uuid4())
+    }
+    current_history.append(assistant_message)
+    
+    return {
+        "conversation_id": conversation_id,
+        "final_answer": final_message,
+        "policy": cached["policy"],
+        "trust_policy": cached["trust_policy"],
+        "explanation": explanation_text,
+        "trust_explanation": trust_explanation,
+        "permissions_score": cached.get("permissions_score", 0),
+        "trust_score": cached.get("trust_score", 0),
+        "overall_score": cached.get("overall_score", 0),
+        "security_notes": cached.get("security_notes", {"permissions": [], "trust": []}),
+        "security_features": cached.get("security_features", {"permissions": [], "trust": []}),
+        "score_breakdown": cached.get("score_breakdown", {"permissions": {"positive": [], "improvements": []}, "trust": {"positive": [], "improvements": []}}),
+        "refinement_suggestions": cached.get("refinement_suggestions", {"permissions": [], "trust": []}),
+        "compliance_status": cached.get("compliance_status", {}),
+        "is_question": False,
+        "regenerate": False,
+        "message_count": len(current_history),
+        "conversation_history": current_history[-10:]  # Include last 10 messages
+    }
+
+
+def build_validation_response(conversation_id: str, user_message: str, cached: Dict[str, Any], compliance_frameworks: List[str] = None) -> Dict[str, Any]:
+    """Build response for validation requests (ValidatorAgent)"""
+    
+    if not cached.get("policy"):
+        return {
+            "conversation_id": conversation_id,
+            "final_answer": "I don't have any policies to validate yet. Please generate policies first.",
+            "error": "no_policies",
+            "policy": None,
+            "trust_policy": None,
+            "is_question": False,
+            "regenerate": False
+        }
+    
+    # Call ValidatorAgent
+    try:
+        validation_result = validator_agent.validate_policy(
+            policy_json=json.dumps(cached["policy"]),
+            compliance_frameworks=compliance_frameworks or ["pci_dss", "hipaa", "sox", "gdpr", "cis"],
+            mode="quick"
+        )
+        
+        compliance_status = validation_result.get("compliance_status", {}) if isinstance(validation_result, dict) else {}
+        security_findings = validation_result.get("findings", []) if isinstance(validation_result, dict) else []
+        
+        # Build response message
+        final_message = f"""## Security Analysis
+
+I've analyzed your policies for security and compliance. Here are the results:
+
+### Compliance Status
+{format_compliance_status(compliance_status)}
+
+### Security Findings
+{format_security_findings(security_findings)}
+
+### Current Policies
+
+#### Permissions Policy
+```json
+{json.dumps(cached['policy'], indent=2)}
+```
+
+#### Trust Policy
+```json
+{json.dumps(cached['trust_policy'], indent=2)}
+```
+"""
+        
+        return {
+            "conversation_id": conversation_id,
+            "final_answer": final_message,
+            "policy": cached["policy"],
+            "trust_policy": cached["trust_policy"],
+            "compliance_status": compliance_status,
+            "security_findings": security_findings,
+            "is_question": False,
+            "regenerate": False,
+            "message_count": len(conversations.get(conversation_id, []))
+        }
+    except Exception as e:
+        logging.error(f"❌ Validation error: {e}")
+        return {
+            "conversation_id": conversation_id,
+            "final_answer": f"An error occurred during validation: {str(e)}",
+            "error": str(e),
+            "policy": cached.get("policy"),
+            "trust_policy": cached.get("trust_policy"),
+            "is_question": False,
+            "regenerate": False
+        }
+
+
+def format_compliance_status(compliance_status: Dict[str, Any]) -> str:
+    """Format compliance status for display"""
+    if not compliance_status:
+        return "No compliance frameworks were checked."
+    
+    lines = []
+    for framework, status in compliance_status.items():
+        if isinstance(status, dict):
+            status_text = status.get("status", "Unknown")
+            lines.append(f"- **{framework.upper()}**: {status_text}")
+        else:
+            lines.append(f"- **{framework.upper()}**: {status}")
+    
+    return "\n".join(lines) if lines else "No compliance data available."
+
+
+def format_security_findings(findings: List[Dict[str, Any]]) -> str:
+    """Format security findings for display"""
+    if not findings:
+        return "No security issues found."
+    
+    lines = []
+    for finding in findings[:10]:  # Limit to 10 findings
+        severity = finding.get("severity", "Unknown")
+        description = finding.get("description", finding.get("message", "No description"))
+        lines.append(f"- **{severity.upper()}**: {description}")
+    
+    return "\n".join(lines) if lines else "No security findings."
+
+
+# ============================================
+# CI/CD INTEGRATION ENDPOINTS
+# ============================================
+
+class PRAnalysisRequest(BaseModel):
+    """Request model for PR analysis"""
+    changed_files: List[Dict[str, str]]  # [{path: str, content: str, status: str}]
+    lookback_days: Optional[int] = 90
+    aws_region: Optional[str] = "us-east-1"
+
+
+@app.post("/api/cicd/analyze")
+async def analyze_pr_changes(request: PRAnalysisRequest):
+    """
+    Analyze IAM policy changes in a PR
+    Used by GitHub Actions, GitLab CI, or webhook handlers
+    """
+    try:
+        logging.info(f"🔍 Analyzing PR changes: {len(request.changed_files)} files")
+        
+        analyzer = CICDAnalyzer(aws_region=request.aws_region)
+        analysis = analyzer.analyze_pr_changes(
+            changed_files=request.changed_files,
+            lookback_days=request.lookback_days
+        )
+        
+        return {
+            "success": analysis.get('success', False),
+            "analysis": analysis.get('analysis', {}),
+            "errors": analysis.get('errors', [])
+        }
+    
+    except Exception as e:
+        logging.error(f"❌ PR analysis error: {e}")
+        raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
+
+
+@app.post("/api/cicd/generate-comment")
+async def generate_pr_comment(request: Request):
+    """
+    Generate formatted PR comment from analysis
+    """
+    try:
+        data = await request.json()
+        analysis = data.get('analysis', {})
+        
+        comment = PRCommentGenerator.generate_comment(analysis)
+        
+        return {
+            "success": True,
+            "comment": comment,
+            "format": "markdown"
+        }
+    
+    except Exception as e:
+        logging.error(f"❌ Comment generation error: {e}")
+        raise HTTPException(status_code=500, detail=f"Comment generation failed: {str(e)}")
+
+
+@app.post("/api/cicd/webhook/{webhook_id}")
+async def generic_webhook_handler(webhook_id: str, request: Request):
+    """
+    Generic webhook handler for CI/CD integration
+    Works with GitHub, GitLab, or any webhook provider
+    
+    Security: Verifies webhook token from header
+    """
+    try:
+        # Verify webhook token
+        token = request.headers.get('X-Aegis-Token', '')
+        if not webhook_manager.verify_webhook(webhook_id, token):
+            raise HTTPException(status_code=401, detail="Invalid webhook token")
+        
+        payload = await request.json()
+        
+        # Detect provider (GitHub or GitLab)
+        github_event = request.headers.get('X-GitHub-Event')
+        gitlab_event = payload.get('object_kind')
+        
+        if github_event:
+            return await _handle_github_webhook(payload, github_event)
+        elif gitlab_event:
+            return await _handle_gitlab_webhook(payload, gitlab_event)
+        else:
+            # Generic webhook - expect our format
+            return await _handle_generic_webhook(payload)
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"❌ Webhook error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+async def _handle_github_webhook(payload: Dict, event_type: str) -> Dict:
+    """Handle GitHub webhook - supports both PR and Push events"""
+    # Support both pull_request and push events
+    if event_type == 'pull_request':
+        action = payload.get('action')
+        if action not in ['opened', 'synchronize']:
+            return {"success": False, "message": f"Ignoring action: {action}"}
+        
+        pr = payload.get('pull_request', {})
+        repo = payload.get('repository', {})
+        
+        return {
+            "success": True,
+            "message": "Webhook received - PR analysis will be performed",
+            "pr_number": pr.get('number'),
+            "repo": repo.get('full_name'),
+            "action": action,
+            "event_type": "pull_request"
+        }
+    
+    elif event_type == 'push':
+        # Handle direct pushes to main/master branches
+        ref = payload.get('ref', '')
+        if not ref.startswith('refs/heads/'):
+            return {"success": False, "message": "Not a branch push"}
+        
+        branch = ref.replace('refs/heads/', '')
+        # Only analyze pushes to main/master/production branches
+        if branch not in ['main', 'master', 'production', 'prod']:
+            return {"success": False, "message": f"Push to {branch} branch - only analyzing main/master/production"}
+        
+        repo = payload.get('repository', {})
+        commits = payload.get('commits', [])
+        
+        return {
+            "success": True,
+            "message": "Webhook received - Push analysis will be performed",
+            "branch": branch,
+            "repo": repo.get('full_name'),
+            "commits": len(commits),
+            "event_type": "push"
+        }
+    
+    else:
+        return {"success": False, "message": f"Unsupported event type: {event_type}"}
+
+
+async def _handle_gitlab_webhook(payload: Dict, event_type: str) -> Dict:
+    """Handle GitLab webhook"""
+    if event_type != 'merge_request':
+        return {"success": False, "message": "Not a merge request event"}
+    
+    mr = payload.get('object_attributes', {})
+    action = mr.get('action')
+    
+    if action not in ['open', 'update']:
+        return {"success": False, "message": f"Ignoring action: {action}"}
+    
+    return {
+        "success": True,
+        "message": "Webhook received - analysis will be performed",
+        "mr_iid": mr.get('iid'),
+        "project": payload.get('project', {}).get('path_with_namespace'),
+        "action": action
+    }
+
+
+async def _handle_generic_webhook(payload: Dict) -> Dict:
+    """Handle generic webhook format"""
+    # Expect: {changed_files: [...], repository: "...", pr_number: ...}
+    changed_files = payload.get('changed_files', [])
+    
+    if not changed_files:
+        return {"success": False, "message": "No changed files provided"}
+    
+    # Analyze directly
+    analyzer = CICDAnalyzer()
+    analysis = analyzer.analyze_pr_changes(
+        changed_files=changed_files,
+        lookback_days=payload.get('lookback_days', 90)
+    )
+    
+    return {
+        "success": True,
+        "analysis": analysis.get('analysis', {}),
+        "message": "Analysis completed"
+    }
+
+
+@app.post("/api/cicd/webhook/github")
+async def github_webhook(request: Request):
+    """
+    GitHub webhook handler for PR events (legacy - use /api/cicd/webhook/{webhook_id})
+    """
+    return await generic_webhook_handler("legacy", request)
+
+
+@app.post("/api/cicd/webhook/gitlab")
+async def gitlab_webhook(request: Request):
+    """
+    GitLab webhook handler for MR events (legacy - use /api/cicd/webhook/{webhook_id})
+    """
+    return await generic_webhook_handler("legacy", request)
+
+
+@app.post("/api/cicd/generate-webhook")
+async def generate_webhook(request: Request):
+    """
+    Generate a secure webhook URL for CI/CD integration
+    No YAML files, no secrets - just add this webhook URL!
+    """
+    try:
+        data = await request.json()
+        user_id = data.get('user_id', 'anonymous')  # In production, get from auth
+        repository = data.get('repository', None)
+        
+        webhook = webhook_manager.generate_webhook(user_id, repository)
+        
+        return {
+            "success": True,
+            "webhook_id": webhook['webhook_id'],
+            "webhook_url": webhook['webhook_url'],
+            "token": webhook['token'],  # Show only once
+            "expires_at": webhook['expires_at'],
+            "instructions": {
+                "github": "Add this URL in: Repository Settings → Webhooks → Add webhook",
+                "gitlab": "Add this URL in: Project Settings → Webhooks → Add webhook",
+                "header": "Add header: X-Aegis-Token with the token value"
+            }
+        }
+    
+    except Exception as e:
+        logging.error(f"❌ Webhook generation error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================
+# GITHUB APP ENDPOINTS
+# ============================================
+
+@app.post("/api/github/webhook")
+async def github_app_webhook(request: Request):
+    """
+    GitHub App webhook handler
+    Handles both PR and Push events automatically
+    """
+    try:
+        # Verify webhook signature
+        payload_body = await request.body()
+        signature = request.headers.get('X-Hub-Signature-256', '')
+        
+        if not github_app.verify_webhook_signature(payload_body, signature):
+            raise HTTPException(status_code=401, detail="Invalid webhook signature")
+        
+        payload = json.loads(payload_body.decode())
+        event_type = request.headers.get('X-GitHub-Event', '')
+        
+        logging.info(f"📥 GitHub App webhook received: {event_type}")
+        
+        # Handle the event
+        result = await _handle_github_webhook(payload, event_type)
+        return result
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"❌ GitHub App webhook error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/github/install")
+async def github_app_install():
+    """
+    Get GitHub App installation URL
+    For GitHub Apps, users install directly from GitHub
+    """
+    try:
+        # Get app ID from environment
+        app_id = os.getenv('GITHUB_APP_ID', '')
+        if not app_id:
+            return {
+                "success": False,
+                "error": "GitHub App not configured",
+                "message": "Please set GITHUB_APP_ID environment variable. Register your app at: https://github.com/settings/apps/new",
+                "setup_url": "https://github.com/settings/apps/new"
+            }
+        
+        # For now, return a generic installation URL
+        # In production, you'd get this from your app registration
+        # The URL format is: https://github.com/apps/{app-name}/installations/new
+        # Or: https://github.com/settings/installations/new (shows all apps)
+        
+        return {
+            "success": True,
+            "install_url": "https://github.com/settings/installations/new",
+            "message": "Go to GitHub to install the app on your repositories",
+            "instructions": "After installing, the app will automatically analyze IAM policies on PRs and pushes"
+        }
+    except Exception as e:
+        logging.error(f"❌ GitHub App install URL generation error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/github/oauth/callback")
+async def github_oauth_callback(request: Request):
+    """
+    Handle GitHub OAuth callback
+    Exchange code for access token
+    """
+    try:
+        data = await request.json()
+        code = data.get('code')
+        
+        if not code:
+            raise HTTPException(status_code=400, detail="Missing authorization code")
+        
+        token_data = github_app.exchange_code_for_token(code)
+        
+        if not token_data:
+            raise HTTPException(status_code=400, detail="Failed to exchange code for token")
+        
+        return {
+            "success": True,
+            "access_token": token_data.get('access_token'),
+            "token_type": token_data.get('token_type', 'bearer'),
+            "scope": token_data.get('scope', '')
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"❌ OAuth callback error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/github/installations")
+async def get_github_installations():
+    """
+    Get list of GitHub App installations
+    """
+    try:
+        # This would query your database in production
+        # For now, return installations from in-memory storage
+        installations = []
+        for installation_id, data in github_app.installations.items():
+            installations.append({
+                "installation_id": installation_id,
+                "account": data.get('account', {}),
+                "expires_at": data.get('expires_at').isoformat() if data.get('expires_at') else None
+            })
+        
+        return {
+            "success": True,
+            "installations": installations
+        }
+    except Exception as e:
+        logging.error(f"❌ Get installations error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
