@@ -327,8 +327,16 @@ iam-policy-check:
                           const response = await fetch(`${apiUrl}/api/github/install`);
                           const data = await response.json();
                           if (data.success && data.install_url) {
-                            // Open GitHub installation page in new tab
-                            window.open(data.install_url, '_blank');
+                            // Show demo message if in demo mode
+                            if (data.demo_mode) {
+                              const confirmMessage = `Demo Mode Active\n\n${data.message}\n\n${data.instructions}\n\nWould you like to see the GitHub App installation page?`;
+                              if (window.confirm(confirmMessage)) {
+                                window.open(data.install_url, '_blank');
+                              }
+                            } else {
+                              // Production mode: Open GitHub installation page directly
+                              window.open(data.install_url, '_blank');
+                            }
                           } else if (data.error) {
                             // Show error with setup instructions
                             alert(`${data.error}\n\n${data.message || ''}\n\n${data.setup_url ? `Setup: ${data.setup_url}` : ''}`);

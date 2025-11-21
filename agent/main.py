@@ -3651,14 +3651,14 @@ async def github_app_install():
         
         # DEMO MODE: If not configured, return a demo URL for localhost testing
         if not app_id:
-            # For demo purposes, return a working GitHub URL
-            # This allows the UI to work and show the flow
+            # For demo purposes, show a simulated installation flow
+            # In production, this would redirect to the actual app installation page
             return {
                 "success": True,
-                "install_url": "https://github.com/settings/apps/new",
-                "message": "Demo Mode: Register your GitHub App to enable full functionality",
+                "install_url": "https://github.com/settings/installations/new",
+                "message": "Demo Mode: This would open the GitHub App installation page",
                 "demo_mode": True,
-                "instructions": "For demo: This will open GitHub App registration. In production, this would open the app installation page."
+                "instructions": "In production: Users select repositories and install the app. The app then automatically analyzes IAM policies on PRs and pushes."
             }
         
         # Production mode: Return actual installation URL
