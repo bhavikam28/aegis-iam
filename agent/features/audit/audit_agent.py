@@ -1139,9 +1139,18 @@ class AuditAgent:
         try:
             finding_type = finding.get('type', '')
             severity = finding.get('severity', '')
-            role_name = finding.get('role', '')
+            role_name = finding.get('role', '') or finding.get('role_name', '') or finding.get('role_arn', '').split('/')[-1] if finding.get('role_arn') else ''
             
-            logging.info(f"🔧 Applying fix for: {finding.get('title')}")
+            # Skip if no role name available
+            if not role_name:
+                logging.warning(f"⚠️ Cannot apply fix: No role name found in finding: {finding.get('title')}")
+                return {
+                    'success': False,
+                    'message': f"Cannot apply fix: No role name found in finding",
+                    'actions': []
+                }
+            
+            logging.info(f"🔧 Applying fix for: {finding.get('title')} (Role: {role_name})")
             
             actions_taken = []
             
@@ -1149,6 +1158,13 @@ class AuditAgent:
             if finding_type == 'Unused Permissions':
                 # Remove unused permissions
                 unused_perms = finding.get('affected_permissions', [])
+                if not unused_perms:
+                    logging.warning(f"⚠️ No affected_permissions found in finding")
+                    return {
+                        'success': False,
+                        'message': f"No permissions specified to remove",
+                        'actions': []
+                    }
                 for perm in unused_perms:
                     result = self._remove_permission(role_name, perm)
                     if result:
@@ -1199,6 +1215,10 @@ class AuditAgent:
     def _remove_permission(self, role_name: str, permission: str) -> bool:
         """Remove a specific permission from a role using boto3"""
         try:
+            if not role_name or not role_name.strip():
+                logging.error(f"❌ Invalid role name: '{role_name}'")
+                return False
+                
             if not self.boto_iam:
                 logging.error("❌ Boto3 IAM client not available")
                 return False
