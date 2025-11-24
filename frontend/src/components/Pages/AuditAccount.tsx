@@ -976,11 +976,45 @@ const AuditAccount: React.FC = () => {
                                           <div className="space-y-1">
                                             {finding.compliance_violations.map((violation, vIdx) => {
                                               // Extract framework and requirement from violation string
-                                              // Format: "HIPAA 164.308(a)(4)", "PCI DSS 7.1.2", "GDPR Article 5", etc.
-                                              const frameworkMatch = violation.match(/(HIPAA|PCI\s+DSS|GDPR|SOX|CIS|NIST)/i);
-                                              const framework = frameworkMatch ? frameworkMatch[1] : '';
-                                              const requirementMatch = violation.match(/(164\.\d+\([a-z]\)?\(?\d+\)?|\d+\.\d+(?:\.\d+)?|Article\s+\d+|Section\s+\d+)/i);
-                                              const requirement = requirementMatch ? requirementMatch[1] : violation;
+                                              // Format: "HIPAA 164.308(a)(4)", "PCI DSS 7.1.2", "GDPR Article 5", "SOC 2 CC6.1", "CIS AWS 1.1, 1.2", etc.
+                                              let framework = '';
+                                              let requirement = violation;
+                                              
+                                              // Check for HIPAA
+                                              const hipaaMatch = violation.match(/HIPAA\s+(164\.\d+\([a-z]\)?\(?\d+\)?)/i);
+                                              if (hipaaMatch) {
+                                                framework = 'HIPAA';
+                                                requirement = hipaaMatch[1];
+                                              }
+                                              // Check for PCI DSS
+                                              else if (violation.match(/PCI\s+DSS/i)) {
+                                                framework = 'PCI DSS';
+                                                const pciMatch = violation.match(/(\d+\.\d+(?:\.\d+)?)/);
+                                                requirement = pciMatch ? pciMatch[1] : violation;
+                                              }
+                                              // Check for GDPR
+                                              else if (violation.match(/GDPR/i)) {
+                                                framework = 'GDPR';
+                                                const gdprMatch = violation.match(/Article\s+(\d+)/i);
+                                                requirement = gdprMatch ? `Article ${gdprMatch[1]}` : violation;
+                                              }
+                                              // Check for SOX
+                                              else if (violation.match(/SOX/i)) {
+                                                framework = 'SOX';
+                                                const soxMatch = violation.match(/Section\s+(\d+)/i);
+                                                requirement = soxMatch ? `Section ${soxMatch[1]}` : violation;
+                                              }
+                                              // Check for SOC 2
+                                              else if (violation.match(/SOC\s*2/i)) {
+                                                framework = 'SOC 2';
+                                                requirement = violation; // Use full violation text for SOC 2
+                                              }
+                                              // Check for CIS
+                                              else if (violation.match(/CIS/i)) {
+                                                framework = 'CIS';
+                                                requirement = violation; // Use full violation text for CIS
+                                              }
+                                              
                                               const link = framework ? getComplianceLink(framework, requirement) : null;
                                               
                                               return (

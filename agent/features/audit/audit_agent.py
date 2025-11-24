@@ -14,7 +14,6 @@ from datetime import datetime, timedelta
 from core.fastmcp_client import get_mcp_client
 from features.validation.security_validator import SecurityValidator
 from features.validation.policy_scorer import calculate_policy_scores, generate_security_recommendations
-from utils.compliance_links import add_links_to_compliance_violations
 
 logging.basicConfig(level=logging.INFO)
 
@@ -583,7 +582,7 @@ class AuditAgent:
                         'impact': impact,
                         'recommendation': recommendation,
                         'detailed_remediation': self._get_detailed_remediation(issue_id, role_name),
-                        'compliance_violations': self._get_compliance_violations_with_links(issue_id),
+                        'compliance_violations': self._get_compliance_violations(issue_id),
                         'affected_permissions': self._extract_permissions_from_policy(policy),
                         'policy_snippet': self._get_policy_snippet(policy, issue_id),
                         'type': 'Policy Violation'

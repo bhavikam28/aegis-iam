@@ -1022,7 +1022,8 @@ When operating in QUICK VALIDATION MODE, you MUST return ONLY a JSON object with
         {
           "requirement": "<requirement-id>",
           "description": "<description>",
-          "fix": "<fix-suggestion>"
+          "fix": "<fix-suggestion>",
+          "link": "<official-documentation-url>"
         }
       ],
       "gaps": ["<gap-1>", "<gap-2>"]
@@ -1517,6 +1518,13 @@ YOUR RESPONSE MUST BE:
     "sox": {{"name": "SOX", "status": "Compliant|Partial|NonCompliant", "violations": [], "gaps": []}},
     "gdpr": {{"name": "GDPR", "status": "Compliant|Partial|NonCompliant", "violations": [], "gaps": []}}
   }},
+  
+CRITICAL: For each violation in compliance_status, you MUST include a "link" field with the official documentation URL.
+- For HIPAA requirements like "164.308(a)(4)", use: https://www.hhs.gov/hipaa/for-professionals/security/laws-regulations/index.html#164.308
+- For PCI DSS requirements like "7.1.2", use: https://www.pcisecuritystandards.org/document_library/?document=pci_dss&view=document
+- For GDPR articles like "Article 5", use: https://gdpr-info.eu/art-5-gdpr/
+- For SOX sections like "Section 404", use: https://www.sec.gov/rules/final/33-8238.htm#404
+- Always provide the most specific URL available for the exact requirement being referenced.
   "quick_wins": ["<win-1>", "<win-2>"],
   "recommendations": ["<rec-1>", "<rec-2>"]
 }}
