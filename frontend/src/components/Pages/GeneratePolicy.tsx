@@ -4,7 +4,7 @@ import type { LucideIcon } from 'lucide-react';
 import { generatePolicy, sendFollowUp } from '../../services/api';
 import { GeneratePolicyResponse, ChatMessage } from '../../types';
 import { saveToStorage, loadFromStorage, clearStorage, STORAGE_KEYS } from '@/utils/persistence';
-import { getComplianceLink } from '@/utils/complianceLinks';
+// Note: Compliance links should come from agent response, not hardcoded
 
 const GeneratePolicy: React.FC = () => {
   const [description, setDescription] = useState('');
@@ -2373,17 +2373,7 @@ What would you like to do?`,
                                   </div>
                                   <div className="text-slate-500 text-xs font-semibold bg-slate-50 px-2 py-1 rounded border border-slate-200 inline-flex items-center space-x-1">
                                     <span>PCI DSS Requirement 7.1.2: Restrict access to cardholder data by business need-to-know</span>
-                                    {(() => {
-                                      const link = getComplianceLink('pci_dss', '7.1.2');
-                                      if (link) {
-                                        return (
-                                          <a href={link} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 transition-colors" title="View official PCI DSS documentation">
-                                            <ExternalLink className="w-3 h-3" />
-                                          </a>
-                                        );
-                                      }
-                                      return null;
-                                    })()}
+                                    {/* Links should come from agent response - TODO: Use compliance_features from agent */}
                                   </div>
                                 </div>
                               </div>
@@ -2396,17 +2386,7 @@ What would you like to do?`,
                                   </div>
                                   <div className="text-slate-500 text-xs font-semibold bg-slate-50 px-2 py-1 rounded border border-slate-200 inline-flex items-center space-x-1">
                                     <span>PCI DSS Requirement 7.1.2: Limit access to cardholder data environment</span>
-                                    {(() => {
-                                      const link = getComplianceLink('pci_dss', '7.1.2');
-                                      if (link) {
-                                        return (
-                                          <a href={link} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 transition-colors" title="View official PCI DSS documentation">
-                                            <ExternalLink className="w-3 h-3" />
-                                          </a>
-                                        );
-                                      }
-                                      return null;
-                                    })()}
+                                    {/* Links should come from agent response - TODO: Use compliance_features from agent */}
                                   </div>
                                 </div>
                               </div>
@@ -2459,17 +2439,7 @@ What would you like to do?`,
                                   </div>
                                   <div className="text-slate-500 text-xs font-semibold bg-slate-50 px-2 py-1 rounded border border-slate-200 inline-flex items-center space-x-1">
                                     <span>HIPAA 164.308(a)(4): Information access management</span>
-                                    {(() => {
-                                      const link = getComplianceLink('hipaa', '164.308(a)(4)');
-                                      if (link) {
-                                        return (
-                                          <a href={link} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 transition-colors" title="View official HIPAA documentation">
-                                            <ExternalLink className="w-3 h-3" />
-                                          </a>
-                                        );
-                                      }
-                                      return null;
-                                    })()}
+                                    {/* Links should come from agent response - TODO: Use compliance_features from agent */}
                                   </div>
                                 </div>
                               </div>
@@ -2556,17 +2526,7 @@ What would you like to do?`,
                                   </div>
                                   <div className="text-slate-500 text-xs font-semibold bg-slate-50 px-2 py-1 rounded border border-slate-200 inline-flex items-center space-x-1">
                                     <span>SOX Section 404: Management assessment of internal controls</span>
-                                    {(() => {
-                                      const link = getComplianceLink('sox', 'Section 404');
-                                      if (link) {
-                                        return (
-                                          <a href={link} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 transition-colors" title="View official SOX documentation">
-                                            <ExternalLink className="w-3 h-3" />
-                                          </a>
-                                        );
-                                      }
-                                      return null;
-                                    })()}
+                                    {/* Links should come from agent response - TODO: Use compliance_features from agent */}
                                   </div>
                                 </div>
                               </div>
@@ -2631,17 +2591,7 @@ What would you like to do?`,
                                   </div>
                                   <div className="text-slate-500 text-xs font-semibold bg-slate-50 px-2 py-1 rounded border border-slate-200 inline-flex items-center space-x-1">
                                     <span>GDPR Article 5(1)(c): Data minimization principle</span>
-                                    {(() => {
-                                      const link = getComplianceLink('gdpr', 'Article 5');
-                                      if (link) {
-                                        return (
-                                          <a href={link} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 transition-colors" title="View official GDPR documentation">
-                                            <ExternalLink className="w-3 h-3" />
-                                          </a>
-                                        );
-                                      }
-                                      return null;
-                                    })()}
+                                    {/* Links should come from agent response - TODO: Use compliance_features from agent */}
                                   </div>
                                 </div>
                               </div>
@@ -2677,17 +2627,7 @@ What would you like to do?`,
                                   </div>
                                   <div className="text-slate-500 text-xs font-semibold bg-slate-50 px-2 py-1 rounded border border-slate-200 inline-flex items-center space-x-1">
                                     <span>GDPR Article 5(2): Accountability principle</span>
-                                    {(() => {
-                                      const link = getComplianceLink('gdpr', 'Article 5');
-                                      if (link) {
-                                        return (
-                                          <a href={link} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 transition-colors" title="View official GDPR documentation">
-                                            <ExternalLink className="w-3 h-3" />
-                                          </a>
-                                        );
-                                      }
-                                      return null;
-                                    })()}
+                                    {/* Links should come from agent response - TODO: Use compliance_features from agent */}
                                   </div>
                                 </div>
                               </div>
@@ -2700,17 +2640,7 @@ What would you like to do?`,
                                   </div>
                                   <div className="text-slate-500 text-xs font-semibold bg-slate-50 px-2 py-1 rounded border border-slate-200 inline-flex items-center space-x-1">
                                     <span>GDPR Article 5(1)(b): Purpose limitation principle</span>
-                                    {(() => {
-                                      const link = getComplianceLink('gdpr', 'Article 5');
-                                      if (link) {
-                                        return (
-                                          <a href={link} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 transition-colors" title="View official GDPR documentation">
-                                            <ExternalLink className="w-3 h-3" />
-                                          </a>
-                                        );
-                                      }
-                                      return null;
-                                    })()}
+                                    {/* Links should come from agent response - TODO: Use compliance_features from agent */}
                                   </div>
                                 </div>
                               </div>
