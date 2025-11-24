@@ -1738,6 +1738,30 @@ NOW RETURN ONLY THE JSON CODE BLOCK - NO TEXT, NO EXPLANATIONS, NO "I'll analyze
                         validation_result = json.loads(response_text)
                         logging.info(f"✅ Successfully parsed entire response as JSON")
                 
+                # Enrich compliance violations with links
+                if isinstance(validation_result, dict) and 'compliance_status' in validation_result:
+                    compliance_status = validation_result['compliance_status']
+                    for framework_key, framework_data in compliance_status.items():
+                        if isinstance(framework_data, dict) and 'violations' in framework_data:
+                            violations = framework_data['violations']
+                            for violation in violations:
+                                if isinstance(violation, dict) and 'requirement' in violation:
+                                    requirement = violation['requirement']
+                                    # Extract framework name from key (e.g., 'pci_dss' -> 'PCI DSS')
+                                    framework_name_map = {
+                                        'pci_dss': 'PCI DSS',
+                                        'hipaa': 'HIPAA',
+                                        'sox': 'SOX',
+                                        'gdpr': 'GDPR',
+                                        'cis': 'CIS',
+                                        'nist': 'NIST'
+                                    }
+                                    framework_name = framework_name_map.get(framework_key, framework_key.upper())
+                                    link = get_compliance_link(framework_name, requirement)
+                                    if link:
+                                        violation['link'] = link
+                                        logging.debug(f"✅ Added link to {framework_name} {requirement}: {link}")
+                
                 # CRITICAL: Always include role_details if validating via ARN
                 # This ensures the frontend receives policy information even if agent doesn't include it
                 if role_arn:

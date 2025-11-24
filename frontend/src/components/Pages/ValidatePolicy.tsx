@@ -1964,7 +1964,8 @@ const ValidatePolicy: React.FC = () => {
                                     <div className="text-red-700 font-bold text-sm flex items-center space-x-2">
                                       <span>{violation.requirement}</span>
                                       {(() => {
-                                        const link = getComplianceLink(key, violation.requirement);
+                                        // Use link from backend if available, otherwise try to generate one
+                                        const link = violation.link || getComplianceLink(key, violation.requirement);
                                         if (link) {
                                           return (
                                             <a
@@ -1972,7 +1973,7 @@ const ValidatePolicy: React.FC = () => {
                                               target="_blank"
                                               rel="noopener noreferrer"
                                               className="text-blue-600 hover:text-blue-800 transition-colors"
-                                              title="View official compliance documentation"
+                                              title={`View official ${key.toUpperCase()} documentation for ${violation.requirement}. Note: You may need to navigate to the specific subsection within the document.`}
                                             >
                                               <ExternalLink className="w-3 h-3" />
                                             </a>

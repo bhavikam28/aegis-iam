@@ -17,7 +17,9 @@ const COMPLIANCE_BASE_URLS = {
   sox: 'https://www.sec.gov/rules/final/33-8238.htm',
   gdpr: 'https://gdpr-info.eu/',
   cis: 'https://www.cisecurity.org/benchmark/aws',
-  nist: 'https://csrc.nist.gov/publications/detail/sp/800-53/rev-5/final'
+  nist: 'https://csrc.nist.gov/publications/detail/sp/800-53/rev-5/final',
+  'soc 2': 'https://www.aicpa.org/interestareas/frc/assuranceadvisoryservices/aicpasoc2report.html',
+  soc2: 'https://www.aicpa.org/interestareas/frc/assuranceadvisoryservices/aicpasoc2report.html',
 };
 
 // HIPAA specific requirements
@@ -25,15 +27,21 @@ const HIPAA_REQUIREMENTS: Record<string, string> = {
   '164.308(a)(4)': 'https://www.hhs.gov/hipaa/for-professionals/security/laws-regulations/index.html#164.308',
   '164.312(a)(1)': 'https://www.hhs.gov/hipaa/for-professionals/security/laws-regulations/index.html#164.312',
   '164.312(a)(2)': 'https://www.hhs.gov/hipaa/for-professionals/security/laws-regulations/index.html#164.312',
+  '164.312(a)(2)(iv)': 'https://www.hhs.gov/hipaa/for-professionals/security/laws-regulations/index.html#164.312',
   '164.312(c)(1)': 'https://www.hhs.gov/hipaa/for-professionals/security/laws-regulations/index.html#164.312',
   '164.312(b)': 'https://www.hhs.gov/hipaa/for-professionals/security/laws-regulations/index.html#164.312',
+  '164.502(b)': 'https://www.hhs.gov/hipaa/for-professionals/privacy/laws-regulations/index.html#164.502',
 };
 
 // PCI DSS specific requirements
+// Note: PCI SSC document library doesn't support direct deep links to specific requirements
+// Links go to the document library - users need to search for the requirement number in the PDF
 const PCI_DSS_REQUIREMENTS: Record<string, string> = {
-  '7.1.2': 'https://www.pcisecuritystandards.org/document_library/?document=pci_dss',
-  '8.3': 'https://www.pcisecuritystandards.org/document_library/?document=pci_dss',
-  '4.2': 'https://www.pcisecuritystandards.org/document_library/?document=pci_dss',
+  '1': 'https://www.pcisecuritystandards.org/document_library/?document=pci_dss&view=document',
+  '7.1.2': 'https://www.pcisecuritystandards.org/document_library/?document=pci_dss&view=document',
+  '8.3': 'https://www.pcisecuritystandards.org/document_library/?document=pci_dss&view=document',
+  '10': 'https://www.pcisecuritystandards.org/document_library/?document=pci_dss&view=document',
+  '4.2': 'https://www.pcisecuritystandards.org/document_library/?document=pci_dss&view=document',
 };
 
 // GDPR Articles
@@ -84,12 +92,16 @@ export function getComplianceLink(framework: string, requirement: string): strin
     return COMPLIANCE_BASE_URLS.sox;
   }
   
-  if (frameworkLower === 'cis') {
+  if (frameworkLower === 'cis' || frameworkLower === 'cis aws') {
     return COMPLIANCE_BASE_URLS.cis;
   }
   
   if (frameworkLower === 'nist') {
     return COMPLIANCE_BASE_URLS.nist;
+  }
+  
+  if (frameworkLower === 'soc 2' || frameworkLower === 'soc2') {
+    return COMPLIANCE_BASE_URLS['soc 2'];
   }
   
   // Fallback to base URL

@@ -2506,7 +2506,7 @@ What would you like to do?`,
                                   <div className="text-slate-500 text-xs font-semibold bg-slate-50 px-2 py-1 rounded border border-slate-200 inline-flex items-center space-x-1">
                                     <span>HIPAA 164.312(a)(2)(iv): Encryption and decryption</span>
                                     {(() => {
-                                      const link = getComplianceLink('hipaa', '164.312(a)(2)');
+                                      const link = getComplianceLink('hipaa', '164.312(a)(2)(iv)');
                                       if (link) {
                                         return (
                                           <a href={link} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 transition-colors" title="View official HIPAA documentation">
