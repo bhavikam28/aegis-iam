@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Search, AlertTriangle, XCircle, CheckCircle, Info, AlertCircle, Shield, Sparkles, Copy, Download, RefreshCw, Zap, Bot, ChevronDown, ChevronUp, Send, TrendingUp, Target, Clock, Share2, Activity, Scan, FileSearch, Users, Database, Lock, Eye, Settings, X, Minimize2, Maximize2, ArrowRight } from 'lucide-react';
+import { Search, AlertTriangle, XCircle, CheckCircle, Info, AlertCircle, Shield, Sparkles, Copy, Download, RefreshCw, Zap, Bot, ChevronDown, ChevronUp, Send, TrendingUp, Target, Clock, Share2, Activity, Scan, FileSearch, Users, Database, Lock, Eye, Settings, X, Minimize2, Maximize2, ArrowRight, ExternalLink } from 'lucide-react';
 import { saveToStorage, loadFromStorage, STORAGE_KEYS } from '@/utils/persistence';
+import { getComplianceLink } from '@/utils/complianceLinks';
 
 // ============================================
 // TYPE DEFINITIONS
@@ -1960,7 +1961,26 @@ const ValidatePolicy: React.FC = () => {
                                 <div className="flex items-start justify-between mb-2">
                                   <div className="flex items-center space-x-2">
                                     <div className="w-2 h-2 bg-red-500 rounded-full"></div>
-                                    <div className="text-red-700 font-bold text-sm">{violation.requirement}</div>
+                                    <div className="text-red-700 font-bold text-sm flex items-center space-x-2">
+                                      <span>{violation.requirement}</span>
+                                      {(() => {
+                                        const link = getComplianceLink(key, violation.requirement);
+                                        if (link) {
+                                          return (
+                                            <a
+                                              href={link}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              className="text-blue-600 hover:text-blue-800 transition-colors"
+                                              title="View official compliance documentation"
+                                            >
+                                              <ExternalLink className="w-3 h-3" />
+                                            </a>
+                                          );
+                                        }
+                                        return null;
+                                      })()}
+                                    </div>
                                   </div>
                                   <span className="px-2 py-0.5 bg-red-500/10 text-red-700 text-xs font-semibold rounded border border-red-200/50">
                                     High Priority

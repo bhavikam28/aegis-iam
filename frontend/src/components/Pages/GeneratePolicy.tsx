@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Shield, Send, RefreshCw, User, Bot, MessageSquare, Lock, ArrowRight, CheckCircle, AlertCircle, Download, Copy, Sparkles, Info, X, Minimize2, ChevronUp, ChevronDown, Maximize2, XCircle, Lightbulb, FileCheck, Target, UserCheck, KeySquare, ShieldCheck, Cloud, Database, Server, Activity, Globe, BookOpen } from 'lucide-react';
+import { Shield, Send, RefreshCw, User, Bot, MessageSquare, Lock, ArrowRight, CheckCircle, AlertCircle, Download, Copy, Sparkles, Info, X, Minimize2, ChevronUp, ChevronDown, Maximize2, XCircle, Lightbulb, FileCheck, Target, UserCheck, KeySquare, ShieldCheck, Cloud, Database, Server, Activity, Globe, BookOpen, ExternalLink } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { generatePolicy, sendFollowUp } from '../../services/api';
 import { GeneratePolicyResponse, ChatMessage } from '../../types';
 import { saveToStorage, loadFromStorage, clearStorage, STORAGE_KEYS } from '@/utils/persistence';
+import { getComplianceLink } from '@/utils/complianceLinks';
 
 const GeneratePolicy: React.FC = () => {
   const [description, setDescription] = useState('');
@@ -2370,8 +2371,19 @@ What would you like to do?`,
                                   <div className="text-slate-600 text-xs font-medium leading-relaxed mb-2">
                                     Policy uses specific actions instead of wildcards, limiting access to only necessary permissions. This ensures that even if credentials are compromised, attackers can only perform the exact operations needed for the intended function, significantly reducing the attack surface.
                                   </div>
-                                  <div className="text-slate-500 text-xs font-semibold bg-slate-50 px-2 py-1 rounded border border-slate-200 inline-block">
-                                    PCI DSS Requirement 7.1.2: Restrict access to cardholder data by business need-to-know
+                                  <div className="text-slate-500 text-xs font-semibold bg-slate-50 px-2 py-1 rounded border border-slate-200 inline-flex items-center space-x-1">
+                                    <span>PCI DSS Requirement 7.1.2: Restrict access to cardholder data by business need-to-know</span>
+                                    {(() => {
+                                      const link = getComplianceLink('pci_dss', '7.1.2');
+                                      if (link) {
+                                        return (
+                                          <a href={link} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 transition-colors" title="View official PCI DSS documentation">
+                                            <ExternalLink className="w-3 h-3" />
+                                          </a>
+                                        );
+                                      }
+                                      return null;
+                                    })()}
                                   </div>
                                 </div>
                               </div>
@@ -2382,8 +2394,19 @@ What would you like to do?`,
                                   <div className="text-slate-600 text-xs font-medium leading-relaxed mb-2">
                                     Permissions are scoped to specific resources (tables, buckets, etc.) rather than using wildcards. This prevents unauthorized access to other resources in your account, ensuring cardholder data environments are properly isolated and protected.
                                   </div>
-                                  <div className="text-slate-500 text-xs font-semibold bg-slate-50 px-2 py-1 rounded border border-slate-200 inline-block">
-                                    PCI DSS Requirement 7.1.2: Limit access to cardholder data environment
+                                  <div className="text-slate-500 text-xs font-semibold bg-slate-50 px-2 py-1 rounded border border-slate-200 inline-flex items-center space-x-1">
+                                    <span>PCI DSS Requirement 7.1.2: Limit access to cardholder data environment</span>
+                                    {(() => {
+                                      const link = getComplianceLink('pci_dss', '7.1.2');
+                                      if (link) {
+                                        return (
+                                          <a href={link} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 transition-colors" title="View official PCI DSS documentation">
+                                            <ExternalLink className="w-3 h-3" />
+                                          </a>
+                                        );
+                                      }
+                                      return null;
+                                    })()}
                                   </div>
                                 </div>
                               </div>
@@ -2394,8 +2417,19 @@ What would you like to do?`,
                                   <div className="text-slate-600 text-xs font-medium leading-relaxed mb-2">
                                     CloudWatch Logs permissions enable comprehensive access monitoring and audit trails. All access to cardholder data can be logged and reviewed, supporting PCI DSS Requirement 10 which mandates tracking and monitoring all access to network resources and cardholder data.
                                   </div>
-                                  <div className="text-slate-500 text-xs font-semibold bg-slate-50 px-2 py-1 rounded border border-slate-200 inline-block">
-                                    PCI DSS Requirement 10: Track and monitor all access to network resources and cardholder data
+                                  <div className="text-slate-500 text-xs font-semibold bg-slate-50 px-2 py-1 rounded border border-slate-200 inline-flex items-center space-x-1">
+                                    <span>PCI DSS Requirement 10: Track and monitor all access to network resources and cardholder data</span>
+                                    {(() => {
+                                      const link = getComplianceLink('pci_dss', '10');
+                                      if (link) {
+                                        return (
+                                          <a href={link} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 transition-colors" title="View official PCI DSS documentation">
+                                            <ExternalLink className="w-3 h-3" />
+                                          </a>
+                                        );
+                                      }
+                                      return null;
+                                    })()}
                                   </div>
                                 </div>
                               </div>
@@ -2423,8 +2457,19 @@ What would you like to do?`,
                                   <div className="text-slate-600 text-xs font-medium leading-relaxed mb-2">
                                     Policy implements least-privilege access controls to protect PHI (Protected Health Information). HIPAA requires covered entities to implement procedures to authorize access to ePHI only when such access is appropriate based on the user's role. This policy ensures that only necessary permissions are granted, reducing the risk of unauthorized PHI access.
                                   </div>
-                                  <div className="text-slate-500 text-xs font-semibold bg-slate-50 px-2 py-1 rounded border border-slate-200 inline-block">
-                                    HIPAA 164.308(a)(4): Information access management
+                                  <div className="text-slate-500 text-xs font-semibold bg-slate-50 px-2 py-1 rounded border border-slate-200 inline-flex items-center space-x-1">
+                                    <span>HIPAA 164.308(a)(4): Information access management</span>
+                                    {(() => {
+                                      const link = getComplianceLink('hipaa', '164.308(a)(4)');
+                                      if (link) {
+                                        return (
+                                          <a href={link} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 transition-colors" title="View official HIPAA documentation">
+                                            <ExternalLink className="w-3 h-3" />
+                                          </a>
+                                        );
+                                      }
+                                      return null;
+                                    })()}
                                   </div>
                                 </div>
                               </div>
@@ -2435,8 +2480,19 @@ What would you like to do?`,
                                   <div className="text-slate-600 text-xs font-medium leading-relaxed mb-2">
                                     CloudWatch Logs permissions enable audit controls for access to ePHI. HIPAA requires implementation of hardware, software, and/or procedural mechanisms that record and examine activity in information systems that contain or use ePHI. This policy ensures all access to PHI is logged and can be audited.
                                   </div>
-                                  <div className="text-slate-500 text-xs font-semibold bg-slate-50 px-2 py-1 rounded border border-slate-200 inline-block">
-                                    HIPAA 164.312(b): Audit controls
+                                  <div className="text-slate-500 text-xs font-semibold bg-slate-50 px-2 py-1 rounded border border-slate-200 inline-flex items-center space-x-1">
+                                    <span>HIPAA 164.312(b): Audit controls</span>
+                                    {(() => {
+                                      const link = getComplianceLink('hipaa', '164.312(b)');
+                                      if (link) {
+                                        return (
+                                          <a href={link} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 transition-colors" title="View official HIPAA documentation">
+                                            <ExternalLink className="w-3 h-3" />
+                                          </a>
+                                        );
+                                      }
+                                      return null;
+                                    })()}
                                   </div>
                                 </div>
                               </div>
@@ -2447,8 +2503,19 @@ What would you like to do?`,
                                   <div className="text-slate-600 text-xs font-medium leading-relaxed mb-2">
                                     Resource-level restrictions limit access to specific data stores, reducing PHI exposure risk. HIPAA requires implementation of technical policies and procedures to allow access only to persons or software programs that have been granted access rights. This policy ensures PHI is only accessible to authorized services and processes.
                                   </div>
-                                  <div className="text-slate-500 text-xs font-semibold bg-slate-50 px-2 py-1 rounded border border-slate-200 inline-block">
-                                    HIPAA 164.312(a)(2)(iv): Encryption and decryption
+                                  <div className="text-slate-500 text-xs font-semibold bg-slate-50 px-2 py-1 rounded border border-slate-200 inline-flex items-center space-x-1">
+                                    <span>HIPAA 164.312(a)(2)(iv): Encryption and decryption</span>
+                                    {(() => {
+                                      const link = getComplianceLink('hipaa', '164.312(a)(2)');
+                                      if (link) {
+                                        return (
+                                          <a href={link} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 transition-colors" title="View official HIPAA documentation">
+                                            <ExternalLink className="w-3 h-3" />
+                                          </a>
+                                        );
+                                      }
+                                      return null;
+                                    })()}
                                   </div>
                                 </div>
                               </div>
@@ -2459,8 +2526,19 @@ What would you like to do?`,
                                   <div className="text-slate-600 text-xs font-medium leading-relaxed mb-2">
                                     By using specific actions instead of wildcards, this policy implements the HIPAA "minimum necessary" standard, ensuring that access to PHI is limited to the minimum amount necessary to accomplish the intended purpose. This reduces the risk of unauthorized disclosure of PHI.
                                   </div>
-                                  <div className="text-slate-500 text-xs font-semibold bg-slate-50 px-2 py-1 rounded border border-slate-200 inline-block">
-                                    HIPAA 164.502(b): Minimum necessary requirements
+                                  <div className="text-slate-500 text-xs font-semibold bg-slate-50 px-2 py-1 rounded border border-slate-200 inline-flex items-center space-x-1">
+                                    <span>HIPAA 164.502(b): Minimum necessary requirements</span>
+                                    {(() => {
+                                      const link = getComplianceLink('hipaa', '164.502(b)');
+                                      if (link) {
+                                        return (
+                                          <a href={link} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 transition-colors" title="View official HIPAA documentation">
+                                            <ExternalLink className="w-3 h-3" />
+                                          </a>
+                                        );
+                                      }
+                                      return null;
+                                    })()}
                                   </div>
                                 </div>
                               </div>
@@ -2476,8 +2554,19 @@ What would you like to do?`,
                                   <div className="text-slate-600 text-xs font-medium leading-relaxed mb-2">
                                     Policy uses specific permissions and resource restrictions to enforce access controls. This ensures that no single role has excessive privileges, supporting SOX Section 404 requirements for internal controls over financial reporting. Segregation of duties prevents conflicts of interest and reduces fraud risk.
                                   </div>
-                                  <div className="text-slate-500 text-xs font-semibold bg-slate-50 px-2 py-1 rounded border border-slate-200 inline-block">
-                                    SOX Section 404: Management assessment of internal controls
+                                  <div className="text-slate-500 text-xs font-semibold bg-slate-50 px-2 py-1 rounded border border-slate-200 inline-flex items-center space-x-1">
+                                    <span>SOX Section 404: Management assessment of internal controls</span>
+                                    {(() => {
+                                      const link = getComplianceLink('sox', 'Section 404');
+                                      if (link) {
+                                        return (
+                                          <a href={link} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 transition-colors" title="View official SOX documentation">
+                                            <ExternalLink className="w-3 h-3" />
+                                          </a>
+                                        );
+                                      }
+                                      return null;
+                                    })()}
                                   </div>
                                 </div>
                               </div>
@@ -2488,8 +2577,19 @@ What would you like to do?`,
                                   <div className="text-slate-600 text-xs font-medium leading-relaxed mb-2">
                                     CloudWatch Logs permissions enable detailed audit trails for financial data access. SOX requires organizations to maintain audit trails that track who accessed financial systems, when, and what changes were made. This policy ensures all access is logged and can be reviewed during SOX audits.
                                   </div>
-                                  <div className="text-slate-500 text-xs font-semibold bg-slate-50 px-2 py-1 rounded border border-slate-200 inline-block">
-                                    SOX Section 302: CEO/CFO certification of financial statements
+                                  <div className="text-slate-500 text-xs font-semibold bg-slate-50 px-2 py-1 rounded border border-slate-200 inline-flex items-center space-x-1">
+                                    <span>SOX Section 302: CEO/CFO certification of financial statements</span>
+                                    {(() => {
+                                      const link = getComplianceLink('sox', 'Section 302');
+                                      if (link) {
+                                        return (
+                                          <a href={link} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 transition-colors" title="View official SOX documentation">
+                                            <ExternalLink className="w-3 h-3" />
+                                          </a>
+                                        );
+                                      }
+                                      return null;
+                                    })()}
                                   </div>
                                 </div>
                               </div>
@@ -2529,8 +2629,19 @@ What would you like to do?`,
                                   <div className="text-slate-600 text-xs font-medium leading-relaxed mb-2">
                                     Policy grants only necessary permissions, following data minimization principles. GDPR Article 5 requires that personal data be adequate, relevant, and limited to what is necessary in relation to the purposes for which they are processed. This policy ensures that access to personal data is restricted to only what's required for the specific function.
                                   </div>
-                                  <div className="text-slate-500 text-xs font-semibold bg-slate-50 px-2 py-1 rounded border border-slate-200 inline-block">
-                                    GDPR Article 5(1)(c): Data minimization principle
+                                  <div className="text-slate-500 text-xs font-semibold bg-slate-50 px-2 py-1 rounded border border-slate-200 inline-flex items-center space-x-1">
+                                    <span>GDPR Article 5(1)(c): Data minimization principle</span>
+                                    {(() => {
+                                      const link = getComplianceLink('gdpr', 'Article 5');
+                                      if (link) {
+                                        return (
+                                          <a href={link} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 transition-colors" title="View official GDPR documentation">
+                                            <ExternalLink className="w-3 h-3" />
+                                          </a>
+                                        );
+                                      }
+                                      return null;
+                                    })()}
                                   </div>
                                 </div>
                               </div>
@@ -2541,8 +2652,19 @@ What would you like to do?`,
                                   <div className="text-slate-600 text-xs font-medium leading-relaxed mb-2">
                                     Resource-level restrictions limit access to personal data, ensuring proper access controls. GDPR Article 32 requires implementation of appropriate technical and organizational measures to ensure a level of security appropriate to the risk, including the ability to ensure the ongoing confidentiality, integrity, availability, and resilience of processing systems.
                                   </div>
-                                  <div className="text-slate-500 text-xs font-semibold bg-slate-50 px-2 py-1 rounded border border-slate-200 inline-block">
-                                    GDPR Article 32: Security of processing
+                                  <div className="text-slate-500 text-xs font-semibold bg-slate-50 px-2 py-1 rounded border border-slate-200 inline-flex items-center space-x-1">
+                                    <span>GDPR Article 32: Security of processing</span>
+                                    {(() => {
+                                      const link = getComplianceLink('gdpr', 'Article 32');
+                                      if (link) {
+                                        return (
+                                          <a href={link} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 transition-colors" title="View official GDPR documentation">
+                                            <ExternalLink className="w-3 h-3" />
+                                          </a>
+                                        );
+                                      }
+                                      return null;
+                                    })()}
                                   </div>
                                 </div>
                               </div>
@@ -2553,8 +2675,19 @@ What would you like to do?`,
                                   <div className="text-slate-600 text-xs font-medium leading-relaxed mb-2">
                                     CloudWatch Logs enable audit trails for data access, supporting data subject rights. GDPR requires organizations to demonstrate compliance (Article 5(2)) and be able to show how personal data is accessed and processed. This policy ensures all access to personal data is logged, supporting accountability requirements and enabling responses to data subject access requests.
                                   </div>
-                                  <div className="text-slate-500 text-xs font-semibold bg-slate-50 px-2 py-1 rounded border border-slate-200 inline-block">
-                                    GDPR Article 5(2): Accountability principle
+                                  <div className="text-slate-500 text-xs font-semibold bg-slate-50 px-2 py-1 rounded border border-slate-200 inline-flex items-center space-x-1">
+                                    <span>GDPR Article 5(2): Accountability principle</span>
+                                    {(() => {
+                                      const link = getComplianceLink('gdpr', 'Article 5');
+                                      if (link) {
+                                        return (
+                                          <a href={link} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 transition-colors" title="View official GDPR documentation">
+                                            <ExternalLink className="w-3 h-3" />
+                                          </a>
+                                        );
+                                      }
+                                      return null;
+                                    })()}
                                   </div>
                                 </div>
                               </div>
@@ -2565,8 +2698,19 @@ What would you like to do?`,
                                   <div className="text-slate-600 text-xs font-medium leading-relaxed mb-2">
                                     By restricting permissions to specific actions and resources, this policy ensures that personal data is processed only for specified, explicit, and legitimate purposes (GDPR Article 5(1)(b)). Access is limited to what's necessary for the intended purpose, preventing unauthorized use of personal data.
                                   </div>
-                                  <div className="text-slate-500 text-xs font-semibold bg-slate-50 px-2 py-1 rounded border border-slate-200 inline-block">
-                                    GDPR Article 5(1)(b): Purpose limitation principle
+                                  <div className="text-slate-500 text-xs font-semibold bg-slate-50 px-2 py-1 rounded border border-slate-200 inline-flex items-center space-x-1">
+                                    <span>GDPR Article 5(1)(b): Purpose limitation principle</span>
+                                    {(() => {
+                                      const link = getComplianceLink('gdpr', 'Article 5');
+                                      if (link) {
+                                        return (
+                                          <a href={link} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 transition-colors" title="View official GDPR documentation">
+                                            <ExternalLink className="w-3 h-3" />
+                                          </a>
+                                        );
+                                      }
+                                      return null;
+                                    })()}
                                   </div>
                                 </div>
                               </div>

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Scan, Shield, Activity, Database, Users, Lock, AlertTriangle, CheckCircle, Zap, Target, TrendingUp, Clock, Play, ChevronRight, XCircle, AlertCircle, Download, RefreshCw, Code, Eye, Settings, Info } from 'lucide-react';
+import { Scan, Shield, Activity, Database, Users, Lock, AlertTriangle, CheckCircle, Zap, Target, TrendingUp, Clock, Play, ChevronRight, XCircle, AlertCircle, Download, RefreshCw, Code, Eye, Settings, Info, ExternalLink } from 'lucide-react';
 import { saveToStorage, loadFromStorage, STORAGE_KEYS } from '@/utils/persistence';
+import { getComplianceLink } from '@/utils/complianceLinks';
 
 interface AuditSummary {
   total_roles: number;
@@ -973,12 +974,33 @@ const AuditAccount: React.FC = () => {
                                             Compliance Violations
                                           </div>
                                           <div className="space-y-1">
-                                            {finding.compliance_violations.map((violation, vIdx) => (
-                                              <div key={vIdx} className="text-slate-600 text-sm flex items-center">
-                                                <span className="w-2 h-2 bg-slate-400 rounded-full mr-2"></span>
-                                                {violation}
-                                              </div>
-                                            ))}
+                                            {finding.compliance_violations.map((violation, vIdx) => {
+                                              // Extract framework and requirement from violation string
+                                              // Format: "HIPAA 164.308(a)(4)", "PCI DSS 7.1.2", "GDPR Article 5", etc.
+                                              const frameworkMatch = violation.match(/(HIPAA|PCI\s+DSS|GDPR|SOX|CIS|NIST)/i);
+                                              const framework = frameworkMatch ? frameworkMatch[1] : '';
+                                              const requirementMatch = violation.match(/(164\.\d+\([a-z]\)?\(?\d+\)?|\d+\.\d+(?:\.\d+)?|Article\s+\d+|Section\s+\d+)/i);
+                                              const requirement = requirementMatch ? requirementMatch[1] : violation;
+                                              const link = framework ? getComplianceLink(framework, requirement) : null;
+                                              
+                                              return (
+                                                <div key={vIdx} className="text-slate-600 text-sm flex items-center space-x-2">
+                                                  <span className="w-2 h-2 bg-slate-400 rounded-full flex-shrink-0"></span>
+                                                  <span className="flex-1">{violation}</span>
+                                                  {link && (
+                                                    <a
+                                                      href={link}
+                                                      target="_blank"
+                                                      rel="noopener noreferrer"
+                                                      className="text-blue-600 hover:text-blue-800 transition-colors flex-shrink-0"
+                                                      title="View official compliance documentation"
+                                                    >
+                                                      <ExternalLink className="w-3 h-3" />
+                                                    </a>
+                                                  )}
+                                                </div>
+                                              );
+                                            })}
                                           </div>
                                         </div>
                                       )}
