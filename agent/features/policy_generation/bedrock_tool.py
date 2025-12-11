@@ -3,20 +3,60 @@ import boto3
 import json
 from strands import tool
 from utils.service_utils import get_service_principal, detect_service_from_description
+from contextvars import ContextVar
 
 logging.basicConfig(level=logging.INFO)
 
 bedrock_runtime = None
 MODEL_ID = 'us.anthropic.claude-3-7-sonnet-20250219-v1:0'
 
-def get_bedrock_client():
-    """Lazy load bedrock client"""
-    global bedrock_runtime
-    if bedrock_runtime is None:
-        logging.info("🔧 Initializing Bedrock client...")
-        bedrock_runtime = boto3.client(service_name='bedrock-runtime', region_name='us-east-1')
-        logging.info("✅ Bedrock client initialized")
-    return bedrock_runtime
+# Context variable for user credentials (request-scoped, thread-safe)
+# SECURITY: Credentials stored only for duration of request, automatically cleared
+_user_credentials: ContextVar[dict] = ContextVar('user_credentials', default=None)
+
+def get_bedrock_client(aws_credentials: dict = None):
+    """
+    Get Bedrock client with optional user credentials
+    
+    Args:
+        aws_credentials: Optional dict with access_key_id, secret_access_key, region
+                        If None, checks context variable, then falls back to default credentials
+    
+    SECURITY: User credentials are used only for this client instance, never stored
+    """
+    # Check explicit parameter first
+    creds = aws_credentials
+    
+    # If not provided, check context variable (set by endpoint)
+    if not creds:
+        creds = _user_credentials.get()
+    
+    if creds:
+        # Use user-provided credentials
+        region = creds.get('region', 'us-east-1')
+        logging.info(f"🔧 Creating Bedrock client with user credentials (region: {region})")
+        return boto3.client(
+            service_name='bedrock-runtime',
+            aws_access_key_id=creds['access_key_id'],
+            aws_secret_access_key=creds['secret_access_key'],
+            region_name=region
+        )
+    else:
+        # Use default credentials (for development/testing only)
+        global bedrock_runtime
+        if bedrock_runtime is None:
+            logging.info("🔧 Initializing Bedrock client with default credentials...")
+            bedrock_runtime = boto3.client(service_name='bedrock-runtime', region_name='us-east-1')
+            logging.info("✅ Bedrock client initialized")
+        return bedrock_runtime
+
+def set_user_credentials(credentials: dict):
+    """Set user credentials for current request context"""
+    _user_credentials.set(credentials)
+
+def clear_user_credentials():
+    """Clear user credentials after request"""
+    _user_credentials.set(None)
 
 
 @tool
