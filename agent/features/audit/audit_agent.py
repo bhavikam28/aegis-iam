@@ -20,9 +20,20 @@ logging.basicConfig(level=logging.INFO)
 class AuditAgent:
     """Production-Ready Autonomous AWS Account Audit Agent"""
     
-    def __init__(self, aws_region: str = "us-east-1"):
+    def __init__(self, aws_region: str = "us-east-1", aws_credentials: dict = None):
+        """
+        Initialize Audit Agent
+        
+        Args:
+            aws_region: AWS region
+            aws_credentials: Optional dict with access_key_id, secret_access_key, region
+                            If None, uses default boto3 credentials
+        
+        SECURITY: User credentials are used only for this agent instance, never stored
+        """
         self.validator = SecurityValidator()
         self.aws_region = aws_region
+        self.aws_credentials = aws_credentials
         
         # MCP clients
         self.iam_client = None
@@ -31,8 +42,27 @@ class AuditAgent:
         
         # Boto3 clients for real AWS operations and remediation
         try:
-            self.boto_iam = boto3.client('iam', region_name=aws_region)
-            self.boto_sts = boto3.client('sts', region_name=aws_region)
+            if aws_credentials:
+                # Use user-provided credentials
+                logging.info(f"🔧 Creating IAM/STS clients with user credentials (region: {aws_region})")
+                self.boto_iam = boto3.client(
+                    'iam',
+                    aws_access_key_id=aws_credentials['access_key_id'],
+                    aws_secret_access_key=aws_credentials['secret_access_key'],
+                    region_name=aws_region
+                )
+                self.boto_sts = boto3.client(
+                    'sts',
+                    aws_access_key_id=aws_credentials['access_key_id'],
+                    aws_secret_access_key=aws_credentials['secret_access_key'],
+                    region_name=aws_region
+                )
+            else:
+                # Use default credentials (for development/testing only)
+                logging.info(f"🔧 Creating IAM/STS clients with default credentials")
+                self.boto_iam = boto3.client('iam', region_name=aws_region)
+                self.boto_sts = boto3.client('sts', region_name=aws_region)
+            
             # Get current account ID
             self.account_id = self.boto_sts.get_caller_identity()['Account']
             logging.info(f"✅ Boto3 IAM client initialized for account: {self.account_id}")
