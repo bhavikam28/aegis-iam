@@ -4,13 +4,14 @@
 
 <div align="center">
 
-[![Live Demo](https://img.shields.io/badge/Live%20Demo-aegis--iam.vercel.app-blue?style=for-the-badge)](https://aegis-iam.vercel.app)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg?style=for-the-badge)](LICENSE)
-[![Powered by Claude](https://img.shields.io/badge/Powered%20by-Claude%203.7-purple?style=for-the-badge)](https://www.anthropic.com/claude)
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-aegis--iam.vercel.app-blue?style=for-the-badge&logo=vercel)](https://aegis-iam.vercel.app)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg?style=for-the-badge&logo=opensourceinitiative)](LICENSE)
+[![Powered by Claude](https://img.shields.io/badge/Powered%20by-Claude%203.7-purple?style=for-the-badge&logo=anthropic)](https://www.anthropic.com/claude)
+[![AWS](https://img.shields.io/badge/AWS-Bedrock-orange?style=for-the-badge&logo=amazonaws)](https://aws.amazon.com/bedrock/)
 
 **Generate, validate, and audit AWS IAM policies using AI-powered autonomous agents**
 
-[Live Demo](https://aegis-iam.vercel.app) · [Report Bug](https://github.com/bhavikam28/aegis-iam/issues) · [Request Feature](https://github.com/bhavikam28/aegis-iam/issues)
+[🚀 Live Demo](https://aegis-iam.vercel.app) · [🐛 Report Bug](https://github.com/bhavikam28/aegis-iam/issues) · [✨ Request Feature](https://github.com/bhavikam28/aegis-iam/issues)
 
 </div>
 
@@ -147,22 +148,24 @@ Aegis IAM uses **AI agents** powered by Claude 3.7 Sonnet to:
 - Python 3.11+
 - AWS CLI configured
 
-### Using Aegis IAM (Hosted)
+### Using Aegis IAM (Hosted) ⚡
 
 1. **Visit the live app:** [https://aegis-iam.vercel.app](https://aegis-iam.vercel.app)
 
-2. **Configure AWS credentials** when prompted:
-   - Access Key ID
-   - Secret Access Key
-   - AWS Region
+2. **Click "Get Started"** and configure AWS credentials in the one-time modal:
+   - 🔑 **Access Key ID**
+   - 🔐 **Secret Access Key**
+   - 🌍 **AWS Region**
+   
+   > **Note:** Credentials are stored *only in memory* for your session. Never persisted.
 
 3. **Choose a feature:**
-   - Generate Policy → Create new IAM policies
-   - Validate Policy → Analyze existing policies
-   - Audit Account → Scan entire AWS account
-   - CI/CD Integration → Automate PR reviews
+   - 🤖 **Generate Policy** → Create new IAM policies from plain English
+   - 🔍 **Validate Policy** → Analyze existing policies for security issues
+   - 🔬 **Audit Account** → Scan your entire AWS account autonomously
+   - 🔄 **CI/CD Integration** → Automate IAM policy reviews in PRs
 
-4. **Get results** instantly with AI-powered analysis!
+4. **Get AI-powered results** instantly with actionable security insights!
 
 ### Running Locally
 
