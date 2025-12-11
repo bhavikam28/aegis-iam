@@ -10,6 +10,9 @@ import boto3
 from typing import Dict, List, Optional
 from core.fastmcp_client import get_mcp_client
 from utils.compliance_links import get_compliance_link
+from contextvars import ContextVar
+# Import bedrock credential helpers for Strands Agent (which uses Bedrock internally)
+from features.policy_generation.bedrock_tool import set_user_credentials as set_bedrock_credentials, clear_user_credentials as clear_bedrock_credentials
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -17,12 +20,52 @@ logger = logging.getLogger(__name__)
 # AWS IAM client (fallback)
 iam_client = None
 
-def get_iam_client():
-    """Lazy load IAM client"""
-    global iam_client
-    if iam_client is None:
-        iam_client = boto3.client('iam')
-    return iam_client
+# Context variable for user credentials (request-scoped, thread-safe)
+# SECURITY: Credentials stored only for duration of request, automatically cleared
+_user_credentials: ContextVar[dict] = ContextVar('validator_user_credentials', default=None)
+
+def get_iam_client(aws_credentials: dict = None):
+    """
+    Get IAM client with optional user credentials
+    
+    Args:
+        aws_credentials: Optional dict with access_key_id, secret_access_key, region
+                        If None, checks context variable, then falls back to default credentials
+    
+    SECURITY: User credentials are used only for this client instance, never stored
+    """
+    # Check explicit parameter first
+    creds = aws_credentials
+    
+    # If not provided, check context variable (set by endpoint)
+    if not creds:
+        creds = _user_credentials.get()
+    
+    if creds:
+        # Use user-provided credentials
+        region = creds.get('region', 'us-east-1')
+        logging.info(f"🔧 Creating IAM client with user credentials (region: {region})")
+        return boto3.client(
+            'iam',
+            aws_access_key_id=creds['access_key_id'],
+            aws_secret_access_key=creds['secret_access_key'],
+            region_name=region
+        )
+    else:
+        # Use default credentials (for development/testing only)
+        global iam_client
+        if iam_client is None:
+            logging.info("🔧 Initializing IAM client with default credentials...")
+            iam_client = boto3.client('iam')
+        return iam_client
+
+def set_user_credentials(credentials: dict):
+    """Set user credentials for current request context"""
+    _user_credentials.set(credentials)
+
+def clear_user_credentials():
+    """Clear user credentials after request"""
+    _user_credentials.set(None)
 
 
 # ============================================

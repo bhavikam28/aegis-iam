@@ -3020,6 +3020,25 @@ async def global_exception_handler(request: Request, exc: Exception):
 @app.post("/validate")
 async def validate_policy(request: ValidationRequest):
     """Validate an IAM policy for security issues and compliance"""
+    logging.info(f"🚀 /validate endpoint called")
+    logging.info(f"   Mode: {request.mode}")
+    logging.info(f"   User credentials provided: {request.aws_credentials is not None}")
+    
+    # Import validator credentials helpers
+    from features.validation.validator_agent import set_user_credentials as set_validator_credentials, clear_user_credentials as clear_validator_credentials
+    
+    # Set user credentials in context (thread-safe)
+    if request.aws_credentials:
+        creds_dict = {
+            'access_key_id': request.aws_credentials.access_key_id,
+            'secret_access_key': request.aws_credentials.secret_access_key,
+            'region': request.aws_credentials.region
+        }
+        # Set for both Bedrock (Strands Agent) and IAM client
+        set_user_credentials(creds_dict)  # Bedrock
+        set_validator_credentials(creds_dict)  # IAM client
+        logging.info(f"✅ User credentials set for region: {request.aws_credentials.region}")
+    
     try:
         if not request.policy_json and not request.role_arn:
             return {
@@ -3216,6 +3235,13 @@ async def validate_policy(request: ValidationRequest):
             "error": str(e),
             "success": False
         }
+    finally:
+        # SECURITY: Always clear user credentials after request
+        if request.aws_credentials:
+            from features.validation.validator_agent import clear_user_credentials as clear_validator_credentials
+            clear_user_credentials()  # Bedrock
+            clear_validator_credentials()  # IAM client
+            logging.info("🧹 User credentials cleared from context")
 
 
 # ============================================
