@@ -2654,6 +2654,66 @@ const AuditAccount: React.FC = () => {
           </div>
         </div>
         )}
+        
+        {/* How Autonomous Audit Works Section */}
+        {!auditResults && !isAuditing && (
+          <div className="bg-white/90 backdrop-blur-xl border-2 border-white/50 rounded-3xl p-8 lg:p-10 shadow-xl mt-8 animate-fadeIn" style={{ animationDelay: '0.8s' }}>
+            <div className="mb-8 text-center">
+              <h2 className="text-3xl sm:text-4xl font-extrabold text-slate-900 mb-4">
+                How <span className="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">Autonomous Audit</span> Works
+              </h2>
+              <p className="text-slate-600 text-lg max-w-3xl mx-auto">
+                Our AI-powered agent scans your entire AWS account autonomously, analyzing IAM roles, policies, and CloudTrail data to identify security risks.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              {/* Step 1 */}
+              <div className="relative bg-gradient-to-br from-blue-50 to-cyan-50 rounded-2xl p-6 border-2 border-blue-200 hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
+                <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-purple-600 rounded-xl flex items-center justify-center text-white font-bold text-xl mb-4 shadow-lg">
+                  1
+                </div>
+                <h3 className="text-lg font-bold text-slate-900 mb-2">Discover IAM Roles</h3>
+                <p className="text-sm text-slate-600 leading-relaxed">
+                  AI agent automatically discovers all IAM roles, policies, and permissions across your AWS account using MCP integration.
+                </p>
+              </div>
+
+              {/* Step 2 */}
+              <div className="relative bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-6 border-2 border-purple-200 hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
+                <div className="w-12 h-12 bg-gradient-to-br from-purple-600 to-pink-600 rounded-xl flex items-center justify-center text-white font-bold text-xl mb-4 shadow-lg">
+                  2
+                </div>
+                <h3 className="text-lg font-bold text-slate-900 mb-2">Analyze CloudTrail</h3>
+                <p className="text-sm text-slate-600 leading-relaxed">
+                  Compares granted permissions against actual CloudTrail usage over the last 90 days to identify unused permissions.
+                </p>
+              </div>
+
+              {/* Step 3 */}
+              <div className="relative bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl p-6 border-2 border-amber-200 hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
+                <div className="w-12 h-12 bg-gradient-to-br from-amber-600 to-orange-600 rounded-xl flex items-center justify-center text-white font-bold text-xl mb-4 shadow-lg">
+                  3
+                </div>
+                <h3 className="text-lg font-bold text-slate-900 mb-2">Detect Issues</h3>
+                <p className="text-sm text-slate-600 leading-relaxed">
+                  Identifies security vulnerabilities, compliance violations, wildcard permissions, and privilege escalation risks.
+                </p>
+              </div>
+
+              {/* Step 4 */}
+              <div className="relative bg-gradient-to-br from-emerald-50 to-teal-50 rounded-2xl p-6 border-2 border-emerald-200 hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
+                <div className="w-12 h-12 bg-gradient-to-br from-emerald-600 to-teal-600 rounded-xl flex items-center justify-center text-white font-bold text-xl mb-4 shadow-lg">
+                  4
+                </div>
+                <h3 className="text-lg font-bold text-slate-900 mb-2">Generate Report</h3>
+                <p className="text-sm text-slate-600 leading-relaxed">
+                  Delivers a comprehensive security report with prioritized findings, compliance status, and actionable recommendations.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
       </div>
       

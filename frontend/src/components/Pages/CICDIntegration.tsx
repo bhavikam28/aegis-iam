@@ -157,8 +157,10 @@ const CICDIntegration: React.FC<CICDIntegrationProps> = () => {
                 <span className="text-slate-900 font-bold text-lg">One-Click Installation</span>
               </div>
               <p className="text-slate-700 mb-6 leading-relaxed">
-                Install the Aegis IAM GitHub App on your repository. <strong>No YAML files, no secrets, no configuration needed!</strong> 
-                Works automatically on both Pull Requests and direct pushes to main/master branches.
+                Install the Aegis IAM GitHub App on your repository. <strong>No YAML files, no secrets, no configuration needed!</strong>
+              </p>
+              <p className="text-slate-700 mb-6 leading-relaxed">
+                Works automatically on both <span className="font-semibold text-slate-900">Pull Requests</span> and direct pushes to <span className="font-semibold text-slate-900">main/master</span> branches.
               </p>
               
               <button
