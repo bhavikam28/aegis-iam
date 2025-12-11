@@ -306,6 +306,85 @@ const LandingPage: React.FC<LandingPageProps> = ({
           </div>
         </section>
 
+        {/* Trust Signals Section - Build Confidence */}
+        <section className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 sm:py-16">
+          {/* Cost & Security Transparency Banner */}
+          <div className="bg-gradient-to-r from-blue-50 via-purple-50 to-pink-50 border-2 border-blue-200/50 rounded-3xl p-6 sm:p-8 mb-8">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-8">
+              {/* 💰 Zero Cost for You */}
+              <div className="flex flex-col items-center text-center">
+                <div className="w-16 h-16 bg-gradient-to-br from-emerald-500 to-green-500 rounded-2xl flex items-center justify-center mb-4 shadow-lg">
+                  <span className="text-3xl">💰</span>
+                </div>
+                <h4 className="text-lg font-bold text-slate-900 mb-2">Zero Cost for You</h4>
+                <p className="text-sm text-slate-600 font-medium">
+                  Use your AWS credentials. All Bedrock/AWS costs go to <span className="font-bold text-emerald-600">your AWS account</span>, not ours.
+                </p>
+              </div>
+
+              {/* 🔐 Privacy First */}
+              <div className="flex flex-col items-center text-center">
+                <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-500 rounded-2xl flex items-center justify-center mb-4 shadow-lg">
+                  <Lock className="w-8 h-8 text-white" />
+                </div>
+                <h4 className="text-lg font-bold text-slate-900 mb-2">Privacy First</h4>
+                <p className="text-sm text-slate-600 font-medium">
+                  <span className="font-bold text-blue-600">Zero storage.</span> Your credentials live only in memory during your session.
+                </p>
+              </div>
+
+              {/* 🌐 Open Source */}
+              <div className="flex flex-col items-center text-center">
+                <div className="w-16 h-16 bg-gradient-to-br from-pink-500 to-orange-500 rounded-2xl flex items-center justify-center mb-4 shadow-lg">
+                  <Globe className="w-8 h-8 text-white" />
+                </div>
+                <h4 className="text-lg font-bold text-slate-900 mb-2">100% Open Source</h4>
+                <p className="text-sm text-slate-600 font-medium">
+                  Fully transparent. Audit our code on <a href="https://github.com/bhavikam28/aegis-iam" target="_blank" rel="noopener noreferrer" className="font-bold text-pink-600 underline hover:text-pink-700">GitHub</a>.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Trust Badges Grid */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {/* AI-Powered */}
+            <div className="bg-white/90 backdrop-blur-xl border-2 border-slate-200/50 rounded-2xl p-4 hover:shadow-xl transition-all text-center">
+              <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-500 rounded-xl flex items-center justify-center mx-auto mb-3">
+                <Brain className="w-6 h-6 text-white" />
+              </div>
+              <div className="text-xs font-bold text-slate-900">AI-Powered</div>
+              <div className="text-xs text-slate-500 mt-1">Claude 3.7 Sonnet</div>
+            </div>
+
+            {/* Enterprise Ready */}
+            <div className="bg-white/90 backdrop-blur-xl border-2 border-slate-200/50 rounded-2xl p-4 hover:shadow-xl transition-all text-center">
+              <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl flex items-center justify-center mx-auto mb-3">
+                <ShieldCheck className="w-6 h-6 text-white" />
+              </div>
+              <div className="text-xs font-bold text-slate-900">Enterprise Ready</div>
+              <div className="text-xs text-slate-500 mt-1">Multi-Compliance</div>
+            </div>
+
+            {/* Real-Time Audit */}
+            <div className="bg-white/90 backdrop-blur-xl border-2 border-slate-200/50 rounded-2xl p-4 hover:shadow-xl transition-all text-center">
+              <div className="w-12 h-12 bg-gradient-to-br from-pink-500 to-orange-500 rounded-xl flex items-center justify-center mx-auto mb-3">
+                <Activity className="w-6 h-6 text-white" />
+              </div>
+              <div className="text-xs font-bold text-slate-900">Real-Time</div>
+              <div className="text-xs text-slate-500 mt-1">Live Analysis</div>
+            </div>
+
+            {/* Community Driven */}
+            <div className="bg-white/90 backdrop-blur-xl border-2 border-slate-200/50 rounded-2xl p-4 hover:shadow-xl transition-all text-center">
+              <div className="w-12 h-12 bg-gradient-to-br from-amber-500 to-yellow-500 rounded-xl flex items-center justify-center mx-auto mb-3">
+                <Users className="w-6 h-6 text-white" />
+              </div>
+              <div className="text-xs font-bold text-slate-900">Community</div>
+              <div className="text-xs text-slate-500 mt-1">Open Source</div>
+            </div>
+          </div>
+        </section>
 
         {/* Feature Section 1: Autonomous Account Auditing */}
         <section className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 sm:py-24">
