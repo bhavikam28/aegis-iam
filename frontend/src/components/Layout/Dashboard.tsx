@@ -4,22 +4,55 @@ import GeneratePolicy from '../Pages/GeneratePolicy';
 import ValidatePolicy from '../Pages/ValidatePolicy';
 import AuditAccount from '../Pages/AuditAccount';
 import CICDIntegration from '../Pages/CICDIntegration';
+import { AWSCredentials } from '../../utils/awsCredentials';
 
-const Dashboard: React.FC<{ onReturnHome: () => void }> = ({ onReturnHome }) => {
+interface DashboardProps {
+  onReturnHome: () => void;
+  awsCredentials: AWSCredentials | null;
+  onCredentialsChange: (credentials: AWSCredentials | null) => void;
+  onOpenCredentialsModal: () => void;
+}
+
+const Dashboard: React.FC<DashboardProps> = ({ 
+  onReturnHome, 
+  awsCredentials, 
+  onCredentialsChange,
+  onOpenCredentialsModal 
+}) => {
   const [activeSection, setActiveSection] = useState('generate');
 
   const renderActiveSection = () => {
     switch (activeSection) {
       case 'generate':
-        return <GeneratePolicy />;
+        return (
+          <GeneratePolicy 
+            awsCredentials={awsCredentials}
+            onOpenCredentialsModal={onOpenCredentialsModal}
+          />
+        );
       case 'validate':
-        return <ValidatePolicy />;
+        return (
+          <ValidatePolicy 
+            awsCredentials={awsCredentials}
+            onOpenCredentialsModal={onOpenCredentialsModal}
+          />
+        );
       case 'audit':
-        return <AuditAccount />;
+        return (
+          <AuditAccount 
+            awsCredentials={awsCredentials}
+            onOpenCredentialsModal={onOpenCredentialsModal}
+          />
+        );
       case 'cicd':
-        return <CICDIntegration />;
+        return <CICDIntegration />; // CI/CD doesn't need credentials
       default:
-        return <GeneratePolicy />;
+        return (
+          <GeneratePolicy 
+            awsCredentials={awsCredentials}
+            onOpenCredentialsModal={onOpenCredentialsModal}
+          />
+        );
     }
   };
 

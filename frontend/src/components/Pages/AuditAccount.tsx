@@ -49,7 +49,12 @@ interface AuditResponse {
   error?: string;
 }
 
-const AuditAccount: React.FC = () => {
+interface AuditAccountProps {
+  awsCredentials: AWSCredentials | null;
+  onOpenCredentialsModal: () => void;
+}
+
+const AuditAccount: React.FC<AuditAccountProps> = ({ awsCredentials: propCredentials, onOpenCredentialsModal }) => {
   const [isAuditing, setIsAuditing] = useState(false);
   const [auditResults, setAuditResults] = useState<AuditResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -74,17 +79,8 @@ const AuditAccount: React.FC = () => {
   const [findingsPerPage] = useState(25);
   const [groupBy, setGroupBy] = useState<'none' | 'severity' | 'role'>('severity');
   
-  // AWS Credentials State (SECURITY: Stored only in memory, never persisted)
-  const [awsCredentials, setAwsCredentials] = useState<AWSCredentials | null>(null);
-  const [showCredentialsModal, setShowCredentialsModal] = useState(false);
-
-  // Check for AWS credentials on mount
-  useEffect(() => {
-    if (!awsCredentials) {
-      // Show credentials modal on first load
-      setShowCredentialsModal(true);
-    }
-  }, []); // Only run once on mount
+  // Use app-level credentials (passed as props)
+  const awsCredentials = propCredentials;
 
   // ============================================
   // PERSISTENCE: Load saved state on mount
@@ -141,7 +137,7 @@ const AuditAccount: React.FC = () => {
     // CRITICAL: Check for AWS credentials first
     if (!awsCredentials) {
       setError('Please configure your AWS credentials first');
-      setShowCredentialsModal(true);
+      onOpenCredentialsModal();
       return;
     }
     
@@ -2521,7 +2517,7 @@ const AuditAccount: React.FC = () => {
                   </span>
                 </div>
                 <button
-                  onClick={() => setShowCredentialsModal(true)}
+                  onClick={() => onOpenCredentialsModal()}
                   className="ml-2 text-green-700 hover:text-green-900 transition-colors"
                   title="Reconfigure credentials"
                 >
@@ -2530,7 +2526,7 @@ const AuditAccount: React.FC = () => {
               </div>
             ) : (
               <button
-                onClick={() => setShowCredentialsModal(true)}
+                onClick={() => onOpenCredentialsModal()}
                 className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold px-6 py-3 rounded-xl shadow-lg transition-all duration-300 transform hover:scale-105"
               >
                 <Key className="w-5 h-5" />
@@ -2716,17 +2712,6 @@ const AuditAccount: React.FC = () => {
         )}
 
       </div>
-      
-      {/* AWS Credentials Configuration Modal */}
-      <AWSConfigModal
-        isOpen={showCredentialsModal}
-        onClose={() => setShowCredentialsModal(false)}
-        onSave={(credentials) => {
-          setAwsCredentials(credentials);
-          setShowCredentialsModal(false);
-        }}
-        currentCredentials={awsCredentials}
-      />
     </div>
   );
 };

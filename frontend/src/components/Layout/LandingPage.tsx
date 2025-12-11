@@ -2,9 +2,27 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Shield, Zap, Lock, ChevronRight, CheckCircle, Search, BarChart3, Code, Sparkles, ArrowRight, Star, TrendingUp, Users, Globe, Brain, Cpu, Activity, Target, Award, Rocket, Layers, FileCheck, Play, XCircle, AlertTriangle, Database, Eye, Settings, Cloud, Server, Key, Fingerprint, Network, ShieldCheck, Bot } from 'lucide-react';
 import Dashboard from './Dashboard';
 import PremiumLogo from '../UI/PremiumLogo';
+import { AWSCredentials } from '../../utils/awsCredentials';
 
-const LandingPage: React.FC = () => {
+interface LandingPageProps {
+  awsCredentials: AWSCredentials | null;
+  onCredentialsChange: (credentials: AWSCredentials | null) => void;
+  onOpenCredentialsModal: () => void;
+  onEnterApp: () => void;
+}
+
+const LandingPage: React.FC<LandingPageProps> = ({ 
+  awsCredentials, 
+  onCredentialsChange, 
+  onOpenCredentialsModal,
+  onEnterApp 
+}) => {
   const [showDashboard, setShowDashboard] = useState(false);
+  
+  const handleGetStarted = () => {
+    setShowDashboard(true);
+    onEnterApp(); // Trigger credential modal if not set
+  };
   const [scrollY, setScrollY] = useState(0);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const heroRef = useRef<HTMLDivElement>(null);
@@ -24,7 +42,14 @@ const LandingPage: React.FC = () => {
   }, []);
 
   if (showDashboard) {
-    return <Dashboard onReturnHome={() => setShowDashboard(false)} />;
+    return (
+      <Dashboard 
+        onReturnHome={() => setShowDashboard(false)}
+        awsCredentials={awsCredentials}
+        onCredentialsChange={onCredentialsChange}
+        onOpenCredentialsModal={onOpenCredentialsModal}
+      />
+    );
   }
 
   return (
@@ -78,7 +103,7 @@ const LandingPage: React.FC = () => {
               </div>
             </div>
             <button
-              onClick={() => setShowDashboard(true)}
+              onClick={handleGetStarted}
               className="group relative overflow-hidden bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 hover:from-blue-700 hover:via-purple-700 hover:to-pink-700 text-white px-6 py-3 rounded-xl font-bold text-sm sm:text-base shadow-lg hover:shadow-xl transition-all duration-300 flex items-center space-x-2 transform hover:scale-105"
             >
               <span className="relative z-10">Get Started</span>
@@ -125,7 +150,7 @@ const LandingPage: React.FC = () => {
             {/* CTA Buttons */}
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-12 sm:mb-16">
               <button
-                onClick={() => setShowDashboard(true)}
+                onClick={handleGetStarted}
                 className="group relative overflow-hidden bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 hover:from-blue-700 hover:via-purple-700 hover:to-pink-700 text-white px-8 sm:px-10 lg:px-12 py-4 sm:py-5 rounded-2xl font-bold text-base sm:text-lg lg:text-xl shadow-xl hover:shadow-2xl transition-all duration-300 flex items-center space-x-3 transform hover:scale-105 touch-manipulation"
                 style={{ minHeight: '44px' }}
               >
@@ -314,7 +339,7 @@ const LandingPage: React.FC = () => {
             </ul>
               <div className="flex items-center space-x-4">
                 <button
-                  onClick={() => setShowDashboard(true)}
+                  onClick={handleGetStarted}
                   className="group bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 hover:from-blue-700 hover:via-purple-700 hover:to-pink-700 text-white px-6 py-3 rounded-xl font-bold shadow-lg hover:shadow-xl transition-all inline-flex items-center space-x-2 transform hover:scale-105"
                 >
                   <span>Try It Now</span>
@@ -583,7 +608,7 @@ const LandingPage: React.FC = () => {
                 and autonomously audit your AWS account—all powered by agentic AI.
               </p>
               <button
-                onClick={() => setShowDashboard(true)}
+                onClick={handleGetStarted}
                 className="group relative overflow-hidden bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 hover:from-blue-700 hover:via-purple-700 hover:to-pink-700 text-white px-10 py-5 rounded-2xl font-bold text-lg sm:text-xl shadow-xl hover:shadow-2xl transition-all inline-flex items-center space-x-3 transform hover:scale-105"
               >
                 <span className="relative z-10">Try It Now</span>

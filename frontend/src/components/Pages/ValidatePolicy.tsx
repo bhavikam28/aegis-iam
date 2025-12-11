@@ -72,7 +72,12 @@ const AVAILABLE_FRAMEWORKS = [
   { id: 'iso27001', name: 'ISO 27001', description: 'Information Security Management' }
 ];
 
-const ValidatePolicy: React.FC = () => {
+interface ValidatePolicyProps {
+  awsCredentials: AWSCredentials | null;
+  onOpenCredentialsModal: () => void;
+}
+
+const ValidatePolicy: React.FC<ValidatePolicyProps> = ({ awsCredentials: propCredentials, onOpenCredentialsModal }) => {
   // State management
   const [inputType, setInputType] = useState<'policy' | 'arn'>('policy');
   const [inputValue, setInputValue] = useState('');
@@ -100,19 +105,10 @@ const ValidatePolicy: React.FC = () => {
   const [showTrustPolicy, setShowTrustPolicy] = useState(false); // Collapsed by default
   const [showSecurityFindings, setShowSecurityFindings] = useState(true); // Expanded by default
   
-  // AWS Credentials State (SECURITY: Stored only in memory, never persisted)
-  const [awsCredentials, setAwsCredentials] = useState<AWSCredentials | null>(null);
-  const [showCredentialsModal, setShowCredentialsModal] = useState(false);
+  // Use app-level credentials (passed as props)
+  const awsCredentials = propCredentials;
   
   const chatEndRef = useRef<HTMLDivElement>(null);
-  
-  // Check for AWS credentials on mount
-  useEffect(() => {
-    if (!awsCredentials) {
-      // Show credentials modal on first load
-      setShowCredentialsModal(true);
-    }
-  }, []); // Only run once on mount
   
   // ============================================
   // PERSISTENCE: Load saved state on mount
@@ -232,7 +228,7 @@ const ValidatePolicy: React.FC = () => {
     // CRITICAL: Check for AWS credentials first
     if (!awsCredentials) {
       setError('Please configure your AWS credentials first');
-      setShowCredentialsModal(true);
+      onOpenCredentialsModal();
       return;
     }
     
@@ -568,7 +564,7 @@ const ValidatePolicy: React.FC = () => {
                       </span>
                     </div>
                     <button
-                      onClick={() => setShowCredentialsModal(true)}
+                      onClick={() => onOpenCredentialsModal()}
                       className="ml-2 text-green-700 hover:text-green-900 transition-colors"
                       title="Reconfigure credentials"
                     >
@@ -577,7 +573,7 @@ const ValidatePolicy: React.FC = () => {
                   </div>
                 ) : (
                   <button
-                    onClick={() => setShowCredentialsModal(true)}
+                    onClick={() => onOpenCredentialsModal()}
                     className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold px-6 py-3 rounded-xl shadow-lg transition-all duration-300 transform hover:scale-105"
                   >
                     <Key className="w-5 h-5" />
@@ -2982,17 +2978,6 @@ ${response.recommendations?.map((r, i) => `${i + 1}. ${r}`).join('\n') || 'None'
           </div>
         )}
       </div>
-      
-      {/* AWS Credentials Configuration Modal */}
-      <AWSConfigModal
-        isOpen={showCredentialsModal}
-        onClose={() => setShowCredentialsModal(false)}
-        onSave={(credentials) => {
-          setAwsCredentials(credentials);
-          setShowCredentialsModal(false);
-        }}
-        currentCredentials={awsCredentials}
-      />
     </div>
   );
 };

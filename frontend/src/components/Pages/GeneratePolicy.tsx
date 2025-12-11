@@ -11,7 +11,12 @@ import AWSConfigModal from '@/components/Modals/AWSConfigModal';
 import { AWSCredentials, validateCredentials, maskAccessKeyId, getRegionDisplayName } from '@/utils/awsCredentials';
 // Note: Compliance links should come from agent response, not hardcoded
 
-const GeneratePolicy: React.FC = () => {
+interface GeneratePolicyProps {
+  awsCredentials: AWSCredentials | null;
+  onOpenCredentialsModal: () => void;
+}
+
+const GeneratePolicy: React.FC<GeneratePolicyProps> = ({ awsCredentials: propCredentials, onOpenCredentialsModal }) => {
   const [description, setDescription] = useState('');
   const [restrictive, setRestrictive] = useState(true);
   const [compliance, setCompliance] = useState('general');
@@ -51,9 +56,9 @@ const GeneratePolicy: React.FC = () => {
   const [deleteRoleName, setDeleteRoleName] = useState('');
   const [deleteLoading, setDeleteLoading] = useState(false);
   
-  // AWS Credentials State (SECURITY: Stored only in memory, never persisted)
-  const [awsCredentials, setAwsCredentials] = useState<AWSCredentials | null>(null);
-  const [showCredentialsModal, setShowCredentialsModal] = useState(false);
+  // Use app-level credentials (passed as props)
+  const awsCredentials = propCredentials;
+  
   const [deleteSuccess, setDeleteSuccess] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   
@@ -84,14 +89,6 @@ const GeneratePolicy: React.FC = () => {
   
   const chatEndRef = useRef<HTMLDivElement>(null);
   const descriptionRef = useRef<HTMLTextAreaElement>(null);
-
-  // Check for AWS credentials on mount
-  useEffect(() => {
-    if (!awsCredentials) {
-      // Show credentials modal on first load
-      setShowCredentialsModal(true);
-    }
-  }, []); // Only run once on mount
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -411,7 +408,7 @@ What would you like to do?`,
     // CRITICAL: Check for AWS credentials first
     if (!awsCredentials) {
       setError('Please configure your AWS credentials first');
-      setShowCredentialsModal(true);
+      onOpenCredentialsModal();
       return;
     }
     
@@ -947,7 +944,7 @@ What would you like to do?`,
                       </span>
                     </div>
                     <button
-                      onClick={() => setShowCredentialsModal(true)}
+                      onClick={() => onOpenCredentialsModal()}
                       className="ml-2 text-green-700 hover:text-green-900 transition-colors"
                       title="Reconfigure credentials"
                     >
@@ -956,7 +953,7 @@ What would you like to do?`,
                   </div>
                 ) : (
                   <button
-                    onClick={() => setShowCredentialsModal(true)}
+                    onClick={() => onOpenCredentialsModal()}
                     className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold px-6 py-3 rounded-xl shadow-lg transition-all duration-300 transform hover:scale-105"
                   >
                     <Key className="w-5 h-5" />
@@ -4971,17 +4968,6 @@ aws iam get-role --role-name ${deployRoleName.trim() || '[ROLE_NAME]'}
           </div>
         </div>
       )}
-      
-      {/* AWS Credentials Configuration Modal */}
-      <AWSConfigModal
-        isOpen={showCredentialsModal}
-        onClose={() => setShowCredentialsModal(false)}
-        onSave={(credentials) => {
-          setAwsCredentials(credentials);
-          setShowCredentialsModal(false);
-        }}
-        currentCredentials={awsCredentials}
-      />
     </div>
   );
 };
