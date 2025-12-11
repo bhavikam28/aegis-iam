@@ -22,7 +22,15 @@ class CICDAnalyzer:
     def __init__(self, aws_region: str = "us-east-1"):
         self.extractor = PolicyExtractor()
         self.aws_region = aws_region
-        self.cloudtrail_client = get_mcp_client('aws-cloudtrail')
+        self._cloudtrail_client = None  # Lazy-load to save memory
+    
+    @property
+    def cloudtrail_client(self):
+        """Lazy-load CloudTrail client only when needed"""
+        if self._cloudtrail_client is None:
+            logging.info("🔄 Lazy-loading CloudTrail MCP client...")
+            self._cloudtrail_client = get_mcp_client('aws-cloudtrail')
+        return self._cloudtrail_client
     
     def analyze_pr_changes(
         self,
