@@ -138,7 +138,8 @@ const detectServiceFromDescription = (description: string): string => {
 };
 
 export const generatePolicy = async (
-  request: ConversationalRequest
+  request: ConversationalRequest,
+  awsCredentials?: { access_key_id: string; secret_access_key: string; region: string } | null
 ): Promise<GeneratePolicyResponse> => {
   // Detect service from description if not explicitly provided
   const detectedService = detectServiceFromDescription(request.description);
@@ -154,7 +155,8 @@ export const generatePolicy = async (
         conversation_id: request.conversation_id || null,
         is_followup: request.is_followup || false,
         restrictive: request.restrictive || false,
-        compliance: request.compliance || 'general'
+        compliance: request.compliance || 'general',
+        aws_credentials: awsCredentials || undefined
       }),
     });
   } catch (fetchError) {
@@ -265,7 +267,8 @@ export const generatePolicy = async (
 export const sendFollowUp = async (
   message: string,
   conversationId: string,
-  compliance?: string
+  compliance?: string,
+  awsCredentials?: { access_key_id: string; secret_access_key: string; region: string } | null
 ): Promise<GeneratePolicyResponse> => {
   return generatePolicy({
     description: message,
@@ -273,7 +276,7 @@ export const sendFollowUp = async (
     compliance: compliance || 'general',
     conversation_id: conversationId,
     is_followup: true
-  });
+  }, awsCredentials);
 };
 
 export const getConversationHistory = async (conversationId: string): Promise<{

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Shield, Send, RefreshCw, User, Bot, MessageSquare, Lock, ArrowRight, CheckCircle, AlertCircle, Download, Copy, Sparkles, Info, X, Minimize2, ChevronUp, ChevronDown, Maximize2, XCircle, Lightbulb, FileCheck, Target, UserCheck, KeySquare, ShieldCheck, Cloud, Database, Server, Activity, Globe, BookOpen, ExternalLink, Upload, FileCode, ChevronDown as ChevronDownIcon } from 'lucide-react';
+import { Shield, Send, RefreshCw, User, Bot, MessageSquare, Lock, ArrowRight, CheckCircle, AlertCircle, Download, Copy, Sparkles, Info, X, Minimize2, ChevronUp, ChevronDown, Maximize2, XCircle, Lightbulb, FileCheck, Target, UserCheck, KeySquare, ShieldCheck, Cloud, Database, Server, Activity, Globe, BookOpen, ExternalLink, Upload, FileCode, ChevronDown as ChevronDownIcon, Key, Settings } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { generatePolicy, sendFollowUp, exportToIAC, deployRole, deleteRole, explainPolicy } from '../../services/api';
 import { GeneratePolicyResponse, ChatMessage } from '../../types';
@@ -7,6 +7,8 @@ import { saveToStorage, loadFromStorage, clearStorage, STORAGE_KEYS } from '@/ut
 import CollapsibleTile from '@/components/Common/CollapsibleTile';
 import SecurityTips from '@/components/Common/SecurityTips';
 import { getComplianceLink } from '@/utils/complianceLinks';
+import AWSConfigModal from '@/components/Modals/AWSConfigModal';
+import { AWSCredentials, validateCredentials, maskAccessKeyId, getRegionDisplayName } from '@/utils/awsCredentials';
 // Note: Compliance links should come from agent response, not hardcoded
 
 const GeneratePolicy: React.FC = () => {
@@ -48,6 +50,10 @@ const GeneratePolicy: React.FC = () => {
   const [manageTab, setManageTab] = useState<'deploy' | 'delete'>('deploy'); // delete tab no longer shown
   const [deleteRoleName, setDeleteRoleName] = useState('');
   const [deleteLoading, setDeleteLoading] = useState(false);
+  
+  // AWS Credentials State (SECURITY: Stored only in memory, never persisted)
+  const [awsCredentials, setAwsCredentials] = useState<AWSCredentials | null>(null);
+  const [showCredentialsModal, setShowCredentialsModal] = useState(false);
   const [deleteSuccess, setDeleteSuccess] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   
@@ -78,6 +84,14 @@ const GeneratePolicy: React.FC = () => {
   
   const chatEndRef = useRef<HTMLDivElement>(null);
   const descriptionRef = useRef<HTMLTextAreaElement>(null);
+
+  // Check for AWS credentials on mount
+  useEffect(() => {
+    if (!awsCredentials) {
+      // Show credentials modal on first load
+      setShowCredentialsModal(true);
+    }
+  }, []); // Only run once on mount
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -393,6 +407,14 @@ What would you like to do?`,
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // CRITICAL: Check for AWS credentials first
+    if (!awsCredentials) {
+      setError('Please configure your AWS credentials first');
+      setShowCredentialsModal(true);
+      return;
+    }
+    
     if (!description.trim()) {
       setError('Please describe what permissions you need');
       return;
@@ -470,7 +492,7 @@ What would you like to do?`,
         description: enhancedDescription,
         restrictive,
         compliance
-      });
+      }, awsCredentials);
       
       // Validate result before setting state
       if (!result) {
@@ -517,7 +539,7 @@ What would you like to do?`,
       console.log('🚀 Sending follow-up message:', currentMessage);
       console.log('🚀 Conversation ID:', conversationId);
       
-      const result = await sendFollowUp(currentMessage, conversationId);
+      const result = await sendFollowUp(currentMessage, conversationId, undefined, awsCredentials);
       
       console.log('📥 Raw result received:', result);
       
@@ -910,6 +932,38 @@ What would you like to do?`,
                 Describe your permission needs in plain English. Our AI automatically generates 
                 secure, least-privilege IAM policies following AWS best practices.
               </p>
+              
+              {/* AWS Credentials Status */}
+              <div className="mt-6 flex justify-center">
+                {awsCredentials ? (
+                  <div className="inline-flex items-center gap-3 bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-200 rounded-xl px-5 py-3 shadow-sm">
+                    <CheckCircle className="w-5 h-5 text-green-600" />
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:gap-3">
+                      <span className="text-sm font-semibold text-green-900">
+                        AWS Configured: {getRegionDisplayName(awsCredentials.region)}
+                      </span>
+                      <span className="text-xs text-green-700 font-mono">
+                        {maskAccessKeyId(awsCredentials.access_key_id)}
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => setShowCredentialsModal(true)}
+                      className="ml-2 text-green-700 hover:text-green-900 transition-colors"
+                      title="Reconfigure credentials"
+                    >
+                      <Settings className="w-4 h-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setShowCredentialsModal(true)}
+                    className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold px-6 py-3 rounded-xl shadow-lg transition-all duration-300 transform hover:scale-105"
+                  >
+                    <Key className="w-5 h-5" />
+                    Configure AWS Credentials
+                  </button>
+                )}
+              </div>
             </div>
 
             <div className="max-w-4xl mx-auto">
@@ -2627,7 +2681,9 @@ What would you like to do?`,
                                     
                                     const result = await sendFollowUp(
                                       `Please implement this refinement: ${suggestion}`,
-                                      conversationId
+                                      conversationId,
+                                      undefined,
+                                      awsCredentials
                                     );
                                     
                                     if (!result) {
@@ -2767,7 +2823,9 @@ What would you like to do?`,
                                     
                                     const result = await sendFollowUp(
                                       `Please implement this refinement: ${suggestion}`,
-                                      conversationId
+                                      conversationId,
+                                      undefined,
+                                      awsCredentials
                                     );
                                     
                                     if (!result) {
@@ -3599,7 +3657,8 @@ What would you like to do?`,
                                 const result = await sendFollowUp(
                                   validationMessage,
                                   conversationId,
-                                  newCompliance
+                                  newCompliance,
+                                  awsCredentials
                                 );
                                 
                                 if (result) {
@@ -3697,7 +3756,9 @@ What would you like to do?`,
                                 
                                 const result = await sendFollowUp(
                                   explainMessage,
-                                  conversationId
+                                  conversationId,
+                                  undefined,
+                                  awsCredentials
                                 );
                                 
                                 if (!result) {
@@ -3778,7 +3839,9 @@ What would you like to do?`,
                                 
                                 const result = await sendFollowUp(
                                   complianceMessage,
-                                  conversationId
+                                  conversationId,
+                                  undefined,
+                                  awsCredentials
                                 );
                                 
                                 if (!result) {
@@ -4909,6 +4972,16 @@ aws iam get-role --role-name ${deployRoleName.trim() || '[ROLE_NAME]'}
         </div>
       )}
       
+      {/* AWS Credentials Configuration Modal */}
+      <AWSConfigModal
+        isOpen={showCredentialsModal}
+        onClose={() => setShowCredentialsModal(false)}
+        onSave={(credentials) => {
+          setAwsCredentials(credentials);
+          setShowCredentialsModal(false);
+        }}
+        currentCredentials={awsCredentials}
+      />
     </div>
   );
 };
