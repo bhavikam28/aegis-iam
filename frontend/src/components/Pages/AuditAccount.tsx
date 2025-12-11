@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Scan, Shield, Activity, Database, Users, Lock, AlertTriangle, CheckCircle, Zap, Target, TrendingUp, Clock, Play, ChevronRight, XCircle, AlertCircle, Download, RefreshCw, Code, Eye, Settings, Info, ExternalLink } from 'lucide-react';
+import { Scan, Shield, Activity, Database, Users, Lock, AlertTriangle, CheckCircle, Zap, Target, TrendingUp, Clock, Play, ChevronRight, XCircle, AlertCircle, Download, RefreshCw, Code, Eye, Settings, Info, ExternalLink, Key } from 'lucide-react';
 import { saveToStorage, loadFromStorage, STORAGE_KEYS } from '@/utils/persistence';
 import CollapsibleTile from '@/components/Common/CollapsibleTile';
 import SecurityTips from '@/components/Common/SecurityTips';
 import { getComplianceLink } from '@/utils/complianceLinks';
+import AWSConfigModal from '@/components/Modals/AWSConfigModal';
+import { AWSCredentials, validateCredentials, maskAccessKeyId, getRegionDisplayName } from '@/utils/awsCredentials';
 
 interface AuditSummary {
   total_roles: number;
@@ -71,6 +73,18 @@ const AuditAccount: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [findingsPerPage] = useState(25);
   const [groupBy, setGroupBy] = useState<'none' | 'severity' | 'role'>('severity');
+  
+  // AWS Credentials State (SECURITY: Stored only in memory, never persisted)
+  const [awsCredentials, setAwsCredentials] = useState<AWSCredentials | null>(null);
+  const [showCredentialsModal, setShowCredentialsModal] = useState(false);
+
+  // Check for AWS credentials on mount
+  useEffect(() => {
+    if (!awsCredentials) {
+      // Show credentials modal on first load
+      setShowCredentialsModal(true);
+    }
+  }, []); // Only run once on mount
 
   // ============================================
   // PERSISTENCE: Load saved state on mount
@@ -124,6 +138,13 @@ const AuditAccount: React.FC = () => {
   }, [auditResults, chatMessages, selectedFindings, severityFilter, roleFilter, searchQuery, viewMode, currentPage, groupBy]);
 
   const handleStartAudit = async () => {
+    // CRITICAL: Check for AWS credentials first
+    if (!awsCredentials) {
+      setError('Please configure your AWS credentials first');
+      setShowCredentialsModal(true);
+      return;
+    }
+    
     setIsAuditing(true);
     setError(null);
 
@@ -133,7 +154,8 @@ const AuditAccount: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           mode: 'full',
-          aws_region: 'us-east-1'
+          aws_region: awsCredentials.region,
+          aws_credentials: awsCredentials || undefined
         })
       });
 
@@ -2484,6 +2506,38 @@ const AuditAccount: React.FC = () => {
             AI-powered autonomous scanning of all IAM roles, policies, and permissions. Discover unused access, 
             security gaps, and compliance violations across your entire AWS infrastructure using <strong className="text-slate-900">CloudTrail analysis</strong> and real-time API monitoring.
           </p>
+          
+          {/* AWS Credentials Status */}
+          <div className="mb-8 flex justify-center animate-fadeIn" style={{ animationDelay: '0.3s' }}>
+            {awsCredentials ? (
+              <div className="inline-flex items-center gap-3 bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-200 rounded-xl px-5 py-3 shadow-sm">
+                <CheckCircle className="w-5 h-5 text-green-600" />
+                <div className="flex flex-col sm:flex-row sm:items-center sm:gap-3">
+                  <span className="text-sm font-semibold text-green-900">
+                    AWS Configured: {getRegionDisplayName(awsCredentials.region)}
+                  </span>
+                  <span className="text-xs text-green-700 font-mono">
+                    {maskAccessKeyId(awsCredentials.access_key_id)}
+                  </span>
+                </div>
+                <button
+                  onClick={() => setShowCredentialsModal(true)}
+                  className="ml-2 text-green-700 hover:text-green-900 transition-colors"
+                  title="Reconfigure credentials"
+                >
+                  <Settings className="w-4 h-4" />
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setShowCredentialsModal(true)}
+                className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold px-6 py-3 rounded-xl shadow-lg transition-all duration-300 transform hover:scale-105"
+              >
+                <Key className="w-5 h-5" />
+                Configure AWS Credentials
+              </button>
+            )}
+          </div>
 
           {/* CTA Button */}
           <button
@@ -2602,6 +2656,17 @@ const AuditAccount: React.FC = () => {
         )}
 
       </div>
+      
+      {/* AWS Credentials Configuration Modal */}
+      <AWSConfigModal
+        isOpen={showCredentialsModal}
+        onClose={() => setShowCredentialsModal(false)}
+        onSave={(credentials) => {
+          setAwsCredentials(credentials);
+          setShowCredentialsModal(false);
+        }}
+        currentCredentials={awsCredentials}
+      />
     </div>
   );
 };
