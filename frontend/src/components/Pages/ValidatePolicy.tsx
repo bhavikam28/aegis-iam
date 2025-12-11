@@ -1,9 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Search, AlertTriangle, XCircle, CheckCircle, Info, AlertCircle, Shield, Sparkles, Copy, Download, RefreshCw, Zap, Bot, ChevronDown, ChevronUp, Send, TrendingUp, Target, Clock, Share2, Activity, Scan, FileSearch, Users, Database, Lock, Eye, Settings, X, Minimize2, Maximize2, ArrowRight, ExternalLink } from 'lucide-react';
+import { Search, AlertTriangle, XCircle, CheckCircle, Info, AlertCircle, Shield, Sparkles, Copy, Download, RefreshCw, Zap, Bot, ChevronDown, ChevronUp, Send, TrendingUp, Target, Clock, Share2, Activity, Scan, FileSearch, Users, Database, Lock, Eye, Settings, X, Minimize2, Maximize2, ArrowRight, ExternalLink, Key } from 'lucide-react';
 import { saveToStorage, loadFromStorage, STORAGE_KEYS } from '@/utils/persistence';
 import { getComplianceLink } from '@/utils/complianceLinks';
 import CollapsibleTile from '@/components/Common/CollapsibleTile';
 import SecurityTips from '@/components/Common/SecurityTips';
+import AWSConfigModal from '@/components/Modals/AWSConfigModal';
+import { AWSCredentials, validateCredentials, maskAccessKeyId, getRegionDisplayName } from '@/utils/awsCredentials';
 
 // ============================================
 // TYPE DEFINITIONS
@@ -98,7 +100,19 @@ const ValidatePolicy: React.FC = () => {
   const [showTrustPolicy, setShowTrustPolicy] = useState(false); // Collapsed by default
   const [showSecurityFindings, setShowSecurityFindings] = useState(true); // Expanded by default
   
+  // AWS Credentials State (SECURITY: Stored only in memory, never persisted)
+  const [awsCredentials, setAwsCredentials] = useState<AWSCredentials | null>(null);
+  const [showCredentialsModal, setShowCredentialsModal] = useState(false);
+  
   const chatEndRef = useRef<HTMLDivElement>(null);
+  
+  // Check for AWS credentials on mount
+  useEffect(() => {
+    if (!awsCredentials) {
+      // Show credentials modal on first load
+      setShowCredentialsModal(true);
+    }
+  }, []); // Only run once on mount
   
   // ============================================
   // PERSISTENCE: Load saved state on mount
@@ -215,6 +229,13 @@ const ValidatePolicy: React.FC = () => {
     console.log('📝 inputValue length:', inputValue.length);
     console.log('📝 inputValue preview:', inputValue.substring(0, 100));
     
+    // CRITICAL: Check for AWS credentials first
+    if (!awsCredentials) {
+      setError('Please configure your AWS credentials first');
+      setShowCredentialsModal(true);
+      return;
+    }
+    
     // Clean the input - remove markdown code fences if present
     let cleanedInput = inputValue.trim();
     if (cleanedInput.startsWith('```json') || cleanedInput.startsWith('```')) {
@@ -243,7 +264,8 @@ const ValidatePolicy: React.FC = () => {
         body: JSON.stringify({
           input_type: inputType,
           input_value: cleanedInput,
-          compliance_frameworks: selectedFrameworks
+          compliance_frameworks: selectedFrameworks,
+          aws_credentials: awsCredentials || undefined
         })
       });
       
@@ -531,6 +553,38 @@ const ValidatePolicy: React.FC = () => {
                 Deep security analysis powered by AI agents. Get instant risk assessment, 
                 compliance validation, and actionable recommendations.
               </p>
+              
+              {/* AWS Credentials Status */}
+              <div className="mt-6 flex justify-center">
+                {awsCredentials ? (
+                  <div className="inline-flex items-center gap-3 bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-200 rounded-xl px-5 py-3 shadow-sm">
+                    <CheckCircle className="w-5 h-5 text-green-600" />
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:gap-3">
+                      <span className="text-sm font-semibold text-green-900">
+                        AWS Configured: {getRegionDisplayName(awsCredentials.region)}
+                      </span>
+                      <span className="text-xs text-green-700 font-mono">
+                        {maskAccessKeyId(awsCredentials.access_key_id)}
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => setShowCredentialsModal(true)}
+                      className="ml-2 text-green-700 hover:text-green-900 transition-colors"
+                      title="Reconfigure credentials"
+                    >
+                      <Settings className="w-4 h-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setShowCredentialsModal(true)}
+                    className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold px-6 py-3 rounded-xl shadow-lg transition-all duration-300 transform hover:scale-105"
+                  >
+                    <Key className="w-5 h-5" />
+                    Configure AWS Credentials
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* Main Input Form */}
@@ -2928,6 +2982,17 @@ ${response.recommendations?.map((r, i) => `${i + 1}. ${r}`).join('\n') || 'None'
           </div>
         )}
       </div>
+      
+      {/* AWS Credentials Configuration Modal */}
+      <AWSConfigModal
+        isOpen={showCredentialsModal}
+        onClose={() => setShowCredentialsModal(false)}
+        onSave={(credentials) => {
+          setAwsCredentials(credentials);
+          setShowCredentialsModal(false);
+        }}
+        currentCredentials={awsCredentials}
+      />
     </div>
   );
 };
