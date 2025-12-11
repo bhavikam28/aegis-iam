@@ -62,6 +62,8 @@ const Dashboard: React.FC<DashboardProps> = ({
         activeSection={activeSection} 
         onSectionChange={setActiveSection}
         onReturnHome={onReturnHome}
+        awsCredentials={awsCredentials}
+        onOpenCredentialsModal={onOpenCredentialsModal}
       />
         <main className="flex-1 overflow-auto">
           {renderActiveSection()}

@@ -1,14 +1,23 @@
 import React, { useState, useEffect } from 'react';
-import { Shield, Search, Scan, Menu, X, Home, GitBranch } from 'lucide-react';
+import { Shield, Search, Scan, Menu, X, Home, GitBranch, Key } from 'lucide-react';
 import PremiumLogo from '../UI/PremiumLogo';
+import { AWSCredentials, maskAccessKeyId } from '../../utils/awsCredentials';
 
 interface TopNavbarProps {
   activeSection: string;
   onSectionChange: (section: string) => void;
   onReturnHome: () => void;
+  awsCredentials?: AWSCredentials | null;
+  onOpenCredentialsModal?: () => void;
 }
 
-const TopNavbar: React.FC<TopNavbarProps> = ({ activeSection, onSectionChange, onReturnHome }) => {
+const TopNavbar: React.FC<TopNavbarProps> = ({ 
+  activeSection, 
+  onSectionChange, 
+  onReturnHome,
+  awsCredentials,
+  onOpenCredentialsModal 
+}) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
 
@@ -108,6 +117,24 @@ const TopNavbar: React.FC<TopNavbarProps> = ({ activeSection, onSectionChange, o
 
             {/* Right Side Actions */}
             <div className="flex items-center space-x-2 sm:space-x-3 -mr-4 sm:-mr-6 lg:-mr-8">
+              {/* AWS Credentials Status Indicator */}
+              {onOpenCredentialsModal && (
+                <button
+                  onClick={onOpenCredentialsModal}
+                  className={`hidden sm:flex items-center space-x-2 px-3 py-2 rounded-xl transition-all duration-300 ${
+                    awsCredentials
+                      ? 'bg-gradient-to-r from-emerald-50 to-green-50 border-2 border-emerald-200 text-emerald-700 hover:border-emerald-300 hover:shadow-lg'
+                      : 'bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-amber-200 text-amber-700 hover:border-amber-300 hover:shadow-lg animate-pulse'
+                  }`}
+                  aria-label={awsCredentials ? "Manage AWS credentials" : "Add AWS credentials"}
+                >
+                  <Key className="w-4 h-4" />
+                  <span className="text-xs font-bold">
+                    {awsCredentials ? 'AWS ✓' : 'Add AWS'}
+                  </span>
+                </button>
+              )}
+              
               {/* Home Button - Premium Styled */}
               <button
                 onClick={onReturnHome}
