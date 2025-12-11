@@ -109,22 +109,23 @@ const CICDIntegration: React.FC<CICDIntegrationProps> = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/30">
-      {/* Background Elements */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-20 right-20 w-96 h-96 bg-blue-400/10 rounded-full blur-3xl animate-pulse"></div>
-        <div className="absolute bottom-20 left-20 w-96 h-96 bg-purple-400/10 rounded-full blur-3xl"></div>
+    <div className="min-h-screen relative overflow-hidden">
+      {/* Premium Animated Background - Matching Website Theme */}
+      <div className="fixed inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-0 right-0 w-[800px] h-[800px] bg-gradient-to-br from-blue-400/8 via-purple-400/6 to-pink-400/4 rounded-full blur-3xl animate-pulse"></div>
+        <div className="absolute bottom-0 left-0 w-[700px] h-[700px] bg-gradient-to-tr from-amber-400/6 via-orange-400/4 to-red-400/3 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '2s' }}></div>
+        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-gradient-to-br from-emerald-400/5 via-cyan-400/4 to-blue-400/3 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '4s' }}></div>
       </div>
 
-      <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+      <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 sm:py-20">
         {/* Header */}
-        <div className="mb-12 text-center">
-          <div className="inline-flex items-center space-x-2 bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-blue-200 rounded-full px-6 py-2 mb-6">
+        <div className="mb-16 text-center animate-fadeIn">
+          <div className="inline-flex items-center space-x-2 bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-blue-200 rounded-full px-6 py-2 mb-6 backdrop-blur-sm">
             <Shield className="w-4 h-4 text-blue-600" />
             <span className="text-blue-700 text-sm font-semibold">CI/CD Integration</span>
           </div>
           
-          <h1 className="text-5xl font-extrabold mb-6">
+          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold mb-6 leading-tight tracking-tight">
             <span className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 bg-clip-text text-transparent">
               Proactive IAM Security
             </span>
@@ -134,29 +135,29 @@ const CICDIntegration: React.FC<CICDIntegrationProps> = () => {
             </span>
           </h1>
           
-          <p className="text-xl text-slate-600 max-w-3xl mx-auto leading-relaxed font-medium">
+          <p className="text-base sm:text-lg lg:text-xl text-slate-600 max-w-3xl mx-auto leading-relaxed font-medium">
             Automatically analyze IAM policies in pull requests and commits before they're merged. 
             Compare requested permissions against actual CloudTrail usage and prevent security issues proactively.
           </p>
         </div>
 
         {/* GitHub App Integration */}
-        <div className="bg-white/90 backdrop-blur-xl border-2 border-white/50 rounded-3xl p-8 shadow-xl mb-8">
+        <div className="bg-white/90 backdrop-blur-xl border-2 border-white/50 rounded-3xl p-6 sm:p-8 lg:p-10 shadow-xl mb-8 animate-fadeIn">
           <div className="space-y-6">
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center space-x-3">
-                <Github className="w-8 h-8 text-slate-900" />
-                <h2 className="text-3xl font-bold text-slate-900">GitHub App Integration</h2>
+            <div className="flex items-center space-x-3 mb-6">
+              <div className="w-12 h-12 bg-gradient-to-br from-slate-900 to-slate-700 rounded-xl flex items-center justify-center shadow-lg">
+                <Github className="w-6 h-6 text-white" />
               </div>
+              <h2 className="text-2xl sm:text-3xl font-bold text-slate-900">GitHub App Integration</h2>
             </div>
 
-            <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-2xl p-6 border-2 border-emerald-200/50">
+            <div className="bg-gradient-to-br from-blue-50 to-purple-50 rounded-2xl p-6 border-2 border-blue-200">
               <div className="flex items-center space-x-2 mb-4">
-                <CheckCircle className="w-5 h-5 text-emerald-600" />
-                <span className="text-emerald-700 font-semibold">One-Click Installation</span>
+                <Zap className="w-5 h-5 text-blue-600" />
+                <span className="text-slate-900 font-bold text-lg">One-Click Installation</span>
               </div>
-              <p className="text-slate-700 mb-6">
-                Install the Aegis IAM GitHub App on your repository. No YAML files, no secrets, no configuration needed!
+              <p className="text-slate-700 mb-6 leading-relaxed">
+                Install the Aegis IAM GitHub App on your repository. <strong>No YAML files, no secrets, no configuration needed!</strong> 
                 Works automatically on both Pull Requests and direct pushes to main/master branches.
               </p>
               
@@ -197,7 +198,7 @@ const CICDIntegration: React.FC<CICDIntegrationProps> = () => {
                   }
                 }}
                 disabled={connecting}
-                className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold py-4 px-6 rounded-xl shadow-lg transition-all duration-300 flex items-center justify-center space-x-2 disabled:opacity-50"
+                className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-bold py-4 px-6 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 flex items-center justify-center space-x-2 disabled:opacity-50 transform hover:scale-[1.02]"
               >
                 {connecting ? (
                   <>
@@ -214,107 +215,144 @@ const CICDIntegration: React.FC<CICDIntegrationProps> = () => {
             </div>
 
             {status && (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className={`rounded-xl p-4 border-2 ${status.configured ? 'border-emerald-200 bg-emerald-50' : 'border-amber-200 bg-amber-50'}`}>
-                  <div className="flex items-center space-x-2 mb-1">
-                    <Shield className="w-4 h-4 text-emerald-600" />
-                    <p className="font-semibold text-slate-900">App Credentials</p>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className={`rounded-2xl p-6 border-2 shadow-sm ${status.configured ? 'border-blue-200 bg-gradient-to-br from-blue-50 to-cyan-50' : 'border-amber-200 bg-gradient-to-br from-amber-50 to-yellow-50'}`}>
+                  <div className="flex items-center space-x-2 mb-3">
+                    <Shield className={`w-5 h-5 ${status.configured ? 'text-blue-600' : 'text-amber-600'}`} />
+                    <p className="font-bold text-slate-900">App Credentials</p>
                   </div>
-                  <p className="text-sm text-slate-600">App ID: {status.app_id_set ? 'configured' : 'missing'}</p>
-                  <p className="text-sm text-slate-600">Private Key: {status.private_key_set ? 'configured' : 'missing'}</p>
-                  <p className="text-sm text-slate-600">Webhook Secret: {status.webhook_secret_set ? 'configured' : 'missing'}</p>
+                  <div className="space-y-1.5">
+                    <div className="flex items-center space-x-2">
+                      {status.app_id_set ? <CheckCircle className="w-4 h-4 text-green-600" /> : <AlertCircle className="w-4 h-4 text-amber-600" />}
+                      <p className="text-sm text-slate-700 font-medium">App ID: {status.app_id_set ? 'Configured' : 'Missing'}</p>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      {status.private_key_set ? <CheckCircle className="w-4 h-4 text-green-600" /> : <AlertCircle className="w-4 h-4 text-amber-600" />}
+                      <p className="text-sm text-slate-700 font-medium">Private Key: {status.private_key_set ? 'Configured' : 'Missing'}</p>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      {status.webhook_secret_set ? <CheckCircle className="w-4 h-4 text-green-600" /> : <AlertCircle className="w-4 h-4 text-amber-600" />}
+                      <p className="text-sm text-slate-700 font-medium">Webhook: {status.webhook_secret_set ? 'Configured' : 'Missing'}</p>
+                    </div>
+                  </div>
                 </div>
-                <div className="rounded-xl p-4 border-2 border-blue-200 bg-blue-50">
-                  <p className="font-semibold text-slate-900 mb-2">Webhook URL</p>
-                  <div className="flex items-center justify-between space-x-2">
-                    <span className="text-sm text-slate-700 truncate">{status.webhook_url || `${apiUrl}/api/github/webhook`}</span>
+                <div className="rounded-2xl p-6 border-2 border-purple-200 bg-gradient-to-br from-purple-50 to-pink-50 shadow-sm">
+                  <p className="font-bold text-slate-900 mb-3 flex items-center gap-2">
+                    <Activity className="w-5 h-5 text-purple-600" />
+                    Webhook URL
+                  </p>
+                  <div className="flex items-center justify-between space-x-2 bg-white rounded-lg px-3 py-2 border border-slate-200">
+                    <span className="text-xs text-slate-700 truncate font-mono">{status.webhook_url || `${apiUrl}/api/github/webhook`}</span>
                     <button
                       onClick={() => copyToClipboard(status.webhook_url || `${apiUrl}/api/github/webhook`, 'webhook')}
-                      className="p-2 rounded-lg bg-white border border-slate-200 hover:bg-slate-50"
+                      className="p-1.5 rounded-lg hover:bg-slate-100 transition-colors"
+                      title="Copy webhook URL"
                     >
                       <Copy className="w-4 h-4 text-slate-600" />
                     </button>
                   </div>
                 </div>
-                <div className="rounded-xl p-4 border-2 border-slate-200 bg-white">
-                  <p className="font-semibold text-slate-900 mb-2">Next Steps</p>
-                  <ul className="space-y-1 text-sm text-slate-700 list-disc list-inside">
-                    <li>Set env vars GITHUB_APP_ID / GITHUB_PRIVATE_KEY / GITHUB_WEBHOOK_SECRET</li>
-                    <li>Install the app on your repo (opens GitHub)</li>
-                    <li>Push or open a PR with IAM policy changes</li>
+                <div className="rounded-2xl p-6 border-2 border-slate-200 bg-gradient-to-br from-slate-50 to-blue-50 shadow-sm">
+                  <p className="font-bold text-slate-900 mb-3 flex items-center gap-2">
+                    <Info className="w-5 h-5 text-slate-700" />
+                    Quick Start
+                  </p>
+                  <ul className="space-y-2 text-sm text-slate-700">
+                    <li className="flex items-start gap-2">
+                      <span className="text-blue-600 font-bold">1.</span>
+                      <span>Click "Install GitHub App" above</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-blue-600 font-bold">2.</span>
+                      <span>Select your repository</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-blue-600 font-bold">3.</span>
+                      <span>Create PR with IAM changes</span>
+                    </li>
                   </ul>
                 </div>
               </div>
             )}
 
-            <div className="bg-blue-50 rounded-xl p-6 border-2 border-blue-200/50">
-              <h3 className="text-xl font-bold text-slate-900 mb-4 flex items-center space-x-2">
-                <Info className="w-6 h-6 text-blue-600" />
+            {/* How It Works Section */}
+            <div className="bg-gradient-to-br from-slate-50 to-blue-50 rounded-2xl p-8 border-2 border-slate-200">
+              <h3 className="text-2xl font-bold text-slate-900 mb-6 flex items-center space-x-2">
+                <Info className="w-7 h-7 text-blue-600" />
                 <span>How It Works</span>
               </h3>
-              <ul className="space-y-3 text-slate-700">
-                <li className="flex items-start space-x-3">
-                  <div className="w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0 mt-0.5">1</div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="flex items-start space-x-4">
+                  <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-purple-600 text-white rounded-xl flex items-center justify-center font-bold text-lg flex-shrink-0 shadow-lg">1</div>
                   <div>
-                    <p className="font-semibold">Click "Install GitHub App"</p>
-                    <p className="text-sm">You'll be redirected to GitHub to authorize the app</p>
+                    <p className="font-bold text-slate-900 mb-1">Click "Install GitHub App"</p>
+                    <p className="text-sm text-slate-600">You'll be redirected to GitHub to authorize the app</p>
                   </div>
-                </li>
-                <li className="flex items-start space-x-3">
-                  <div className="w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0 mt-0.5">2</div>
+                </div>
+                <div className="flex items-start space-x-4">
+                  <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-purple-600 text-white rounded-xl flex items-center justify-center font-bold text-lg flex-shrink-0 shadow-lg">2</div>
                   <div>
-                    <p className="font-semibold">Select Repository</p>
-                    <p className="text-sm">Choose which repositories to install the app on</p>
+                    <p className="font-bold text-slate-900 mb-1">Select Repository</p>
+                    <p className="text-sm text-slate-600">Choose which repositories to install the app on</p>
                   </div>
-                </li>
-                <li className="flex items-start space-x-3">
-                  <div className="w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0 mt-0.5">3</div>
+                </div>
+                <div className="flex items-start space-x-4">
+                  <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-purple-600 text-white rounded-xl flex items-center justify-center font-bold text-lg flex-shrink-0 shadow-lg">3</div>
                   <div>
-                    <p className="font-semibold">Automatic Analysis</p>
-                    <p className="text-sm">Every PR and push automatically triggers IAM policy analysis</p>
+                    <p className="font-bold text-slate-900 mb-1">Automatic Analysis</p>
+                    <p className="text-sm text-slate-600">Every PR and push automatically triggers IAM policy analysis</p>
                   </div>
-                </li>
-                <li className="flex items-start space-x-3">
-                  <div className="w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0 mt-0.5">4</div>
+                </div>
+                <div className="flex items-start space-x-4">
+                  <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-purple-600 text-white rounded-xl flex items-center justify-center font-bold text-lg flex-shrink-0 shadow-lg">4</div>
                   <div>
-                    <p className="font-semibold">Get Results</p>
-                    <p className="text-sm">Security analysis is posted as comments on PRs or commits, and visible here on the dashboard</p>
+                    <p className="font-bold text-slate-900 mb-1">Get Results</p>
+                    <p className="text-sm text-slate-600">Security analysis posted as comments on PRs and visible on this dashboard</p>
                   </div>
-                </li>
-              </ul>
+                </div>
+              </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="bg-white/80 rounded-xl p-6 border-2 border-slate-200/50">
-                <Zap className="w-8 h-8 text-emerald-600 mb-3" />
-                <h4 className="font-bold text-slate-900 mb-2">Zero Config</h4>
-                <p className="text-sm text-slate-600">No YAML files, no secrets, no code changes needed.</p>
+            {/* Feature Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="group bg-white rounded-2xl p-6 border-2 border-slate-200 hover:border-blue-300 hover:shadow-xl transition-all duration-300">
+                <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform shadow-lg">
+                  <Zap className="w-6 h-6 text-white" />
+                </div>
+                <h4 className="font-bold text-slate-900 mb-2 text-lg">Zero Config</h4>
+                <p className="text-sm text-slate-600 leading-relaxed">No YAML files, no secrets, no code changes needed. Just install and go!</p>
               </div>
-              <div className="bg-white/80 rounded-xl p-6 border-2 border-slate-200/50">
-                <Shield className="w-8 h-8 text-emerald-600 mb-3" />
-                <h4 className="font-bold text-slate-900 mb-2">Secure</h4>
-                <p className="text-sm text-slate-600">OAuth-based authentication with scoped permissions.</p>
+              <div className="group bg-white rounded-2xl p-6 border-2 border-slate-200 hover:border-purple-300 hover:shadow-xl transition-all duration-300">
+                <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform shadow-lg">
+                  <Shield className="w-6 h-6 text-white" />
+                </div>
+                <h4 className="font-bold text-slate-900 mb-2 text-lg">Secure</h4>
+                <p className="text-sm text-slate-600 leading-relaxed">OAuth-based authentication with scoped permissions. Your code stays safe.</p>
               </div>
-              <div className="bg-white/80 rounded-xl p-6 border-2 border-slate-200/50">
-                <Activity className="w-8 h-8 text-emerald-600 mb-3" />
-                <h4 className="font-bold text-slate-900 mb-2">Automatic</h4>
-                <p className="text-sm text-slate-600">Works on PRs and direct pushes to main/master.</p>
+              <div className="group bg-white rounded-2xl p-6 border-2 border-slate-200 hover:border-blue-300 hover:shadow-xl transition-all duration-300">
+                <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-500 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform shadow-lg">
+                  <Activity className="w-6 h-6 text-white" />
+                </div>
+                <h4 className="font-bold text-slate-900 mb-2 text-lg">Automatic</h4>
+                <p className="text-sm text-slate-600 leading-relaxed">Works on PRs and direct pushes to main/master. Set it and forget it!</p>
               </div>
             </div>
           </div>
         </div>
 
         {/* Analysis Results Section */}
-        <div className="bg-white/90 backdrop-blur-xl border-2 border-white/50 rounded-3xl p-8 shadow-xl">
-          <div className="flex items-center justify-between mb-6">
+        <div className="bg-white/90 backdrop-blur-xl border-2 border-white/50 rounded-3xl p-6 sm:p-8 lg:p-10 shadow-xl animate-fadeIn">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
             <div className="flex items-center space-x-3">
-              <FileText className="w-8 h-8 text-slate-900" />
-              <h2 className="text-3xl font-bold text-slate-900">Recent Analysis Results</h2>
+              <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
+                <FileText className="w-6 h-6 text-white" />
+              </div>
+              <h2 className="text-2xl sm:text-3xl font-bold text-slate-900">Recent Analysis Results</h2>
             </div>
             <button
               onClick={fetchAnalysisResults}
               disabled={loadingResults}
-              className="flex items-center space-x-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50"
+              className="flex items-center justify-center space-x-2 px-5 py-2.5 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-xl transition-all shadow-lg hover:shadow-xl disabled:opacity-50 font-semibold transform hover:scale-105"
             >
               <RefreshCw className={`w-4 h-4 ${loadingResults ? 'animate-spin' : ''}`} />
               <span>Refresh</span>
@@ -322,17 +360,35 @@ const CICDIntegration: React.FC<CICDIntegrationProps> = () => {
           </div>
 
           {loadingResults ? (
-            <div className="text-center py-12">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-              <p className="mt-4 text-slate-600">Loading analysis results...</p>
+            <div className="text-center py-16 bg-gradient-to-br from-slate-50 to-blue-50 rounded-2xl border-2 border-slate-200">
+              <div className="animate-spin rounded-full h-16 w-16 border-4 border-blue-200 border-t-blue-600 mx-auto"></div>
+              <p className="mt-6 text-slate-700 font-medium text-lg">Loading analysis results...</p>
             </div>
           ) : analysisResults.length === 0 ? (
-            <div className="text-center py-12 bg-gradient-to-br from-slate-50 to-blue-50 rounded-2xl border-2 border-slate-200/50">
-              <Info className="w-16 h-16 text-slate-400 mx-auto mb-4" />
-              <h3 className="text-xl font-bold text-slate-700 mb-2">No Analysis Results Yet</h3>
-              <p className="text-slate-600">
-                Analysis results will appear here after you install the GitHub App and create PRs or push code.
+            <div className="text-center py-16 bg-gradient-to-br from-slate-50 via-blue-50 to-purple-50 rounded-2xl border-2 border-slate-200">
+              <div className="w-20 h-20 bg-gradient-to-br from-blue-100 to-purple-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                <Info className="w-10 h-10 text-blue-600" />
+              </div>
+              <h3 className="text-2xl font-bold text-slate-900 mb-3">No Analysis Results Yet</h3>
+              <p className="text-slate-600 max-w-md mx-auto leading-relaxed mb-6">
+                Analysis results will appear here after you install the GitHub App and create PRs or push code with IAM policy changes.
               </p>
+              <div className="flex flex-col sm:flex-row gap-3 justify-center items-center text-sm text-slate-600">
+                <div className="flex items-center gap-2">
+                  <CheckCircle className="w-4 h-4 text-green-600" />
+                  <span>Install GitHub App</span>
+                </div>
+                <div className="hidden sm:block text-slate-400">→</div>
+                <div className="flex items-center gap-2">
+                  <CheckCircle className="w-4 h-4 text-green-600" />
+                  <span>Create PR or Push</span>
+                </div>
+                <div className="hidden sm:block text-slate-400">→</div>
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-blue-600" />
+                  <span>See Results Here</span>
+                </div>
+              </div>
             </div>
           ) : (
             <div className="space-y-4">
