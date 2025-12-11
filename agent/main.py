@@ -5,6 +5,7 @@ from pydantic import BaseModel, field_validator
 from typing import Optional, List, Dict, Any
 # Feature imports
 from features.policy_generation.policy_agent import PolicyAgent
+from features.policy_generation.bedrock_tool import set_user_credentials, clear_user_credentials
 from features.validation.validator_agent import ValidatorAgent
 from features.audit.audit_agent import AuditAgent
 from features.cicd.cicd_analyzer import CICDAnalyzer
@@ -465,13 +466,35 @@ async def generate(request: GenerationRequest):
     logging.info(f"   Request description length: {len(request.description)}")
     logging.info(f"   Is followup: {request.is_followup}")
     logging.info(f"   Conversation ID: {request.conversation_id}")
+    logging.info(f"   User credentials provided: {request.aws_credentials is not None}")
     
-    # AUTO-DETECT ACTUAL AWS ACCOUNT ID from credentials
+    # Set user credentials in context (thread-safe)
+    if request.aws_credentials:
+        creds_dict = {
+            'access_key_id': request.aws_credentials.access_key_id,
+            'secret_access_key': request.aws_credentials.secret_access_key,
+            'region': request.aws_credentials.region
+        }
+        set_user_credentials(creds_dict)
+        logging.info(f"✅ User credentials set for region: {request.aws_credentials.region}")
+    
     try:
-        import boto3
-        sts = boto3.client('sts')
-        actual_account_id = sts.get_caller_identity()['Account']
-        logging.info(f"✅ Detected AWS Account ID: {actual_account_id}")
+        # AUTO-DETECT ACTUAL AWS ACCOUNT ID from credentials
+        try:
+            import boto3
+            # Use user credentials if provided, otherwise default
+            if request.aws_credentials:
+                sts = boto3.client(
+                    'sts',
+                    aws_access_key_id=request.aws_credentials.access_key_id,
+                    aws_secret_access_key=request.aws_credentials.secret_access_key,
+                    region_name=request.aws_credentials.region
+                )
+            else:
+                sts = boto3.client('sts')
+            
+            actual_account_id = sts.get_caller_identity()['Account']
+            logging.info(f"✅ Detected AWS Account ID: {actual_account_id}")
         
         # Replace any user-provided account ID with the ACTUAL account ID
         import re
@@ -501,21 +524,26 @@ async def generate(request: GenerationRequest):
         logging.info(f"✅ _generate_internal returned, type: {type(result)}")
         if isinstance(result, JSONResponse):
             logging.info(f"   JSONResponse status: {result.status_code}")
-        return result
-    except Exception as outer_error:
-        logging.error(f"❌ CRITICAL: Outer exception handler caught error: {outer_error}")
-        logging.exception(outer_error)
-        # Return guaranteed minimal response as plain dict (let FastAPI serialize)
-        error_response = {
-            "conversation_id": str(uuid.uuid4()),
-            "final_answer": f"An error occurred: {str(outer_error)[:200]}. Please try again.",
-            "error": str(outer_error)[:200],
-            "message_count": 1,
-            "policy": None,
-            "trust_policy": None
-        }
-        logging.info(f"⚠️ Returning error response from outer handler: {error_response}")
-        return error_response  # Return dict, not JSONResponse - let FastAPI handle it
+            return result
+        except Exception as outer_error:
+            logging.error(f"❌ CRITICAL: Outer exception handler caught error: {outer_error}")
+            logging.exception(outer_error)
+            # Return guaranteed minimal response as plain dict (let FastAPI serialize)
+            error_response = {
+                "conversation_id": str(uuid.uuid4()),
+                "final_answer": f"An error occurred: {str(outer_error)[:200]}. Please try again.",
+                "error": str(outer_error)[:200],
+                "message_count": 1,
+                "policy": None,
+                "trust_policy": None
+            }
+            logging.info(f"⚠️ Returning error response from outer handler: {error_response}")
+            return error_response  # Return dict, not JSONResponse - let FastAPI handle it
+    finally:
+        # SECURITY: Always clear user credentials after request
+        if request.aws_credentials:
+            clear_user_credentials()
+            logging.info("🧹 User credentials cleared from context")
 
 def _ensure_list(value: Any) -> List[Any]:
     if isinstance(value, list):
