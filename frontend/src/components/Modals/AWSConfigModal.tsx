@@ -1,249 +1,269 @@
 import React, { useState } from 'react';
-import { X, Shield, Lock, AlertTriangle, CheckCircle, ExternalLink } from 'lucide-react';
+import { X, Key, Globe, AlertCircle, CheckCircle, ExternalLink } from 'lucide-react';
 
 interface AWSConfigModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (credentials: AWSCredentials) => void;
+  onSave: (credentials: { access_key_id: string; secret_access_key: string; region: string }) => void;
+  currentCredentials?: { access_key_id: string; secret_access_key: string; region: string } | null;
 }
 
-export interface AWSCredentials {
-  accessKeyId: string;
-  secretAccessKey: string;
-  region: string;
-}
+const AWS_REGIONS = [
+  { value: 'us-east-1', label: 'US East (N. Virginia)' },
+  { value: 'us-east-2', label: 'US East (Ohio)' },
+  { value: 'us-west-1', label: 'US West (N. California)' },
+  { value: 'us-west-2', label: 'US West (Oregon)' },
+  { value: 'eu-west-1', label: 'Europe (Ireland)' },
+  { value: 'eu-west-2', label: 'Europe (London)' },
+  { value: 'eu-west-3', label: 'Europe (Paris)' },
+  { value: 'eu-central-1', label: 'Europe (Frankfurt)' },
+  { value: 'eu-north-1', label: 'Europe (Stockholm)' },
+  { value: 'ap-northeast-1', label: 'Asia Pacific (Tokyo)' },
+  { value: 'ap-northeast-2', label: 'Asia Pacific (Seoul)' },
+  { value: 'ap-southeast-1', label: 'Asia Pacific (Singapore)' },
+  { value: 'ap-southeast-2', label: 'Asia Pacific (Sydney)' },
+  { value: 'ap-south-1', label: 'Asia Pacific (Mumbai)' },
+  { value: 'ca-central-1', label: 'Canada (Central)' },
+  { value: 'sa-east-1', label: 'South America (São Paulo)' },
+];
 
-const AWSConfigModal: React.FC<AWSConfigModalProps> = ({ isOpen, onClose, onSubmit }) => {
-  const [credentials, setCredentials] = useState<AWSCredentials>({
-    accessKeyId: '',
-    secretAccessKey: '',
-    region: 'us-east-1'
-  });
-  
+const AWSConfigModal: React.FC<AWSConfigModalProps> = ({ isOpen, onClose, onSave, currentCredentials }) => {
+  const [accessKeyId, setAccessKeyId] = useState(currentCredentials?.access_key_id || '');
+  const [secretAccessKey, setSecretAccessKey] = useState(currentCredentials?.secret_access_key || '');
+  const [region, setRegion] = useState(currentCredentials?.region || 'us-east-1');
   const [showSecret, setShowSecret] = useState(false);
-  const [agreed, setAgreed] = useState(false);
+  const [errors, setErrors] = useState<{ accessKeyId?: string; secretAccessKey?: string }>({});
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!agreed) {
-      alert('Please acknowledge the security notice');
-      return;
+  const validate = () => {
+    const newErrors: { accessKeyId?: string; secretAccessKey?: string } = {};
+
+    // Validate Access Key ID (20 characters, alphanumeric, starts with AKIA)
+    if (!accessKeyId) {
+      newErrors.accessKeyId = 'Access Key ID is required';
+    } else if (!/^AKIA[A-Z0-9]{16}$/.test(accessKeyId)) {
+      newErrors.accessKeyId = 'Invalid format. Should be 20 characters starting with AKIA';
     }
-    if (!credentials.accessKeyId || !credentials.secretAccessKey) {
-      alert('Please enter both Access Key ID and Secret Access Key');
-      return;
+
+    // Validate Secret Access Key (40 characters, alphanumeric + symbols)
+    if (!secretAccessKey) {
+      newErrors.secretAccessKey = 'Secret Access Key is required';
+    } else if (secretAccessKey.length !== 40) {
+      newErrors.secretAccessKey = 'Invalid format. Should be 40 characters';
     }
-    onSubmit(credentials);
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleSave = () => {
+    if (validate()) {
+      onSave({
+        access_key_id: accessKeyId,
+        secret_access_key: secretAccessKey,
+        region,
+      });
+      onClose();
+    }
+  };
+
+  const handleCancel = () => {
+    // Reset form
+    setAccessKeyId(currentCredentials?.access_key_id || '');
+    setSecretAccessKey(currentCredentials?.secret_access_key || '');
+    setRegion(currentCredentials?.region || 'us-east-1');
+    setErrors({});
     onClose();
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm">
+      <div className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 rounded-2xl shadow-2xl border border-gray-700">
         {/* Header */}
-        <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-6 rounded-t-3xl relative">
-          <button
-            onClick={onClose}
-            className="absolute top-4 right-4 text-white/80 hover:text-white transition-colors"
-          >
-            <X className="w-6 h-6" />
-          </button>
-          <div className="flex items-center space-x-3">
-            <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
-              <Shield className="w-6 h-6" />
-            </div>
-            <div>
-              <h2 className="text-2xl font-bold">AWS Configuration</h2>
-              <p className="text-blue-100 text-sm">Secure credential management</p>
-            </div>
+        <div className="sticky top-0 z-10 bg-gradient-to-r from-blue-600 to-purple-600 px-6 py-4 rounded-t-2xl flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Key className="w-6 h-6 text-white" />
+            <h2 className="text-2xl font-bold text-white">AWS Credentials Configuration</h2>
           </div>
+          <button
+            onClick={handleCancel}
+            className="text-white hover:bg-white/20 rounded-lg p-2 transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
         </div>
 
-        <div className="p-6 space-y-6">
+        {/* Content */}
+        <div className="px-6 py-6 space-y-6">
           {/* Security Notice */}
-          <div className="bg-gradient-to-r from-emerald-50 to-green-50 border-2 border-emerald-200 rounded-xl p-4">
-            <div className="flex items-start space-x-3">
-              <Lock className="w-5 h-5 text-emerald-600 flex-shrink-0 mt-0.5" />
-              <div className="flex-1">
-                <h3 className="font-bold text-emerald-900 mb-2">🔒 Your Security is Our Priority</h3>
-                <ul className="space-y-1 text-sm text-emerald-800">
-                  <li className="flex items-start">
-                    <CheckCircle className="w-4 h-4 mr-2 mt-0.5 flex-shrink-0" />
-                    <span>Credentials are <strong>NEVER stored</strong> on our servers</span>
-                  </li>
-                  <li className="flex items-start">
-                    <CheckCircle className="w-4 h-4 mr-2 mt-0.5 flex-shrink-0" />
-                    <span>Sent <strong>directly to AWS Bedrock</strong> using HTTPS</span>
-                  </li>
-                  <li className="flex items-start">
-                    <CheckCircle className="w-4 h-4 mr-2 mt-0.5 flex-shrink-0" />
-                    <span>Cleared automatically when you <strong>close the browser</strong></span>
-                  </li>
-                  <li className="flex items-start">
-                    <CheckCircle className="w-4 h-4 mr-2 mt-0.5 flex-shrink-0" />
-                    <span>All traffic encrypted with <strong>TLS 1.3</strong></span>
-                  </li>
-                </ul>
-              </div>
+          <div className="bg-blue-900/30 border border-blue-500/50 rounded-lg p-4 flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <h3 className="text-sm font-semibold text-blue-300 mb-1">Your Credentials Are Secure</h3>
+              <p className="text-xs text-blue-200/80 leading-relaxed">
+                Your AWS credentials are <strong>never stored</strong> on our servers. They are used only for the duration 
+                of your current session and are transmitted securely over HTTPS directly to AWS. We never log or persist 
+                your credentials.
+              </p>
             </div>
           </div>
 
-          {/* Cost Warning */}
-          <div className="bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-amber-200 rounded-xl p-4">
-            <div className="flex items-start space-x-3">
-              <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
-              <div className="flex-1">
-                <h3 className="font-bold text-amber-900 mb-1">💰 Billing Information</h3>
-                <p className="text-sm text-amber-800">
-                  Usage will be billed to <strong>YOUR AWS account</strong>. Estimated cost: <strong>~$0.01-0.03 per analysis</strong> (AWS Bedrock Claude 3.7 Sonnet pricing).
-                </p>
-              </div>
-            </div>
+          {/* AWS Setup Guide */}
+          <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4">
+            <h3 className="text-sm font-semibold text-gray-300 mb-2 flex items-center gap-2">
+              <ExternalLink className="w-4 h-4" />
+              Need AWS Credentials?
+            </h3>
+            <p className="text-xs text-gray-400 mb-3">
+              Follow these steps to create an IAM user with programmatic access:
+            </p>
+            <ol className="text-xs text-gray-400 space-y-1.5 list-decimal list-inside">
+              <li>Go to AWS Console → IAM → Users → Create User</li>
+              <li>Enable "Programmatic access" (Access Key ID and Secret)</li>
+              <li>Attach policies: <code className="text-xs bg-gray-700 px-1 py-0.5 rounded">IAMFullAccess</code>, <code className="text-xs bg-gray-700 px-1 py-0.5 rounded">AmazonBedrockFullAccess</code></li>
+              <li>Download the credentials CSV file</li>
+            </ol>
+            <a
+              href="https://docs.aws.amazon.com/IAM/latest/UserGuide/id_users_create.html"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 mt-3 transition-colors"
+            >
+              Read AWS IAM User Guide <ExternalLink className="w-3 h-3" />
+            </a>
           </div>
 
-          {/* Credentials Form */}
-          <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Form Fields */}
+          <div className="space-y-4">
             {/* Access Key ID */}
             <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-2">
-                AWS Access Key ID <span className="text-red-500">*</span>
+              <label htmlFor="accessKeyId" className="block text-sm font-medium text-gray-300 mb-2">
+                Access Key ID <span className="text-red-400">*</span>
               </label>
               <input
                 type="text"
-                value={credentials.accessKeyId}
-                onChange={(e) => setCredentials({ ...credentials, accessKeyId: e.target.value })}
+                id="accessKeyId"
+                value={accessKeyId}
+                onChange={(e) => {
+                  setAccessKeyId(e.target.value);
+                  setErrors((prev) => ({ ...prev, accessKeyId: undefined }));
+                }}
                 placeholder="AKIAIOSFODNN7EXAMPLE"
-                className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:border-blue-500 focus:outline-none font-mono text-sm"
-                required
-                autoComplete="off"
-                spellCheck="false"
+                className={`w-full px-4 py-3 bg-gray-800 border ${
+                  errors.accessKeyId ? 'border-red-500' : 'border-gray-600'
+                } rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all font-mono text-sm`}
               />
+              {errors.accessKeyId && (
+                <p className="text-xs text-red-400 mt-1 flex items-center gap-1">
+                  <AlertCircle className="w-3 h-3" />
+                  {errors.accessKeyId}
+                </p>
+              )}
+              <p className="text-xs text-gray-500 mt-1">
+                Format: 20 characters starting with AKIA
+              </p>
             </div>
 
             {/* Secret Access Key */}
             <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-2">
-                AWS Secret Access Key <span className="text-red-500">*</span>
+              <label htmlFor="secretAccessKey" className="block text-sm font-medium text-gray-300 mb-2">
+                Secret Access Key <span className="text-red-400">*</span>
               </label>
               <div className="relative">
                 <input
-                  type={showSecret ? "text" : "password"}
-                  value={credentials.secretAccessKey}
-                  onChange={(e) => setCredentials({ ...credentials, secretAccessKey: e.target.value })}
+                  type={showSecret ? 'text' : 'password'}
+                  id="secretAccessKey"
+                  value={secretAccessKey}
+                  onChange={(e) => {
+                    setSecretAccessKey(e.target.value);
+                    setErrors((prev) => ({ ...prev, secretAccessKey: undefined }));
+                  }}
                   placeholder="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
-                  className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:border-blue-500 focus:outline-none font-mono text-sm pr-20"
-                  required
-                  autoComplete="off"
-                  spellCheck="false"
+                  className={`w-full px-4 py-3 bg-gray-800 border ${
+                    errors.secretAccessKey ? 'border-red-500' : 'border-gray-600'
+                  } rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all font-mono text-sm pr-20`}
                 />
                 <button
                   type="button"
                   onClick={() => setShowSecret(!showSecret)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-blue-600 hover:text-blue-700 font-medium"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 hover:text-gray-300 transition-colors"
                 >
                   {showSecret ? 'Hide' : 'Show'}
                 </button>
               </div>
+              {errors.secretAccessKey && (
+                <p className="text-xs text-red-400 mt-1 flex items-center gap-1">
+                  <AlertCircle className="w-3 h-3" />
+                  {errors.secretAccessKey}
+                </p>
+              )}
+              <p className="text-xs text-gray-500 mt-1">
+                Format: 40 characters (alphanumeric + symbols)
+              </p>
             </div>
 
             {/* Region */}
             <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-2">
-                AWS Region <span className="text-red-500">*</span>
+              <label htmlFor="region" className="block text-sm font-medium text-gray-300 mb-2">
+                <Globe className="w-4 h-4 inline-block mr-1" />
+                AWS Region <span className="text-red-400">*</span>
               </label>
               <select
-                value={credentials.region}
-                onChange={(e) => setCredentials({ ...credentials, region: e.target.value })}
-                className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:border-blue-500 focus:outline-none"
-                required
+                id="region"
+                value={region}
+                onChange={(e) => setRegion(e.target.value)}
+                className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
               >
-                <option value="us-east-1">US East (N. Virginia) - us-east-1</option>
-                <option value="us-east-2">US East (Ohio) - us-east-2</option>
-                <option value="us-west-1">US West (N. California) - us-west-1</option>
-                <option value="us-west-2">US West (Oregon) - us-west-2</option>
-                <option value="eu-west-1">EU (Ireland) - eu-west-1</option>
-                <option value="eu-central-1">EU (Frankfurt) - eu-central-1</option>
-                <option value="ap-southeast-1">Asia Pacific (Singapore) - ap-southeast-1</option>
-                <option value="ap-northeast-1">Asia Pacific (Tokyo) - ap-northeast-1</option>
+                {AWS_REGIONS.map((r) => (
+                  <option key={r.value} value={r.value}>
+                    {r.label}
+                  </option>
+                ))}
               </select>
             </div>
+          </div>
 
-            {/* Agreement Checkbox */}
-            <div className="bg-slate-50 rounded-xl p-4 border-2 border-slate-200">
-              <label className="flex items-start space-x-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={agreed}
-                  onChange={(e) => setAgreed(e.target.checked)}
-                  className="mt-1 w-5 h-5 text-blue-600 border-2 border-slate-300 rounded focus:ring-2 focus:ring-blue-500"
-                />
-                <span className="text-sm text-slate-700">
-                  I understand that my AWS credentials will be used to make API calls to AWS Bedrock,
-                  and I will be charged according to AWS pricing. Credentials are never stored and are
-                  used only for the duration of this session.
-                </span>
-              </label>
-            </div>
-
-            {/* Help Link */}
-            <div className="bg-blue-50 rounded-xl p-4 border-2 border-blue-200">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2 text-sm text-blue-700">
-                  <span>Don't have AWS credentials?</span>
-                </div>
-                <a
-                  href="https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_access-keys.html"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center space-x-1 text-sm font-medium text-blue-600 hover:text-blue-700"
-                >
-                  <span>How to Get AWS Keys</span>
-                  <ExternalLink className="w-4 h-4" />
-                </a>
-              </div>
-            </div>
-
-            {/* Action Buttons */}
-            <div className="flex space-x-3 pt-4">
-              <button
-                type="button"
-                onClick={onClose}
-                className="flex-1 px-6 py-3 border-2 border-slate-300 text-slate-700 rounded-xl font-semibold hover:bg-slate-50 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={!agreed}
-                className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl font-semibold hover:from-blue-700 hover:to-purple-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
-              >
-                Continue Securely
-              </button>
-            </div>
-          </form>
-
-          {/* Alternative Options */}
-          <div className="pt-4 border-t-2 border-slate-100">
-            <p className="text-sm text-slate-600 text-center mb-3">
-              Prefer not to enter credentials here?
-            </p>
-            <div className="grid grid-cols-2 gap-3">
-              <a
-                href="/github-action-guide"
-                className="text-center px-4 py-2 bg-slate-100 hover:bg-slate-200 rounded-lg text-sm font-medium text-slate-700 transition-colors"
-              >
-                Use GitHub Action
-              </a>
-              <a
-                href="/self-host-guide"
-                className="text-center px-4 py-2 bg-slate-100 hover:bg-slate-200 rounded-lg text-sm font-medium text-slate-700 transition-colors"
-              >
-                Self-Host Instead
-              </a>
+          {/* Cost Warning */}
+          <div className="bg-yellow-900/30 border border-yellow-500/50 rounded-lg p-4 flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-yellow-400 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <h3 className="text-sm font-semibold text-yellow-300 mb-1">AWS Charges Apply</h3>
+              <p className="text-xs text-yellow-200/80 leading-relaxed">
+                Using Aegis IAM will invoke AWS Bedrock API calls on <strong>your AWS account</strong>. These calls incur 
+                charges based on AWS Bedrock pricing (~$3-15 per 1M tokens). You are responsible for all AWS costs.
+              </p>
             </div>
           </div>
+
+          {/* Success Message (if reconfiguring) */}
+          {currentCredentials && (
+            <div className="bg-green-900/30 border border-green-500/50 rounded-lg p-4 flex items-start gap-3">
+              <CheckCircle className="w-5 h-5 text-green-400 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <h3 className="text-sm font-semibold text-green-300 mb-1">Credentials Already Configured</h3>
+                <p className="text-xs text-green-200/80">
+                  You can update your credentials below and save to reconfigure.
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="sticky bottom-0 bg-gray-800/95 backdrop-blur-sm px-6 py-4 rounded-b-2xl flex items-center justify-between border-t border-gray-700">
+          <button
+            onClick={handleCancel}
+            className="px-5 py-2.5 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors font-medium"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            className="px-5 py-2.5 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-lg transition-all font-medium shadow-lg"
+          >
+            Save & Continue
+          </button>
         </div>
       </div>
     </div>
@@ -251,4 +271,3 @@ const AWSConfigModal: React.FC<AWSConfigModalProps> = ({ isOpen, onClose, onSubm
 };
 
 export default AWSConfigModal;
-
