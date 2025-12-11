@@ -1,4 +1,4 @@
-# Test IAM Policy
+# Test IAM Policy for S3
 
 {
   "Version": "2012-10-17",
