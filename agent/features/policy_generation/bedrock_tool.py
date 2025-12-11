@@ -273,7 +273,7 @@ CRITICAL REMINDERS:
 
     body = json.dumps({
         "anthropic_version": "bedrock-2023-05-31",
-        "max_tokens": 8000,  # Increased to ensure complete compliance responses and detailed explanations
+        "max_tokens": 4000,  # Optimized - actual usage is ~1500-2000 tokens
         "system": system_prompt,  # Add system prompt here
         "messages": [{"role": "user", "content": [{"type": "text", "text": user_prompt}]}],
         "temperature": 0.1  # Low temperature for consistent, fast responses
@@ -312,7 +312,7 @@ CRITICAL REMINDERS:
         logging.info(f"   Output tokens: {output_tokens:,} → ${output_cost:.6f}")
         logging.info(f"   💵 ESTIMATED COST: ${total_cost:.6f} per request")
         logging.info(f"   Response length: {len(raw_response_text):,} chars")
-        logging.info(f"   Note: max_tokens=8000 is a LIMIT, not actual usage. You pay for {output_tokens:,} tokens generated.")
+        logging.info(f"   Note: max_tokens=4000 is a LIMIT, not actual usage. You pay for {output_tokens:,} tokens generated.")
         logging.info("CHECKING FOR REQUIRED SECTIONS:")
         logging.info("  Has Permissions Policy: {}".format("## Permissions Policy" in raw_response_text))
         logging.info("  Has Trust Policy: {}".format("## Trust Policy" in raw_response_text))
@@ -347,24 +347,63 @@ CRITICAL REMINDERS:
                 raw_response_text += trust_policy_section
                 logging.info("✅ Appended Trust Policy section at end")
         
-        # Fix improperly formatted JSON (all on one line)
-        json_blocks = [block.strip() for block in raw_response_text.split('```json') if block.strip()]
-        for i, block in enumerate(json_blocks):
+        # Fix improperly formatted JSON blocks (Claude sometimes outputs JSON on one line)
+        # Use regex to extract JSON content from ```json ... ``` blocks
+        import re
+        json_block_pattern = r'```json\s*([\s\S]*?)```'
+        matches = list(re.finditer(json_block_pattern, raw_response_text, re.IGNORECASE))
+        
+        for match in matches:
+            full_match = match.group(0)  # Full match including ```json and ```
+            json_content = match.group(1).strip()  # Just the JSON content
+            
+            # Try to parse the JSON
             try:
-                json.loads(block)
+                # If it parses successfully, it's valid JSON - no fix needed
+                json.loads(json_content)
             except json.JSONDecodeError:
+                # JSON is invalid - try to fix formatting
                 logging.warning("❌ Improperly formatted JSON block detected. Attempting to fix...")
-                lines = block.splitlines()
-                fixed_block = ''
-                indent_level = 0
-                for line in lines:
-                    if line.strip().startswith('}'):
-                        indent_level -= 1
-                    fixed_block += '  ' * indent_level + line.strip() + '\n'
-                    if line.strip().startswith('{'):
-                        indent_level += 1
-                raw_response_text = raw_response_text.replace('```json' + block + '```', '```json' + fixed_block + '```')
-                logging.info("✅ Successfully fixed JSON block")
+                
+                # Try to extract valid JSON from the content (might have extra text)
+                # Find the first { and last } to extract the JSON object
+                first_brace = json_content.find('{')
+                last_brace = json_content.rfind('}')
+                
+                if first_brace >= 0 and last_brace > first_brace:
+                    json_only = json_content[first_brace:last_brace + 1]
+                    try:
+                        # Try parsing the extracted JSON
+                        parsed = json.loads(json_only)
+                        # If successful, format it properly
+                        formatted_json = json.dumps(parsed, indent=2)
+                        # Replace the old block with properly formatted JSON
+                        new_block = f'```json\n{formatted_json}\n```'
+                        raw_response_text = raw_response_text.replace(full_match, new_block)
+                        logging.info("✅ Successfully fixed JSON block")
+                    except json.JSONDecodeError:
+                        # Still invalid - try line-by-line formatting fix
+                        lines = json_only.splitlines()
+                        fixed_block = ''
+                        indent_level = 0
+                        for line in lines:
+                            stripped = line.strip()
+                            if stripped.startswith('}'):
+                                indent_level = max(0, indent_level - 1)
+                            fixed_block += '  ' * indent_level + stripped + '\n'
+                            if stripped.startswith('{'):
+                                indent_level += 1
+                        # Try parsing the fixed version
+                        try:
+                            json.loads(fixed_block.strip())
+                            new_block = f'```json\n{fixed_block}\n```'
+                            raw_response_text = raw_response_text.replace(full_match, new_block)
+                            logging.info("✅ Successfully fixed JSON block (line-by-line formatting)")
+                        except json.JSONDecodeError:
+                            # Couldn't fix it - leave as is
+                            logging.warning(f"⚠️ Could not fix JSON block, leaving as-is")
+                else:
+                    logging.warning(f"⚠️ Could not find JSON structure in block, leaving as-is")
         
         logging.info("=" * 80)
         
@@ -394,7 +433,7 @@ If user wants changes: Update the policy and output the SAME format as before wi
 
     body = json.dumps({
         "anthropic_version": "bedrock-2023-05-31",
-        "max_tokens": 8000,  # Increased to ensure complete compliance responses and detailed explanations
+        "max_tokens": 4000,  # Optimized - actual usage is ~1500-2000 tokens
         "messages": [{"role": "user", "content": [{"type": "text", "text": prompt}]}],
         "temperature": 0.1
     })

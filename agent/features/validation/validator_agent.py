@@ -9,6 +9,7 @@ import json
 import boto3
 from typing import Dict, List, Optional
 from core.fastmcp_client import get_mcp_client
+from utils.compliance_links import get_compliance_link
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

@@ -2,6 +2,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Search, AlertTriangle, XCircle, CheckCircle, Info, AlertCircle, Shield, Sparkles, Copy, Download, RefreshCw, Zap, Bot, ChevronDown, ChevronUp, Send, TrendingUp, Target, Clock, Share2, Activity, Scan, FileSearch, Users, Database, Lock, Eye, Settings, X, Minimize2, Maximize2, ArrowRight, ExternalLink } from 'lucide-react';
 import { saveToStorage, loadFromStorage, STORAGE_KEYS } from '@/utils/persistence';
 import { getComplianceLink } from '@/utils/complianceLinks';
+import CollapsibleTile from '@/components/Common/CollapsibleTile';
+import SecurityTips from '@/components/Common/SecurityTips';
 
 // ============================================
 // TYPE DEFINITIONS
@@ -74,6 +76,7 @@ const ValidatePolicy: React.FC = () => {
   const [inputValue, setInputValue] = useState('');
   const [response, setResponse] = useState<ValidatePolicyResponse | null>(null);
   const [loading, setLoading] = useState(false);
+  const [validationStep, setValidationStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [showInitialForm, setShowInitialForm] = useState(true);
   
@@ -148,32 +151,50 @@ const ValidatePolicy: React.FC = () => {
     }
   }, [enhancementChat]);
 
-  // Helper function for risk grade - MUST BE BEFORE handleValidation
-  const getRiskGrade = (score: number) => {
-    if (score <= 30) return { 
+  // Animated step indicator for loading state
+  useEffect(() => {
+    if (loading) {
+      setValidationStep(0);
+      const id = window.setInterval(() => {
+        setValidationStep(prev => (prev + 1) % 3);
+      }, 1700);
+      return () => window.clearInterval(id);
+    } else {
+      setValidationStep(0);
+    }
+  }, [loading]);
+
+  // Helper function for security score grade - converts risk score (0-100, higher=worse) to security score (0-100, higher=better)
+  const getSecurityScore = (riskScore: number) => {
+    return 100 - riskScore; // Invert: 0 risk = 100 security, 100 risk = 0 security
+  };
+
+  // Helper function for security grade - MUST BE BEFORE handleValidation
+  const getSecurityGrade = (securityScore: number) => {
+    if (securityScore >= 70) return { 
       grade: 'A', 
       label: 'Excellent', 
       color: 'emerald', 
       bgClass: 'from-emerald-500/20 to-green-500/20', 
       borderClass: 'border-emerald-500/30' 
     };
-    if (score <= 60) return { 
+    if (securityScore >= 40) return { 
       grade: 'B', 
       label: 'Good', 
-      color: 'yellow', 
-      bgClass: 'from-yellow-500/20 to-amber-500/20', 
-      borderClass: 'border-yellow-500/30' 
+      color: 'blue', 
+      bgClass: 'from-blue-500/20 to-cyan-500/20', 
+      borderClass: 'border-blue-500/30' 
     };
-    if (score <= 80) return { 
+    if (securityScore >= 20) return { 
       grade: 'C', 
-      label: 'Moderate Risk', 
+      label: 'Moderate', 
       color: 'orange', 
       bgClass: 'from-orange-500/20 to-red-500/20', 
       borderClass: 'border-orange-500/30' 
     };
     return { 
       grade: 'F', 
-      label: 'High Risk', 
+      label: 'Needs Improvement', 
       color: 'red', 
       bgClass: 'from-red-500/20 to-rose-500/20', 
       borderClass: 'border-red-500/30' 
@@ -297,7 +318,8 @@ const ValidatePolicy: React.FC = () => {
         const highCount = data.findings.filter((f: SecurityFinding) => f.severity === 'High').length;
         const mediumCount = data.findings.filter((f: SecurityFinding) => f.severity === 'Medium').length;
         const lowCount = data.findings.filter((f: SecurityFinding) => f.severity === 'Low').length;
-        const riskGrade = getRiskGrade(data.risk_score);
+        const securityScore = getSecurityScore(data.risk_score);
+        const securityGrade = getSecurityGrade(securityScore);
         const hasCriticalIssues = criticalCount > 0 || highCount > 0;
         const hasQuickWins = data.quick_wins && data.quick_wins.length > 0;
         const hasRecommendations = data.recommendations && data.recommendations.length > 0;
@@ -341,12 +363,12 @@ const ValidatePolicy: React.FC = () => {
         
         let greetingContent = `🔒 **Analysis Complete!** I'm Aegis AI, your intelligent security assistant.\n\n`;
         greetingContent += `**Your Policy Assessment:**\n`;
-        greetingContent += `• Risk Score: **${data.risk_score}/100** (${riskGrade.label})\n`;
+        greetingContent += `• Security Score: **${securityScore}/100** (${securityGrade.label})\n`;
         greetingContent += `• Total Findings: **${data.findings.length}** security ${data.findings.length === 1 ? 'issue' : 'issues'}\n`;
         greetingContent += `• Critical: **${criticalCount}** | High: **${highCount}** | Medium: **${mediumCount}** | Low: **${lowCount}**\n\n`;
         if (hasCriticalIssues) {
           greetingContent += `⚠️ **Action Required:** Your role has ${criticalCount > 0 ? 'critical' : 'high'}-severity security issues that need immediate attention.\n\n`;
-        } else if (data.risk_score <= 20) {
+        } else if (securityScore >= 80) {
           greetingContent += `✅ **Excellent Security Posture:** Your role follows AWS security best practices with minimal issues.\n\n`;
         } else {
           greetingContent += `📊 **Security Review:** Your role has some areas for improvement.\n\n`;
@@ -646,27 +668,55 @@ const ValidatePolicy: React.FC = () => {
                 <Shield className="w-16 h-16 text-blue-600 relative z-10 animate-pulse" />
               </div>
               
-              <h2 className="text-6xl font-extrabold bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent mb-4 animate-pulse leading-tight pb-2">
+              <h2 className="text-4xl sm:text-5xl font-extrabold bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent mb-4 animate-pulse leading-tight pb-2">
                 Deep Security Scan
               </h2>
               
-              <p className="text-2xl text-slate-700 mb-8 leading-relaxed font-semibold max-w-2xl mx-auto">
+              <p className="text-xl text-slate-600 mb-8 leading-relaxed font-medium max-w-2xl mx-auto">
                 Analyzing your IAM policy for vulnerabilities and compliance issues...
               </p>
               
-              <div className="flex flex-col items-center space-y-4 mb-10">
-                <div className="flex items-center space-x-3 px-6 py-3 bg-white/80 backdrop-blur-xl border-2 border-blue-200 rounded-full shadow-lg">
-                  <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-                  <span className="text-sm font-semibold text-slate-700">Checking security controls...</span>
-                </div>
-                <div className="flex items-center space-x-3 px-6 py-3 bg-white/80 backdrop-blur-xl border-2 border-purple-200 rounded-full shadow-lg">
-                  <div className="w-2 h-2 bg-purple-500 rounded-full animate-pulse" style={{ animationDelay: '0.5s' }}></div>
-                  <span className="text-sm font-semibold text-slate-700">Validating compliance...</span>
-                </div>
-                <div className="flex items-center space-x-3 px-6 py-3 bg-white/80 backdrop-blur-xl border-2 border-pink-200 rounded-full shadow-lg">
-                  <div className="w-2 h-2 bg-pink-500 rounded-full animate-pulse" style={{ animationDelay: '1s' }}></div>
-                  <span className="text-sm font-semibold text-slate-700">Calculating risk score...</span>
-                </div>
+              {/* Step indicators */}
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mb-8">
+                {['Checking security controls', 'Validating compliance', 'Calculating risk score'].map((label, idx) => {
+                  const isCurrent = validationStep === idx;
+                  const isDone = validationStep > idx;
+                  return (
+                    <div key={label} className="flex items-center w-full sm:w-auto">
+                      <div
+                        className={`flex items-center space-x-3 px-4 py-3 rounded-xl border-2 shadow-lg transition-all w-full sm:w-64 ${
+                          isCurrent
+                            ? 'bg-white/90 backdrop-blur-xl border-blue-300 shadow-blue-100'
+                            : 'bg-white/70 border-slate-200'
+                        }`}
+                      >
+                        <div
+                          className={`w-3 h-3 rounded-full ${
+                            isCurrent
+                              ? 'bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 animate-pulse'
+                              : isDone
+                              ? 'bg-blue-400'
+                              : 'bg-slate-300'
+                          }`}
+                        ></div>
+                        <div className="text-left">
+                          <div className="text-xs font-semibold text-slate-500">Step {idx + 1} of 3</div>
+                          <div className={`text-sm font-bold ${isCurrent ? 'text-slate-900' : 'text-slate-600'}`}>
+                            {label}...
+                          </div>
+                        </div>
+                      </div>
+                      {idx < 2 && (
+                        <div className="hidden sm:block w-10 h-0.5 bg-gradient-to-r from-blue-200 via-purple-200 to-pink-200 mx-2"></div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Security Tips while loading */}
+              <div className="mt-8">
+                <SecurityTips rotationInterval={4000} />
               </div>
             </div>
           </div>
@@ -707,7 +757,7 @@ const ValidatePolicy: React.FC = () => {
             {/* PREMIUM SECURITY RISK SCORE - Matching Audit Account Design */}
             {(() => {
               const riskScore = response.risk_score || 0;
-              const grade = getRiskGrade(riskScore);
+              const grade = getSecurityGrade(riskScore);
               
               // Color scheme based on score
               const getScoreColors = (score: number) => {
@@ -768,8 +818,8 @@ const ValidatePolicy: React.FC = () => {
                       {/* Left: Label Only */}
                       <div className="flex items-center gap-4 flex-shrink-0">
                         <div className="flex flex-col gap-1">
-                          <div className="text-slate-700 text-sm font-black uppercase tracking-widest">Security Risk Score</div>
-                          <div className="text-xs text-slate-500 font-medium">Higher = More Risk</div>
+                          <div className="text-slate-700 text-sm font-black uppercase tracking-widest">Security Score</div>
+                          <div className="text-xs text-slate-500 font-medium">Higher = Better Security</div>
                         </div>
                       </div>
                       
@@ -1268,19 +1318,15 @@ const ValidatePolicy: React.FC = () => {
 
                       {/* Critical Issues - Premium Design */}
                       {response.findings.filter(f => f.severity === 'Critical').length > 0 && (
-                        <div className="mb-8">
-                          <div className="flex items-center justify-between mb-5">
-                            <div className="flex items-center space-x-3">
-                              <div className="w-12 h-12 bg-gradient-to-br from-red-500/20 to-red-600/20 rounded-xl flex items-center justify-center border-2 border-red-200/50 shadow-lg">
-                                <XCircle className="w-6 h-6 text-red-600" />
-                              </div>
-                              <div>
-                                <h5 className="text-red-600 font-black text-xl flex items-center space-x-2">
-                                  <span>Critical Issues</span>
-                                </h5>
-                                <p className="text-xs text-slate-500 font-medium mt-0.5">Requires immediate attention</p>
-                              </div>
+                        <CollapsibleTile
+                          title="Critical Issues"
+                          subtitle="Requires immediate attention"
+                          icon={
+                            <div className="w-12 h-12 bg-gradient-to-br from-red-500/20 to-red-600/20 rounded-xl flex items-center justify-center border-2 border-red-200/50 shadow-lg">
+                              <XCircle className="w-6 h-6 text-red-600" />
                             </div>
+                          }
+                          badge={
                             <div className="px-4 py-2 bg-red-500/10 border-2 border-red-200/50 rounded-xl">
                               <span className="text-red-700 font-black text-lg">
                                 {response.findings.filter(f => f.severity === 'Critical').length}
@@ -1289,7 +1335,11 @@ const ValidatePolicy: React.FC = () => {
                                 {response.findings.filter(f => f.severity === 'Critical').length === 1 ? 'issue' : 'issues'}
                               </span>
                             </div>
-                          </div>
+                          }
+                          defaultExpanded={true}
+                          variant="error"
+                          className="mb-8"
+                        >
                           <div className="space-y-3">
                             {response.findings.filter(f => f.severity === 'Critical').map((finding, idx) => (
                               <div key={idx} className="group relative bg-gradient-to-br from-red-50/80 to-white border-2 border-red-200/50 rounded-xl p-5 hover:border-red-300 hover:shadow-xl transition-all duration-300 hover:scale-[1.01]">
@@ -1307,24 +1357,20 @@ const ValidatePolicy: React.FC = () => {
                               </div>
                             ))}
                           </div>
-                        </div>
+                        </CollapsibleTile>
                       )}
 
                       {/* High Issues - Premium Design */}
                       {response.findings.filter(f => f.severity === 'High').length > 0 && (
-                        <div className="mb-8">
-                          <div className="flex items-center justify-between mb-5">
-                            <div className="flex items-center space-x-3">
-                              <div className="w-12 h-12 bg-gradient-to-br from-orange-500/20 to-orange-600/20 rounded-xl flex items-center justify-center border-2 border-orange-200/50 shadow-lg">
-                                <AlertTriangle className="w-6 h-6 text-orange-600" />
-                              </div>
-                              <div>
-                                <h5 className="text-orange-600 font-black text-xl flex items-center space-x-2">
-                                  <span>High Issues</span>
-                                </h5>
-                                <p className="text-xs text-slate-500 font-medium mt-0.5">Should be addressed soon</p>
-                              </div>
+                        <CollapsibleTile
+                          title="High Issues"
+                          subtitle="Should be addressed soon"
+                          icon={
+                            <div className="w-12 h-12 bg-gradient-to-br from-orange-500/20 to-orange-600/20 rounded-xl flex items-center justify-center border-2 border-orange-200/50 shadow-lg">
+                              <AlertTriangle className="w-6 h-6 text-orange-600" />
                             </div>
+                          }
+                          badge={
                             <div className="px-4 py-2 bg-orange-500/10 border-2 border-orange-200/50 rounded-xl">
                               <span className="text-orange-700 font-black text-lg">
                                 {response.findings.filter(f => f.severity === 'High').length}
@@ -1333,7 +1379,11 @@ const ValidatePolicy: React.FC = () => {
                                 {response.findings.filter(f => f.severity === 'High').length === 1 ? 'issue' : 'issues'}
                               </span>
                             </div>
-                          </div>
+                          }
+                          defaultExpanded={true}
+                          variant="warning"
+                          className="mb-8"
+                        >
                           <div className="space-y-3">
                             {response.findings.filter(f => f.severity === 'High').map((finding, idx) => (
                               <div key={idx} className="group relative bg-gradient-to-br from-orange-50/80 to-white border-2 border-orange-200/50 rounded-xl p-5 hover:border-orange-300 hover:shadow-xl transition-all duration-300 hover:scale-[1.01]">
@@ -1351,24 +1401,20 @@ const ValidatePolicy: React.FC = () => {
                               </div>
                             ))}
                           </div>
-                        </div>
+                        </CollapsibleTile>
                       )}
 
                       {/* Medium Issues - Premium Design */}
                       {response.findings.filter(f => f.severity === 'Medium').length > 0 && (
-                        <div className="mb-8">
-                          <div className="flex items-center justify-between mb-5">
-                            <div className="flex items-center space-x-3">
-                              <div className="w-12 h-12 bg-gradient-to-br from-yellow-500/20 to-yellow-600/20 rounded-xl flex items-center justify-center border-2 border-yellow-200/50 shadow-lg">
-                                <AlertCircle className="w-6 h-6 text-yellow-600" />
-                              </div>
-                              <div>
-                                <h5 className="text-yellow-600 font-black text-xl flex items-center space-x-2">
-                                  <span>Medium Issues</span>
-                                </h5>
-                                <p className="text-xs text-slate-500 font-medium mt-0.5">Consider addressing</p>
-                              </div>
+                        <CollapsibleTile
+                          title="Medium Issues"
+                          subtitle="Consider addressing"
+                          icon={
+                            <div className="w-12 h-12 bg-gradient-to-br from-yellow-500/20 to-yellow-600/20 rounded-xl flex items-center justify-center border-2 border-yellow-200/50 shadow-lg">
+                              <AlertCircle className="w-6 h-6 text-yellow-600" />
                             </div>
+                          }
+                          badge={
                             <div className="px-4 py-2 bg-yellow-500/10 border-2 border-yellow-200/50 rounded-xl">
                               <span className="text-yellow-700 font-black text-lg">
                                 {response.findings.filter(f => f.severity === 'Medium').length}
@@ -1377,7 +1423,11 @@ const ValidatePolicy: React.FC = () => {
                                 {response.findings.filter(f => f.severity === 'Medium').length === 1 ? 'issue' : 'issues'}
                               </span>
                             </div>
-                          </div>
+                          }
+                          defaultExpanded={false}
+                          variant="warning"
+                          className="mb-8"
+                        >
                           <div className="space-y-3">
                             {response.findings.filter(f => f.severity === 'Medium').map((finding, idx) => (
                               <div key={idx} className="group relative bg-gradient-to-br from-yellow-50/80 to-white border-2 border-yellow-200/50 rounded-xl p-5 hover:border-yellow-300 hover:shadow-xl transition-all duration-300 hover:scale-[1.01]">
@@ -1395,24 +1445,20 @@ const ValidatePolicy: React.FC = () => {
                               </div>
                             ))}
                           </div>
-                        </div>
+                        </CollapsibleTile>
                       )}
 
                       {/* Low Issues - Premium Design */}
                       {response.findings.filter(f => f.severity === 'Low').length > 0 && (
-                        <div className="mb-8">
-                          <div className="flex items-center justify-between mb-5">
-                            <div className="flex items-center space-x-3">
-                              <div className="w-12 h-12 bg-gradient-to-br from-slate-500/20 to-slate-600/20 rounded-xl flex items-center justify-center border-2 border-slate-200/50 shadow-lg">
-                                <Info className="w-6 h-6 text-slate-600" />
-                              </div>
-                              <div>
-                                <h5 className="text-slate-600 font-black text-xl flex items-center space-x-2">
-                                  <span>Low Issues</span>
-                                </h5>
-                                <p className="text-xs text-slate-500 font-medium mt-0.5">Minor improvements</p>
-                              </div>
+                        <CollapsibleTile
+                          title="Low Issues"
+                          subtitle="Minor improvements"
+                          icon={
+                            <div className="w-12 h-12 bg-gradient-to-br from-slate-500/20 to-slate-600/20 rounded-xl flex items-center justify-center border-2 border-slate-200/50 shadow-lg">
+                              <Info className="w-6 h-6 text-slate-600" />
                             </div>
+                          }
+                          badge={
                             <div className="px-4 py-2 bg-slate-500/10 border-2 border-slate-200/50 rounded-xl">
                               <span className="text-slate-700 font-black text-lg">
                                 {response.findings.filter(f => f.severity === 'Low').length}
@@ -1421,7 +1467,11 @@ const ValidatePolicy: React.FC = () => {
                                 {response.findings.filter(f => f.severity === 'Low').length === 1 ? 'issue' : 'issues'}
                               </span>
                             </div>
-                          </div>
+                          }
+                          defaultExpanded={false}
+                          variant="default"
+                          className="mb-8"
+                        >
                           <div className="space-y-3">
                             {response.findings.filter(f => f.severity === 'Low').map((finding, idx) => (
                               <div key={idx} className="group relative bg-gradient-to-br from-slate-50/80 to-white border-2 border-slate-200/50 rounded-xl p-5 hover:border-slate-300 hover:shadow-xl transition-all duration-300 hover:scale-[1.01]">
@@ -1439,7 +1489,7 @@ const ValidatePolicy: React.FC = () => {
                               </div>
                             ))}
                           </div>
-                        </div>
+                        </CollapsibleTile>
                       )}
 
                       {/* No Issues Found - Show when all findings are 0 */}
@@ -1452,7 +1502,7 @@ const ValidatePolicy: React.FC = () => {
                           </p>
                           <div className="mt-6 p-4 bg-white/80 rounded-xl border border-emerald-200">
                             <p className="text-sm text-slate-600">
-                              <strong>Risk Score:</strong> {response.risk_score}/100 ({getRiskGrade(response.risk_score).label})
+                              <strong>Risk Score:</strong> {response.risk_score}/100 ({getSecurityGrade(response.risk_score).label})
                             </p>
                             <p className="text-sm text-slate-600 mt-2">
                               This score reflects excellent security posture with no findings requiring remediation.
@@ -1477,7 +1527,7 @@ const ValidatePolicy: React.FC = () => {
                                   response.risk_score <= 80 ? 'text-orange-600' :
                                   'text-red-600'
                                 }`}>
-                                  {getRiskGrade(response.risk_score).label}
+                                  {getSecurityGrade(response.risk_score).label}
                                 </span>
                               </div>
                             </div>
@@ -1906,29 +1956,24 @@ const ValidatePolicy: React.FC = () => {
                     const totalIssues = violations.length + gaps.length;
                     
                     return (
-                      <div key={key} className={`bg-white/80 backdrop-blur-xl border-2 rounded-2xl p-6 shadow-xl hover:shadow-2xl transition-all duration-300 ${
-                        framework.status === 'Compliant' 
-                          ? 'border-green-200/50' 
-                          : 'border-red-200/50'
-                      }`}>
-                        <div className="flex items-center justify-between mb-4">
-                          <div className="flex items-center space-x-3">
-                            <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
-                              framework.status === 'Compliant'
-                                ? 'bg-green-500/10 border-2 border-green-200/50'
-                                : 'bg-red-500/10 border-2 border-red-200/50'
-                            }`}>
-                              {framework.status === 'Compliant' ? (
-                                <CheckCircle className="w-6 h-6 text-green-600" />
-                              ) : (
-                                <XCircle className="w-6 h-6 text-red-600" />
-                              )}
-                            </div>
-                            <div>
-                              <h4 className="text-slate-900 font-bold text-lg">{framework.name}</h4>
-                              <div className="text-xs text-slate-500 font-medium">{totalIssues} {totalIssues === 1 ? 'issue' : 'issues'} found</div>
-                            </div>
+                      <CollapsibleTile
+                        key={key}
+                        title={framework.name}
+                        subtitle={`${totalIssues} ${totalIssues === 1 ? 'issue' : 'issues'} found`}
+                        icon={
+                          <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
+                            framework.status === 'Compliant'
+                              ? 'bg-green-500/10 border-2 border-green-200/50'
+                              : 'bg-red-500/10 border-2 border-red-200/50'
+                          }`}>
+                            {framework.status === 'Compliant' ? (
+                              <CheckCircle className="w-6 h-6 text-green-600" />
+                            ) : (
+                              <XCircle className="w-6 h-6 text-red-600" />
+                            )}
                           </div>
+                        }
+                        badge={
                           <span className={`px-3 py-1.5 rounded-full text-xs font-bold ${
                             framework.status === 'Compliant'
                               ? 'bg-green-500/10 text-green-700 border border-green-200/50'
@@ -1936,8 +1981,10 @@ const ValidatePolicy: React.FC = () => {
                           }`}>
                             {framework.status}
                           </span>
-                        </div>
-                        
+                        }
+                        defaultExpanded={framework.status !== 'Compliant'}
+                        variant={framework.status === 'Compliant' ? 'success' : 'error'}
+                      >
                         {/* Progress Indicator */}
                         {framework.status !== 'Compliant' && (
                           <div className="mb-4">
@@ -2035,7 +2082,7 @@ const ValidatePolicy: React.FC = () => {
                             <p className="text-green-700 font-semibold text-sm">All requirements met</p>
                           </div>
                         )}
-                      </div>
+                      </CollapsibleTile>
                     );
                   })}
                 </div>
@@ -2420,7 +2467,7 @@ const ValidatePolicy: React.FC = () => {
   <div class="section">
     <h2>Risk Score</h2>
     <div class="score">${response.risk_score}/100</div>
-    <div class="grade">Grade: ${getRiskGrade(response.risk_score).label}</div>
+    <div class="grade">Grade: ${getSecurityGrade(100 - response.risk_score).label}</div>
   </div>
 
   <div class="section">
@@ -2556,7 +2603,7 @@ AEGIS IAM SECURITY ANALYSIS REPORT
 Generated: ${new Date().toLocaleString()}
 ================================
 
-RISK SCORE: ${response.risk_score}/100 - ${getRiskGrade(response.risk_score).label}
+RISK SCORE: ${response.risk_score}/100 - ${getSecurityGrade(response.risk_score).label}
 
 FINDINGS SUMMARY:
 - Critical: ${response.findings.filter(f => f.severity === 'Critical').length}
@@ -2585,6 +2632,45 @@ ${response.recommendations?.map((r, i) => `${i + 1}. ${r}`).join('\n') || 'None'
                   >
                     <Copy className="w-5 h-5 group-hover:scale-110 transition-transform" />
                     <span>Copy Report</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      const summaryLines = [
+                        'Aegis IAM - Validation Report',
+                        `Generated: ${new Date().toLocaleString()}`,
+                        '',
+                        `Risk Score: ${response.risk_score}/100 (${getSecurityGrade(100 - response.risk_score).label})`,
+                        `Findings: ${response.findings.length} (Critical ${response.findings.filter(f => f.severity === 'Critical').length}, High ${response.findings.filter(f => f.severity === 'High').length}, Medium ${response.findings.filter(f => f.severity === 'Medium').length}, Low ${response.findings.filter(f => f.severity === 'Low').length})`,
+                        '',
+                        'Report generated by Aegis IAM.'
+                      ];
+                      const mailBody = summaryLines.join('\n');
+                      const mailto = `mailto:?subject=${encodeURIComponent('Aegis IAM Validation Report')}&body=${encodeURIComponent(mailBody)}`;
+                      if (navigator.share) {
+                        navigator.share({ title: 'Aegis IAM Validation Report', text: mailBody }).catch(() => {
+                          navigator.clipboard?.writeText(mailBody);
+                          alert('Sharing blocked. Summary copied to clipboard.');
+                        });
+                        return;
+                      }
+                      try {
+                        const link = document.createElement('a');
+                        link.href = mailto;
+                        link.target = '_self';
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                        setTimeout(() => { window.location.href = mailto; }, 100);
+                      } catch (e) {
+                        console.warn('mailto navigation failed, copying to clipboard', e);
+                        navigator.clipboard?.writeText(mailBody);
+                        alert('Email client could not be opened. Summary copied to clipboard instead.');
+                      }
+                    }}
+                    className="group px-6 py-4 bg-white/90 hover:bg-white border-2 border-slate-200 hover:border-slate-300 rounded-xl text-slate-700 hover:text-slate-900 font-bold transition-all duration-300 shadow-lg hover:shadow-xl hover:scale-105 flex items-center space-x-3"
+                  >
+                    <Download className="w-5 h-5 group-hover:translate-y-0.5 transition-transform" />
+                    <span>Email Report</span>
                   </button>
                 </div>
               </div>

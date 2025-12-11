@@ -133,7 +133,7 @@ const detectServiceFromDescription = (description: string): string => {
   const detectedService = Object.entries(serviceScores)
     .sort(([, a], [, b]) => b - a)[0][0];
   
-  console.log(`🔍 Detected service: ${detectedService} from description`);
+  // Service auto-detected
   return detectedService;
 };
 
@@ -170,10 +170,6 @@ export const generatePolicy = async (
     throw new Error(`Backend error: ${response.status} - ${responseText.substring(0, 200)}`);
   }
 
-  // Log response for debugging
-  console.log('📥 Backend response text (first 1000 chars):', responseText.substring(0, 1000));
-  console.log('📥 Backend response length:', responseText.length);
-  
   // Check if response is empty or null
   if (!responseText || responseText.trim() === '' || responseText.trim() === 'null') {
     console.error('Backend returned empty or null response body');
@@ -197,15 +193,6 @@ export const generatePolicy = async (
     console.error('Response text (first 500 chars):', responseText.substring(0, 500));
     throw new Error("Backend returned null or empty response. The server may have encountered an error. Please check backend logs.");
   }
-  
-  console.log('✅ Backend response parsed successfully:', {
-    hasFinalAnswer: !!backendResponse.final_answer,
-    finalAnswerLength: backendResponse.final_answer?.length || 0,
-    finalAnswerPreview: backendResponse.final_answer?.substring(0, 200) || 'EMPTY',
-    hasPolicy: !!backendResponse.policy,
-    hasTrustPolicy: !!backendResponse.trust_policy,
-    conversationId: backendResponse.conversation_id
-  });
   
   // Check if final_answer exists - handle error responses and normal responses
   if (!backendResponse.final_answer || (typeof backendResponse.final_answer === 'string' && backendResponse.final_answer.trim() === '')) {
@@ -277,12 +264,13 @@ export const generatePolicy = async (
 
 export const sendFollowUp = async (
   message: string,
-  conversationId: string
+  conversationId: string,
+  compliance?: string
 ): Promise<GeneratePolicyResponse> => {
   return generatePolicy({
     description: message,
     restrictive: true,
-    compliance: 'general',
+    compliance: compliance || 'general',
     conversation_id: conversationId,
     is_followup: true
   });
@@ -554,4 +542,168 @@ export const analyzeHistory = async (request: AnalyzeHistoryRequest): Promise<An
       "Eliminated potential privilege escalation paths."
     ]
   };
+};
+
+// ============================================
+// IAC EXPORT API
+// ============================================
+
+export interface IACExportRequest {
+  policy: any;
+  format: 'cloudformation' | 'terraform' | 'yaml' | 'json';
+  role_name?: string;
+  trust_policy?: any;
+}
+
+export interface IACExportResponse {
+  success: boolean;
+  format: string;
+  content: string;
+  filename: string;
+  mime_type: string;
+  error?: string;
+}
+
+export const exportToIAC = async (request: IACExportRequest): Promise<IACExportResponse> => {
+  const response = await fetch(`${API_URL}/api/export/iac`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Export failed: ${response.status} - ${errorText}`);
+  }
+
+  return response.json();
+};
+
+// ============================================
+// IAM DEPLOYMENT API
+// ============================================
+
+export interface DeployRoleRequest {
+  role_name: string;
+  trust_policy: any;
+  permissions_policy: any;
+  description?: string;
+  aws_region?: string;
+  deploy_as_inline?: boolean;
+}
+
+export interface DeployRoleResponse {
+  success: boolean;
+  role_arn?: string;
+  policy_arn?: string;
+  message?: string;
+  error?: string;
+  details?: any;
+}
+
+export const deployRole = async (request: DeployRoleRequest): Promise<DeployRoleResponse> => {
+  const response = await fetch(`${API_URL}/api/deploy/role`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Deployment failed: ${response.status} - ${errorText}`);
+  }
+
+  return response.json();
+};
+
+export interface DeleteRoleRequest {
+  role_name: string;
+  aws_region?: string;
+}
+
+export interface DeleteRoleResponse {
+  success: boolean;
+  message?: string;
+  error?: string;
+  details?: {
+    inline_policies_deleted: string[];
+    managed_policies_detached: string[];
+    role_deleted: boolean;
+  };
+}
+
+export const deleteRole = async (request: DeleteRoleRequest): Promise<DeleteRoleResponse> => {
+  const response = await fetch(`${API_URL}/api/deploy/role`, {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Delete failed: ${response.status} - ${errorText}`);
+  }
+
+  return response.json();
+};
+
+export interface DeployPolicyRequest {
+  policy_name: string;
+  policy_document: any;
+  description?: string;
+  aws_region?: string;
+}
+
+export interface DeployPolicyResponse {
+  success: boolean;
+  policy_arn?: string;
+  policy_name?: string;
+  message?: string;
+  error?: string;
+}
+
+export const deployPolicy = async (request: DeployPolicyRequest): Promise<DeployPolicyResponse> => {
+  const response = await fetch(`${API_URL}/api/deploy/policy`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Policy deployment failed: ${response.status} - ${errorText}`);
+  }
+
+  return response.json();
+};
+
+// ============================================
+// NATURAL LANGUAGE EXPLANATION API
+// ============================================
+
+export interface ExplainPolicyRequest {
+  policy: any;
+  trust_policy?: any;
+  explanation_type?: 'simple' | 'detailed';
+}
+
+export interface ExplainPolicyResponse {
+  success: boolean;
+  explanation: string;
+  error?: string;
+}
+
+export const explainPolicy = async (request: ExplainPolicyRequest): Promise<ExplainPolicyResponse> => {
+  const response = await fetch(`${API_URL}/api/explain/policy`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Explanation failed: ${response.status} - ${errorText}`);
+  }
+
+  return response.json();
 };

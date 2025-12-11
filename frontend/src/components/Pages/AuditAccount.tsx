@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Scan, Shield, Activity, Database, Users, Lock, AlertTriangle, CheckCircle, Zap, Target, TrendingUp, Clock, Play, ChevronRight, XCircle, AlertCircle, Download, RefreshCw, Code, Eye, Settings, Info, ExternalLink } from 'lucide-react';
 import { saveToStorage, loadFromStorage, STORAGE_KEYS } from '@/utils/persistence';
+import CollapsibleTile from '@/components/Common/CollapsibleTile';
+import SecurityTips from '@/components/Common/SecurityTips';
 import { getComplianceLink } from '@/utils/complianceLinks';
 
 interface AuditSummary {
@@ -874,76 +876,51 @@ const AuditAccount: React.FC = () => {
                                       className="mt-1 w-5 h-5 rounded-md border-2 border-slate-300 bg-white text-blue-600 focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 cursor-pointer transition-all hover:border-blue-400 checked:bg-blue-600 checked:border-blue-600"
                                     />
                                     <div className="flex-1">
-                                  <div className="flex items-start justify-between mb-4">
-                                    <div className="flex items-center space-x-3 flex-1">
-                                      <span className={`px-3 py-1.5 ${colors.badge} border rounded-lg font-semibold text-sm`}>
-                                        {finding.severity}
-                                      </span>
-                                      <div className="flex-1">
-                                        <h4 className="text-slate-900 font-bold text-lg mb-1">{finding.title}</h4>
-                                        <p className="text-slate-600 text-sm">{finding.description}</p>
-                                      </div>
-                                    </div>
-                                    <button
-                                      onClick={() => {
-                                        const newExpanded = new Set(expandedFindings);
-                                        if (newExpanded.has(globalIdx)) {
-                                          newExpanded.delete(globalIdx);
-                                        } else {
-                                          newExpanded.add(globalIdx);
+                                      <CollapsibleTile
+                                        title={finding.title}
+                                        subtitle={finding.description}
+                                        icon={
+                                          <span className={`px-3 py-1.5 ${colors.badge} border rounded-lg font-semibold text-sm`}>
+                                            {finding.severity}
+                                          </span>
                                         }
-                                        setExpandedFindings(newExpanded);
-                                      }}
-                                      className="ml-4 text-slate-400 hover:text-slate-600 transition-colors"
-                                    >
-                                      {expandedFindings.has(globalIdx) ? '▼' : '▶'}
-                                    </button>
-                                  </div>
-                                  
-                                  {/* Basic Info Always Visible */}
-                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                                    {finding.role && (
-                                      <div className="bg-slate-50 rounded-lg p-3 border border-slate-200">
-                                        <div className="text-slate-500 text-xs font-semibold mb-1">Affected Role</div>
-                                        <div className="text-slate-900 font-mono text-sm">{finding.role}</div>
-                                      </div>
-                                    )}
-                                    {finding.affected_permissions && finding.affected_permissions.length > 0 && (
-                                      <div className="bg-slate-50 rounded-lg p-3 border border-slate-200">
-                                        <div className="text-slate-500 text-xs font-semibold mb-1">Affected Permissions</div>
-                                        <div className="text-slate-900 font-mono text-xs">
-                                          {finding.affected_permissions.slice(0, 3).join(', ')}
-                                          {finding.affected_permissions.length > 3 && (
-                                            <button
-                                              onClick={() => {
-                                                const newExpanded = new Set(expandedFindings);
-                                                if (!newExpanded.has(globalIdx)) {
-                                                  newExpanded.add(globalIdx);
-                                                  setExpandedFindings(newExpanded);
-                                                }
-                                              }}
-                                              className="ml-2 text-blue-600 hover:text-blue-700 font-medium"
-                                            >
-                                              +{finding.affected_permissions.length - 3} more
-                                            </button>
+                                        defaultExpanded={false}
+                                        variant={finding.severity === 'Critical' ? 'error' : finding.severity === 'High' ? 'warning' : 'default'}
+                                        className="mb-4"
+                                        headerClassName="p-0"
+                                      >
+                                        {/* Basic Info */}
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                          {finding.role && (
+                                            <div className="bg-slate-50 rounded-lg p-3 border border-slate-200">
+                                              <div className="text-slate-500 text-xs font-semibold mb-1">Affected Role</div>
+                                              <div className="text-slate-900 font-mono text-sm">{finding.role}</div>
+                                            </div>
+                                          )}
+                                          {finding.affected_permissions && finding.affected_permissions.length > 0 && (
+                                            <div className="bg-slate-50 rounded-lg p-3 border border-slate-200">
+                                              <div className="text-slate-500 text-xs font-semibold mb-1">Affected Permissions ({finding.affected_permissions.length})</div>
+                                              <div className="text-slate-900 font-mono text-xs">
+                                                {finding.affected_permissions.slice(0, 5).join(', ')}
+                                                {finding.affected_permissions.length > 5 && ` +${finding.affected_permissions.length - 5} more`}
+                                              </div>
+                                            </div>
                                           )}
                                         </div>
-                                      </div>
-                                    )}
-                                  </div>
 
-                                  {/* Recommendation Always Visible */}
-                                  <div className="bg-gradient-to-r from-emerald-100 to-green-100 border-2 border-emerald-400 rounded-lg p-4 mb-4 shadow-sm">
-                                    <div className="text-emerald-800 text-sm font-bold mb-2 flex items-center">
-                                      <CheckCircle className="w-4 h-4 mr-2" />
-                                      Quick Recommendation
-                                    </div>
-                                    <div className="text-emerald-900 text-sm leading-relaxed font-medium">{finding.recommendation}</div>
-                                  </div>
+                                        {/* Recommendation */}
+                                        {finding.recommendation && (
+                                          <div className="bg-gradient-to-r from-emerald-100 to-green-100 border-2 border-emerald-400 rounded-lg p-4 mb-4 shadow-sm">
+                                            <div className="text-emerald-800 text-sm font-bold mb-2 flex items-center">
+                                              <CheckCircle className="w-4 h-4 mr-2" />
+                                              Quick Recommendation
+                                            </div>
+                                            <div className="text-emerald-900 text-sm leading-relaxed font-medium">{finding.recommendation}</div>
+                                          </div>
+                                        )}
 
-                                  {/* Expandable Detailed Information */}
-                                  {expandedFindings.has(globalIdx) && (
-                                    <div className="mt-4 space-y-4 pt-4 border-t border-slate-200">
+                                        {/* Detailed Information */}
+                                        <div className="space-y-4">
                                       {/* Why It Matters */}
                                       {finding.why_it_matters && (
                                         <div className="bg-gradient-to-r from-amber-100 to-yellow-100 border-2 border-amber-400 rounded-lg p-4 shadow-sm">
@@ -1102,12 +1079,12 @@ const AuditAccount: React.FC = () => {
                                            </div>
                                          </div>
                                                                               )}
-                                     </div>
-                                   )}
+                                        </div>
+                                      </CollapsibleTile>
                                     </div>
                                   </div>
-                                 </div>
-                               );
+                                </div>
+                              );
                            })}
                          </div>
                        ) : (
@@ -1493,14 +1470,16 @@ const AuditAccount: React.FC = () => {
                                 {auditResults.audit_summary.critical_issues > 0 && auditResults.audit_summary.high_issues > 0 && ' and '}
                                 {auditResults.audit_summary.high_issues > 0 && `${auditResults.audit_summary.high_issues} high-risk`} findings violate {framework.name} requirements.
                               </p>
-                              {relevantFindings.length > 0 && (
-                                <div className="mt-2 space-y-1">
-                                  <p className="text-amber-900 text-xs font-semibold">Key Violations:</p>
-                                  {relevantFindings.map((f: Finding, idx: number) => (
+                              <div className="mt-2 space-y-1">
+                                <p className="text-amber-900 text-xs font-semibold">Key Violations:</p>
+                                {relevantFindings.length > 0 ? (
+                                  relevantFindings.map((f: Finding, idx: number) => (
                                     <p key={idx} className="text-amber-800 text-xs font-medium">• {f.title}</p>
-                                  ))}
-                    </div>
-                              )}
+                                  ))
+                                ) : (
+                                  <p className="text-amber-800 text-xs font-medium">• No specific violation details provided; review findings above.</p>
+                                )}
+                              </div>
                               <p className="text-amber-900 text-xs font-semibold mt-2">
                                 Required: {framework.requirements.filter((_, i) => !isCompliant || i < 2).join(', ')}
                               </p>
@@ -2273,17 +2252,118 @@ const AuditAccount: React.FC = () => {
                       scp_analysis: auditResults.scp_analysis
                     };
                     
-                    // Format as JSON with proper spacing
-                    const dataStr = JSON.stringify(reportData, null, 2);
-                    // Use proper MIME type with charset
-                    const dataBlob = new Blob([dataStr], { type: 'application/json;charset=utf-8' });
-                  const url = URL.createObjectURL(dataBlob);
-                  const link = document.createElement('a');
-                  link.href = url;
-                    // Use .json extension (not .pdf) - JSON is the correct format
-                    link.download = `aegis-audit-report-${new Date().toISOString().split('T')[0]}.json`;
+                    // Structured HTML export (concise, no full JSON)
+                    const findingsHtml = (reportData.findings || [])
+                      .map((f: any, idx: number) => `
+                        <div style="border:1px solid #e2e8f0;border-radius:12px;padding:16px;margin-bottom:12px;">
+                          <h3 style="margin:0 0 6px;font-size:16px;">${idx + 1}. [${f.severity}] ${f.title || 'Finding'}</h3>
+                          ${f.id ? `<p style="margin:4px 0;font-size:12px;color:#64748b;">ID: ${f.id}</p>` : ''}
+                          ${f.description ? `<p style="margin:6px 0;">${f.description}</p>` : ''}
+                          ${f.recommendation ? `<p style="margin:6px 0;"><strong>Recommendation:</strong> ${f.recommendation}</p>` : ''}
+                          ${f.policy_snippet ? `<pre style="background:#0f172a;color:#e2e8f0;padding:12px;border-radius:10px;overflow:auto;font-size:12px;">${f.policy_snippet}</pre>` : ''}
+                        </div>
+                      `)
+                      .join('');
+
+                    const complianceHtml = reportData.compliance_status
+                      ? Object.entries(reportData.compliance_status).map(([key, framework]: [string, any]) => {
+                          const name = framework?.name || key.toUpperCase();
+                          const status = framework?.status || 'Unknown';
+                          const violations = framework?.violations || [];
+                          const gaps = framework?.gaps || [];
+                          return `
+                            <div style="border:1px solid #e2e8f0;border-radius:12px;padding:12px;margin-bottom:10px;">
+                              <h4 style="margin:0 0 6px;font-size:15px;">${name}</h4>
+                              <p style="margin:4px 0;"><strong>Status:</strong> ${status}</p>
+                              <p style="margin:4px 0;"><strong>Violations (${violations.length}):</strong></p>
+                              <ul style="margin:4px 0 8px 18px;">
+                                ${
+                                  violations.length
+                                    ? violations.map((v: any) => `<li>${v.requirement || ''} ${v.description || ''}</li>`).join('')
+                                    : '<li>No violations reported.</li>'
+                                }
+                              </ul>
+                              <p style="margin:4px 0;"><strong>Gaps (${gaps.length}):</strong></p>
+                              <ul style="margin:4px 0 8px 18px;">
+                                ${
+                                  gaps.length
+                                    ? gaps.map((g: string) => `<li>${g}</li>`).join('')
+                                    : '<li>No gaps reported.</li>'
+                                }
+                              </ul>
+                            </div>
+                          `;
+                        }).join('')
+                      : '<p>No compliance data.</p>';
+
+                    const recommendationsHtml = (reportData.recommendations || []).map((r: string) => `<li>${r}</li>`).join('');
+
+                    const htmlContent = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Aegis IAM - Audit Report</title>
+  <style>
+    body { font-family: Inter, Arial, sans-serif; padding: 32px; color: #0f172a; background: #f8fafc; }
+    h1 { color: #1e40af; margin-bottom: 6px; }
+    h2 { color: #0f172a; margin-top: 24px; }
+    ul { margin: 6px 0 12px 18px; }
+    .card { background:#fff; border:1px solid #e2e8f0; border-radius:16px; padding:16px; margin:12px 0; box-shadow:0 6px 18px rgba(15,23,42,0.05); }
+  </style>
+</head>
+<body>
+  <h1>Aegis IAM - Audit Report</h1>
+  <p><strong>Generated:</strong> ${new Date().toLocaleString()}</p>
+
+  <div class="card">
+    <h2>Executive Summary</h2>
+    <p><strong>Security Score:</strong> ${reportData.executive_summary.security_score}</p>
+    <p><strong>Risk Score:</strong> ${reportData.executive_summary.risk_score}</p>
+    <p><strong>Security Grade:</strong> ${reportData.executive_summary.security_grade}</p>
+  </div>
+
+  <div class="card">
+    <h2>Findings Summary</h2>
+    <ul>
+      <li>Total: ${reportData.findings_summary.total_findings}</li>
+      <li>Critical: ${reportData.findings_summary.critical}</li>
+      <li>High: ${reportData.findings_summary.high}</li>
+      <li>Medium: ${reportData.findings_summary.medium}</li>
+      <li>Low: ${reportData.findings_summary.low}</li>
+    </ul>
+  </div>
+
+  ${(reportData.findings || []).length ? `
+    <div class="card">
+      <h2>Detailed Findings</h2>
+      ${findingsHtml}
+    </div>
+  ` : ''}
+
+  ${(reportData.recommendations || []).length ? `
+    <div class="card">
+      <h2>Security Recommendations</h2>
+      <ul>${recommendationsHtml}</ul>
+    </div>
+  ` : ''}
+
+  ${reportData.compliance_status ? `
+    <div class="card">
+      <h2>Compliance Status</h2>
+      ${complianceHtml}
+    </div>
+  ` : ''}
+</body>
+</html>`;
+
+                    const dataBlob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
+                    const url = URL.createObjectURL(dataBlob);
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = `aegis-audit-report-${new Date().toISOString().split('T')[0]}.html`;
                     document.body.appendChild(link);
-                  link.click();
+                    link.click();
                     document.body.removeChild(link);
                     URL.revokeObjectURL(url);
                   } catch (error) {
@@ -2294,14 +2374,99 @@ const AuditAccount: React.FC = () => {
                 className="px-6 py-3 bg-gradient-to-r from-slate-700 to-slate-600 hover:from-slate-600 hover:to-slate-500 text-white rounded-xl font-bold transition-all duration-300 flex items-center space-x-2 shadow-lg hover:shadow-xl hover:scale-105"
               >
                 <Download className="w-5 h-5" />
-                <span>Download Report (JSON)</span>
+                <span>Download Report (PDF)</span>
+              </button>
+              <button
+                onClick={() => {
+                  if (!auditResults) return;
+                  const summaryLines = [
+                    'Aegis IAM - Audit Report',
+                    `Generated: ${new Date().toLocaleString()}`,
+                    '',
+                    `Security Score: ${auditResults.security_score ?? Math.max(0, 100 - (auditResults.risk_score || 100))}`,
+                    `Risk Score: ${auditResults.risk_score || 0}`,
+                    `Findings: ${auditResults.audit_summary.total_findings} (Critical ${auditResults.audit_summary.critical_issues}, High ${auditResults.audit_summary.high_issues}, Medium ${(auditResults.findings || []).filter(f => f.severity === 'Medium').length}, Low ${(auditResults.findings || []).filter(f => f.severity === 'Low').length})`,
+                    '',
+                    'Report generated by Aegis IAM.'
+                  ];
+                  const mailBody = summaryLines.join('\n');
+                  const mailto = `mailto:?subject=${encodeURIComponent('Aegis IAM Audit Report')}&body=${encodeURIComponent(mailBody)}`;
+                  if (navigator.share) {
+                    navigator.share({ title: 'Aegis IAM Audit Report', text: mailBody }).catch(() => {
+                      navigator.clipboard?.writeText(mailBody);
+                      alert('Sharing blocked. Summary copied to clipboard.');
+                    });
+                    return;
+                  }
+                  try {
+                    const link = document.createElement('a');
+                    link.href = mailto;
+                    link.target = '_self';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    // Fallback to direct navigation
+                    setTimeout(() => { window.location.href = mailto; }, 100);
+                  } catch (e) {
+                    console.warn('mailto navigation failed, copying to clipboard', e);
+                    navigator.clipboard?.writeText(mailBody);
+                    alert('Email client could not be opened. Summary copied to clipboard instead.');
+                  }
+                }}
+                className="px-6 py-3 bg-white border-2 border-slate-300 hover:border-slate-400 text-slate-800 rounded-xl font-bold transition-all duration-300 flex items-center space-x-2 shadow-lg hover:shadow-xl hover:scale-105"
+              >
+                <Download className="w-5 h-5" />
+                <span>Share via Email</span>
               </button>
             </div>
           </div>
         )}
 
-        {/* Hero Section - Only show if no results - Premium Light Theme */}
-        {!auditResults && (
+        {/* Loading State - Show when auditing */}
+        {isAuditing && !auditResults && (
+          <div className="relative min-h-screen flex items-center justify-center">
+            <div className="text-center px-8 max-w-3xl">
+              <div className="inline-flex items-center justify-center w-32 h-32 mb-10 relative">
+                <div className="absolute inset-0 border-4 border-transparent border-t-blue-500 border-r-purple-500 rounded-full animate-spin"></div>
+                <div className="absolute inset-2 border-4 border-transparent border-t-purple-500 border-r-pink-500 rounded-full animate-spin" style={{ animationDirection: 'reverse', animationDuration: '2s' }}></div>
+                <div className="absolute inset-0 bg-gradient-to-br from-blue-500/20 via-purple-500/20 to-pink-500/20 rounded-full animate-ping"></div>
+                <Shield className="w-16 h-16 text-blue-600 relative z-10 animate-pulse" />
+              </div>
+              
+              <h2 className="text-4xl sm:text-5xl font-extrabold bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent mb-4 animate-pulse leading-tight pb-2">
+                Autonomous Audit Running
+              </h2>
+              
+              <p className="text-xl text-slate-600 mb-8 leading-relaxed font-medium max-w-2xl mx-auto">
+                Scanning all IAM roles, policies, and analyzing CloudTrail logs...
+              </p>
+              
+              {/* Step indicators */}
+              <div className="flex flex-col items-center space-y-3 mb-8">
+                <div className="flex items-center space-x-3 px-5 py-2.5 bg-white/80 backdrop-blur-xl border-2 border-blue-200 rounded-full shadow-lg">
+                  <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                  <span className="text-sm font-semibold text-slate-700">Discovering IAM roles...</span>
+                </div>
+                <div className="flex items-center space-x-3 px-5 py-2.5 bg-white/80 backdrop-blur-xl border-2 border-purple-200 rounded-full shadow-lg">
+                  <div className="w-2 h-2 bg-purple-500 rounded-full animate-pulse" style={{ animationDelay: '0.5s' }}></div>
+                  <span className="text-sm font-semibold text-slate-700">Analyzing CloudTrail events...</span>
+                </div>
+                <div className="flex items-center space-x-3 px-5 py-2.5 bg-white/80 backdrop-blur-xl border-2 border-pink-200 rounded-full shadow-lg">
+                  <div className="w-2 h-2 bg-pink-500 rounded-full animate-pulse" style={{ animationDelay: '1s' }}></div>
+                  <span className="text-sm font-semibold text-slate-700">Checking compliance...</span>
+                </div>
+              </div>
+
+              {/* Security Tips while auditing */}
+              <div className="mt-10">
+                <SecurityTips rotationInterval={4000} />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Hero Section - Only show if no results and not auditing - Premium Light Theme */}
+        {!auditResults && !isAuditing && (
         <div className="text-center mb-20 animate-fadeIn">
           <div className="inline-flex items-center space-x-2 bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-blue-200 rounded-full px-6 py-3 mb-6 backdrop-blur-sm">
             <Scan className="w-5 h-5 text-blue-600" />
@@ -2347,8 +2512,8 @@ const AuditAccount: React.FC = () => {
         </div>
         )}
 
-        {/* Feature Grid - Only show if no results */}
-        {!auditResults && (
+        {/* Feature Grid - Only show if no results and not auditing */}
+        {!auditResults && !isAuditing && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-20">
           {/* Feature 1 */}
           <div className="group relative bg-white/90 backdrop-blur-xl border-2 border-white/50 rounded-3xl p-8 shadow-xl hover:shadow-2xl hover:-translate-y-1 transition-all duration-500 overflow-hidden animate-fadeIn" style={{ animationDelay: '0.2s' }}>
@@ -2431,87 +2596,6 @@ const AuditAccount: React.FC = () => {
               <p className="text-slate-600 leading-relaxed font-medium">
               Export comprehensive audit reports with specific remediation steps for your security and compliance teams.
             </p>
-            </div>
-          </div>
-        </div>
-        )}
-
-        {/* How It Works Section - Only show if no results - Premium Light Theme */}
-        {!auditResults && (
-        <div className="mb-20 animate-fadeIn" style={{ animationDelay: '0.8s' }}>
-          <div className="flex items-center justify-center space-x-3 mb-12">
-            <div className="w-1 h-8 bg-gradient-to-b from-blue-500 to-purple-500 rounded-full"></div>
-            <h2 className="text-4xl font-bold text-slate-900 text-center tracking-tight">
-              How <span className="bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">Autonomous Audit</span> Works
-          </h2>
-            <div className="w-1 h-8 bg-gradient-to-b from-blue-500 to-purple-500 rounded-full"></div>
-          </div>
-          
-          <div className="flex flex-col md:flex-row items-center justify-center gap-4 md:gap-2">
-            {/* Step 1 */}
-            <div className="relative group w-full md:w-auto">
-              <div className="bg-white/90 backdrop-blur-xl border-2 border-white/50 rounded-2xl p-6 text-center shadow-xl hover:shadow-2xl hover:-translate-y-1 transition-all duration-500">
-                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white font-black text-xl mx-auto mb-4 shadow-lg group-hover:scale-110 transition-transform duration-300">1</div>
-                <h4 className="text-slate-900 font-bold mb-2">Connect AWS</h4>
-                <p className="text-slate-600 text-sm font-medium">Provide credentials or use configured AWS profile</p>
-              </div>
-            </div>
-
-            {/* Arrow 1 - Between boxes */}
-            <div className="hidden md:flex items-center justify-center mx-1">
-            <div className="relative">
-                <div className="absolute inset-0 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 rounded-full blur-md opacity-30"></div>
-                <div className="relative w-10 h-10 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 rounded-full flex items-center justify-center shadow-lg">
-                  <ChevronRight className="w-5 h-5 text-white font-bold drop-shadow-lg" />
-              </div>
-              </div>
-            </div>
-
-            {/* Step 2 */}
-            <div className="relative group w-full md:w-auto">
-              <div className="bg-white/90 backdrop-blur-xl border-2 border-white/50 rounded-2xl p-6 text-center shadow-xl hover:shadow-2xl hover:-translate-y-1 transition-all duration-500">
-                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white font-black text-xl mx-auto mb-4 shadow-lg group-hover:scale-110 transition-transform duration-300">2</div>
-                <h4 className="text-slate-900 font-bold mb-2">AI Scans Account</h4>
-                <p className="text-slate-600 text-sm font-medium">Agent discovers all IAM roles and policies using MCP</p>
-              </div>
-            </div>
-
-            {/* Arrow 2 - Between boxes */}
-            <div className="hidden md:flex items-center justify-center mx-1">
-            <div className="relative">
-                <div className="absolute inset-0 bg-gradient-to-r from-purple-500 via-pink-500 to-orange-500 rounded-full blur-md opacity-30"></div>
-                <div className="relative w-10 h-10 bg-gradient-to-r from-purple-500 via-pink-500 to-orange-500 rounded-full flex items-center justify-center shadow-lg">
-                  <ChevronRight className="w-5 h-5 text-white font-bold drop-shadow-lg" />
-              </div>
-              </div>
-            </div>
-
-            {/* Step 3 */}
-            <div className="relative group w-full md:w-auto">
-              <div className="bg-white/90 backdrop-blur-xl border-2 border-white/50 rounded-2xl p-6 text-center shadow-xl hover:shadow-2xl hover:-translate-y-1 transition-all duration-500">
-                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-pink-500 to-orange-500 flex items-center justify-center text-white font-black text-xl mx-auto mb-4 shadow-lg group-hover:scale-110 transition-transform duration-300">3</div>
-                <h4 className="text-slate-900 font-bold mb-2">Deep Analysis</h4>
-                <p className="text-slate-600 text-sm font-medium">Validates security, compliance, and usage patterns</p>
-              </div>
-            </div>
-
-            {/* Arrow 3 - Between boxes */}
-            <div className="hidden md:flex items-center justify-center mx-1">
-            <div className="relative">
-                <div className="absolute inset-0 bg-gradient-to-r from-orange-500 via-pink-500 to-emerald-500 rounded-full blur-md opacity-30"></div>
-                <div className="relative w-10 h-10 bg-gradient-to-r from-orange-500 via-pink-500 to-emerald-500 rounded-full flex items-center justify-center shadow-lg">
-                  <ChevronRight className="w-5 h-5 text-white font-bold drop-shadow-lg" />
-              </div>
-              </div>
-            </div>
-
-            {/* Step 4 */}
-            <div className="group w-full md:w-auto">
-              <div className="bg-white/90 backdrop-blur-xl border-2 border-white/50 rounded-2xl p-6 text-center shadow-xl hover:shadow-2xl hover:-translate-y-1 transition-all duration-500">
-                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-emerald-500 to-green-500 flex items-center justify-center text-white font-black text-xl mx-auto mb-4 shadow-lg group-hover:scale-110 transition-transform duration-300">4</div>
-                <h4 className="text-slate-900 font-bold mb-2">Get Report</h4>
-                <p className="text-slate-600 text-sm font-medium">Comprehensive findings with remediation steps</p>
-              </div>
             </div>
           </div>
         </div>

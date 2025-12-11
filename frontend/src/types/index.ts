@@ -36,6 +36,14 @@ export interface RefinementSuggestions {
   trust?: string[];
 }
 
+export interface ComplianceFeature {
+  title: string;
+  subtitle: string;
+  requirement: string;
+  description: string;
+  link?: string;
+}
+
 export interface GeneratePolicyResponse {
   conversation_id: string;
   final_answer: string;
@@ -54,6 +62,7 @@ export interface GeneratePolicyResponse {
   conversation_history?: ChatMessage[];
   is_question?: boolean;
   compliance_status?: Record<string, ComplianceFramework>;
+  compliance_features?: ComplianceFeature[];
   security_findings?: SecurityFinding[];
   reasoning?: {
     plan: string;

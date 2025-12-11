@@ -1,9 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Shield, Send, RefreshCw, User, Bot, MessageSquare, Lock, ArrowRight, CheckCircle, AlertCircle, Download, Copy, Sparkles, Info, X, Minimize2, ChevronUp, ChevronDown, Maximize2, XCircle, Lightbulb, FileCheck, Target, UserCheck, KeySquare, ShieldCheck, Cloud, Database, Server, Activity, Globe, BookOpen, ExternalLink } from 'lucide-react';
+import { Shield, Send, RefreshCw, User, Bot, MessageSquare, Lock, ArrowRight, CheckCircle, AlertCircle, Download, Copy, Sparkles, Info, X, Minimize2, ChevronUp, ChevronDown, Maximize2, XCircle, Lightbulb, FileCheck, Target, UserCheck, KeySquare, ShieldCheck, Cloud, Database, Server, Activity, Globe, BookOpen, ExternalLink, Upload, FileCode, ChevronDown as ChevronDownIcon } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { generatePolicy, sendFollowUp } from '../../services/api';
+import { generatePolicy, sendFollowUp, exportToIAC, deployRole, deleteRole, explainPolicy } from '../../services/api';
 import { GeneratePolicyResponse, ChatMessage } from '../../types';
 import { saveToStorage, loadFromStorage, clearStorage, STORAGE_KEYS } from '@/utils/persistence';
+import CollapsibleTile from '@/components/Common/CollapsibleTile';
+import SecurityTips from '@/components/Common/SecurityTips';
+import { getComplianceLink } from '@/utils/complianceLinks';
 // Note: Compliance links should come from agent response, not hardcoded
 
 const GeneratePolicy: React.FC = () => {
@@ -28,6 +31,36 @@ const GeneratePolicy: React.FC = () => {
   const [isNewSubmission, setIsNewSubmission] = useState(false); // Track if this is a fresh submission (not restored)
   const [hasClearedState, setHasClearedState] = useState(false); // Track if user explicitly cleared state
   
+  // New feature states
+  const [showDeployModal, setShowDeployModal] = useState(false);
+  const [showExplainModal, setShowExplainModal] = useState(false);
+  const [deployLoading, setDeployLoading] = useState(false);
+  const [explainLoading, setExplainLoading] = useState(false);
+  const [simpleExplanation, setSimpleExplanation] = useState<string | null>(null);
+  const [deployRoleName, setDeployRoleName] = useState('');
+  const [deployRegion, setDeployRegion] = useState('us-east-1');
+  const [deployDescription, setDeployDescription] = useState('');
+  const [deploySuccess, setDeploySuccess] = useState<string | null>(null);
+  const [deployError, setDeployError] = useState<string | null>(null);
+  const [showCliCommands, setShowCliCommands] = useState(false);
+  
+  // Manage modal tab state (Deploy or Delete)
+  const [manageTab, setManageTab] = useState<'deploy' | 'delete'>('deploy'); // delete tab no longer shown
+  const [deleteRoleName, setDeleteRoleName] = useState('');
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteSuccess, setDeleteSuccess] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  
+  // Format preview states for Permissions Policy
+  const [selectedFormat, setSelectedFormat] = useState<'json' | 'cloudformation' | 'terraform' | 'yaml'>('json');
+  const [formatContent, setFormatContent] = useState<Record<string, string>>({});
+  const [loadingFormat, setLoadingFormat] = useState<string | null>(null);
+  
+  // Format preview states for Trust Policy
+  const [selectedTrustFormat, setSelectedTrustFormat] = useState<'json' | 'cloudformation' | 'terraform' | 'yaml'>('json');
+  const [trustFormatContent, setTrustFormatContent] = useState<Record<string, string>>({});
+  const [loadingTrustFormat, setLoadingTrustFormat] = useState<string | null>(null);
+  
   // Collapsible sections state - Smart defaults: Show critical, collapse detailed sections
   const [showPermissionsPolicy, setShowPermissionsPolicy] = useState(true); // Always show - critical
   const [showTrustPolicy, setShowTrustPolicy] = useState(true); // Always show - critical
@@ -40,7 +73,31 @@ const GeneratePolicy: React.FC = () => {
   const [showComplianceStatus, setShowComplianceStatus] = useState(false); // Collapsed by default
   const [showScoreBreakdown, setShowScoreBreakdown] = useState(false); // Collapsed by default
   
+  // Loading step tracking (only 2 steps now - no auto-validation)
+  const [loadingStep, setLoadingStep] = useState<'analyzing' | 'generating' | 'complete'>('analyzing');
+  
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const descriptionRef = useRef<HTMLTextAreaElement>(null);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ctrl+Enter or Cmd+Enter to generate
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        if (showInitialForm && description.trim() && !loading) {
+          e.preventDefault();
+          // Trigger form submit
+          const form = document.querySelector('form');
+          if (form) {
+            form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+          }
+        }
+      }
+    };
+    
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showInitialForm, description, loading]);
 
   const complianceFrameworks = [
     { value: 'general', label: 'General Security' },
@@ -395,8 +452,11 @@ What would you like to do?`,
     setLoading(true);
     setError(null);
     setShowInitialForm(false);
+    setLoadingStep('analyzing'); // Start with analyzing step
     
     try {
+      // Simulate step progression (only 2 steps - validation is optional now)
+      setTimeout(() => setLoadingStep('generating'), 1500);
       // Build description with optional AWS values if provided
       let enhancedDescription = description;
       if (awsAccountId.trim()) {
@@ -930,19 +990,26 @@ What would you like to do?`,
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                           <div>
                             <label htmlFor="awsAccountId" className="block text-slate-700 text-sm font-semibold mb-2">
-                              AWS Account ID
+                              AWS Account ID (Auto-detected)
                             </label>
                             <input
                               id="awsAccountId"
                               type="text"
                               value={awsAccountId}
                               onChange={(e) => setAwsAccountId(e.target.value)}
-                              placeholder="123456789012"
+                              placeholder="Leave blank - will use your configured account"
                               maxLength={12}
                               pattern="[0-9]{12}"
                               className="w-full px-4 py-3 bg-white/60 backdrop-blur-sm border-2 border-slate-200 rounded-xl text-slate-900 text-base placeholder-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 focus:outline-none transition-all duration-300 font-medium"
                             />
-                            <p className="text-xs text-slate-500 mt-1 font-medium">12-digit numeric account ID</p>
+                            <div className="mt-2 bg-blue-50 border border-blue-200 rounded-lg p-3">
+                              <div className="flex items-start space-x-2">
+                                <Info className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                                <p className="text-xs text-blue-700 font-medium">
+                                  <strong>Auto-detected:</strong> Your actual AWS Account ID from configured credentials will be used. This ensures policies work correctly when deployed.
+                                </p>
+                              </div>
+                            </div>
                           </div>
                           
                           <div>
@@ -1032,6 +1099,14 @@ What would you like to do?`,
                     <span>Generate Secure Policy</span>
                     <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform duration-300" />
                   </button>
+                  
+                  {/* Keyboard shortcut hint */}
+                  <p className="text-center text-sm text-slate-400 mt-3">
+                    <kbd className="px-2 py-0.5 bg-slate-100 rounded text-xs font-mono">Ctrl</kbd>
+                    <span className="mx-1">+</span>
+                    <kbd className="px-2 py-0.5 bg-slate-100 rounded text-xs font-mono">Enter</kbd>
+                    <span className="ml-2">to generate</span>
+                  </p>
                 </div>
               </form>
 
@@ -1045,7 +1120,7 @@ What would you like to do?`,
         </div>
       )}
 
-      {/* LOADING STATE - Premium Light */}
+      {/* LOADING STATE - Premium Light with Step Indicators */}
       {!showInitialForm && loading && !response && (
         <div className="relative min-h-screen flex items-center justify-center">
           <div className="text-center px-8 max-w-3xl">
@@ -1056,27 +1131,75 @@ What would you like to do?`,
               <Shield className="w-16 h-16 text-blue-600 relative z-10 animate-pulse" />
             </div>
             
-            <h2 className="text-6xl font-extrabold bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent mb-4 animate-pulse leading-tight pb-2">
-              Aegis AI Analyzing
+            <h2 className="text-4xl sm:text-5xl font-extrabold bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent mb-4 animate-pulse leading-tight pb-2">
+              {loadingStep === 'analyzing' && 'Analyzing Your Request'}
+              {loadingStep === 'generating' && 'Generating Secure Policy'}
+              {loadingStep === 'complete' && 'Almost Done!'}
             </h2>
             
-            <p className="text-2xl text-slate-700 mb-8 leading-relaxed font-semibold max-w-2xl mx-auto">
-              Crafting your secure IAM policy with least-privilege principles...
+            <p className="text-xl text-slate-600 mb-10 leading-relaxed font-medium max-w-2xl mx-auto">
+              {loadingStep === 'analyzing' && 'Understanding your AWS service requirements...'}
+              {loadingStep === 'generating' && 'Crafting least-privilege IAM policies with security scores...'}
+              {loadingStep === 'complete' && 'Finalizing your secure policy...'}
             </p>
             
-            <div className="flex flex-col items-center space-y-4 mb-10">
-              <div className="flex items-center space-x-3 px-6 py-3 bg-white/80 backdrop-blur-xl border-2 border-blue-200 rounded-full shadow-lg">
-                <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-                <span className="text-sm font-semibold text-slate-700">Analyzing AWS services...</span>
+            {/* Step Progress Indicator */}
+            <div className="flex items-center justify-center space-x-2 sm:space-x-4 mb-10">
+              {/* Step 1: Analyzing */}
+              <div className={`flex flex-col items-center transition-all duration-500 ${loadingStep === 'analyzing' ? 'scale-110' : 'scale-100 opacity-60'}`}>
+                <div className={`w-12 h-12 sm:w-14 sm:h-14 rounded-full flex items-center justify-center transition-all duration-500 ${
+                  loadingStep === 'analyzing' 
+                    ? 'bg-gradient-to-br from-blue-500 to-indigo-600 shadow-lg shadow-blue-500/40' 
+                    : (loadingStep === 'generating' || loadingStep === 'complete')
+                      ? 'bg-gradient-to-br from-blue-600 to-indigo-700 shadow-lg shadow-blue-500/30'
+                      : 'bg-slate-200'
+                }`}>
+                  {loadingStep === 'analyzing' ? (
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  ) : (
+                    <CheckCircle className="w-6 h-6 text-white" />
+                  )}
+                </div>
+                <span className={`text-xs sm:text-sm mt-2 font-semibold ${loadingStep === 'analyzing' ? 'text-blue-600' : 'text-blue-700'}`}>
+                  Analyze
+                </span>
               </div>
-              <div className="flex items-center space-x-3 px-6 py-3 bg-white/80 backdrop-blur-xl border-2 border-purple-200 rounded-full shadow-lg">
-                <div className="w-2 h-2 bg-purple-500 rounded-full animate-pulse" style={{ animationDelay: '0.5s' }}></div>
-                <span className="text-sm font-semibold text-slate-700">Calculating security scores...</span>
+
+              {/* Connector */}
+              <div className={`w-8 sm:w-16 h-1 rounded-full transition-all duration-500 ${
+                loadingStep !== 'analyzing' ? 'bg-gradient-to-r from-blue-500 via-purple-500 to-purple-600' : 'bg-slate-200'
+              }`}></div>
+
+              {/* Step 2: Generating */}
+              <div className={`flex flex-col items-center transition-all duration-500 ${loadingStep === 'generating' ? 'scale-110' : 'scale-100 opacity-60'}`}>
+                <div className={`w-12 h-12 sm:w-14 sm:h-14 rounded-full flex items-center justify-center transition-all duration-500 ${
+                  loadingStep === 'generating' 
+                    ? 'bg-gradient-to-br from-pink-500 to-pink-600 shadow-lg shadow-pink-500/40' 
+                    : loadingStep === 'complete'
+                      ? 'bg-gradient-to-br from-pink-600 to-pink-700 shadow-lg shadow-pink-500/30'
+                      : 'bg-slate-200'
+                }`}>
+                  {loadingStep === 'generating' ? (
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  ) : loadingStep === 'complete' ? (
+                    <CheckCircle className="w-6 h-6 text-white" />
+                  ) : (
+                    <span className="w-6 h-6 text-slate-400 font-bold">2</span>
+                  )}
+                </div>
+                <span className={`text-xs sm:text-sm mt-2 font-semibold ${
+                  loadingStep === 'generating' ? 'text-pink-600' 
+                  : loadingStep === 'complete' ? 'text-pink-700' 
+                  : 'text-slate-400'
+                }`}>
+                  Generate
+                </span>
               </div>
-              <div className="flex items-center space-x-3 px-6 py-3 bg-white/80 backdrop-blur-xl border-2 border-pink-200 rounded-full shadow-lg">
-                <div className="w-2 h-2 bg-pink-500 rounded-full animate-pulse" style={{ animationDelay: '1s' }}></div>
-                <span className="text-sm font-semibold text-slate-700">Generating policies...</span>
-              </div>
+            </div>
+
+            {/* Security Tips while loading */}
+            <div className="mt-10">
+              <SecurityTips rotationInterval={4000} />
             </div>
           </div>
         </div>
@@ -1398,60 +1521,48 @@ What would you like to do?`,
 
                   {/* Collapsible Breakdown - Premium Enhanced */}
                   {showScoreBreakdown && (
-                  <div className="mt-6 pt-6 border-t border-slate-200/50 space-y-6 animate-in slide-in-from-top duration-300">
-                    {(response.score_breakdown?.permissions?.positive?.length || 0) > 0 && (
-                      <div className="bg-white/85 backdrop-blur border-2 border-blue-200/50 rounded-2xl p-6 shadow-xl">
-                        <div className="flex items-center justify-between mb-5">
-                          <div className="flex items-center space-x-3">
-                            <div className="w-11 h-11 bg-gradient-to-br from-blue-500 to-purple-500 rounded-xl flex items-center justify-center shadow-md">
-                              <CheckCircle className="w-5 h-5 text-white" />
-                            </div>
+                  <div className="mt-6 pt-6 border-t border-slate-200/50 animate-in slide-in-from-top duration-300">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                      {(response.score_breakdown?.permissions?.positive?.length || 0) > 0 && (
+                        <div className="bg-white/90 border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition">
+                          <div className="flex items-center space-x-3 mb-4">
+                            <div className="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 text-sm font-bold">S</div>
                             <div>
-                              <h4 className="text-lg font-semibold text-slate-900">Strengths</h4>
-                              <p className="text-xs text-slate-500">{response.score_breakdown?.permissions?.positive?.length || 0} security features identified</p>
+                              <h4 className="text-base font-semibold text-slate-900">Strengths</h4>
+                              <p className="text-xs text-slate-500">{response.score_breakdown?.permissions?.positive?.length || 0} items</p>
                             </div>
                           </div>
-                          <span className="text-xs font-medium text-blue-600 bg-blue-500/10 px-3 py-1 rounded-full border border-blue-200/60">Optimized</span>
+                          <ul className="space-y-3">
+                            {(response.score_breakdown?.permissions?.positive || []).map((item, idx) => (
+                              <li key={idx} className="flex items-start space-x-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5">
+                                <div className="mt-1 w-2 h-2 rounded-full bg-blue-500 flex-shrink-0"></div>
+                                <span className="text-sm text-slate-700 leading-snug break-words whitespace-normal flex-1">{item}</span>
+                              </li>
+                            ))}
+                          </ul>
                         </div>
-                        <ul className="space-y-3">
-                          {(response.score_breakdown?.permissions?.positive || []).map((item, idx) => (
-                            <li key={idx} className="group bg-gradient-to-br from-blue-50/80 via-purple-50/70 to-white border border-blue-200/50 rounded-xl p-4 flex items-start space-x-4 shadow-sm hover:shadow-lg transition-all">
-                              <div className="flex-shrink-0 w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-500 rounded-lg flex items-center justify-center shadow-md group-hover:scale-[1.05] transition-transform">
-                                <CheckCircle className="w-4 h-4 text-white" />
-                              </div>
-                              <span className="text-[15px] text-slate-700 leading-relaxed flex-1">{item}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                    
-                    {(response.score_breakdown?.permissions?.improvements?.length || 0) > 0 && (
-                      <div className="bg-white/85 backdrop-blur border-2 border-purple-200/50 rounded-2xl p-6 shadow-xl">
-                        <div className="flex items-center justify-between mb-5">
-                          <div className="flex items-center space-x-3">
-                            <div className="w-11 h-11 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl flex items-center justify-center shadow-md">
-                              <Target className="w-5 h-5 text-white" />
-                            </div>
+                      )}
+                      
+                      {(response.score_breakdown?.permissions?.improvements?.length || 0) > 0 && (
+                        <div className="bg-white/90 border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition">
+                          <div className="flex items-center space-x-3 mb-4">
+                            <div className="w-9 h-9 rounded-full bg-amber-100 flex items-center justify-center text-amber-700 text-sm font-bold">O</div>
                             <div>
-                              <h4 className="text-lg font-semibold text-slate-900">Opportunities</h4>
-                              <p className="text-xs text-slate-500">{response.score_breakdown?.permissions?.improvements?.length || 0} targeted recommendations</p>
+                              <h4 className="text-base font-semibold text-slate-900">Opportunities</h4>
+                              <p className="text-xs text-slate-500">{response.score_breakdown?.permissions?.improvements?.length || 0} items</p>
                             </div>
                           </div>
-                          <span className="text-xs font-medium text-purple-600 bg-purple-500/10 px-3 py-1 rounded-full border border-purple-200/60">Action Needed</span>
+                          <ul className="space-y-3">
+                            {(response.score_breakdown?.permissions?.improvements || []).map((item, idx) => (
+                              <li key={idx} className="flex items-start space-x-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5">
+                                <div className="mt-1 w-2 h-2 rounded-full bg-amber-500 flex-shrink-0"></div>
+                                <span className="text-sm text-slate-700 leading-snug break-words whitespace-normal flex-1">{item}</span>
+                              </li>
+                            ))}
+                          </ul>
                         </div>
-                        <ul className="space-y-3">
-                          {(response.score_breakdown?.permissions?.improvements || []).map((item, idx) => (
-                            <li key={idx} className="group bg-gradient-to-br from-purple-50/80 via-pink-50/70 to-white border border-purple-200/50 rounded-xl p-4 flex items-start space-x-4 shadow-sm hover:shadow-lg transition-all">
-                              <div className="flex-shrink-0 w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center shadow-md group-hover:scale-[1.05] transition-transform">
-                                <Target className="w-4 h-4 text-white" />
-                              </div>
-                              <span className="text-[15px] text-slate-700 leading-relaxed flex-1">{item}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
                   )}
                 </div>
@@ -1521,60 +1632,48 @@ What would you like to do?`,
 
                   {/* Collapsible Breakdown - Premium Enhanced */}
                   {showScoreBreakdown && (
-                  <div className="mt-6 pt-6 border-t border-slate-200/50 space-y-6 animate-in slide-in-from-top duration-300">
-                    {(response.score_breakdown?.trust?.positive?.length || 0) > 0 && (
-                      <div className="bg-white/85 backdrop-blur border-2 border-blue-200/50 rounded-2xl p-6 shadow-xl">
-                        <div className="flex items-center justify-between mb-5">
-                          <div className="flex items-center space-x-3">
-                            <div className="w-11 h-11 bg-gradient-to-br from-blue-500 to-purple-500 rounded-xl flex items-center justify-center shadow-md">
-                              <CheckCircle className="w-5 h-5 text-white" />
-                            </div>
+                  <div className="mt-6 pt-6 border-t border-slate-200/50 animate-in slide-in-from-top duration-300">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                      {(response.score_breakdown?.trust?.positive?.length || 0) > 0 && (
+                        <div className="bg-white/90 border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition">
+                          <div className="flex items-center space-x-3 mb-4">
+                            <div className="w-9 h-9 rounded-full bg-teal-100 flex items-center justify-center text-teal-700 text-sm font-bold">S</div>
                             <div>
-                              <h4 className="text-lg font-semibold text-slate-900">Strengths</h4>
-                              <p className="text-xs text-slate-500">{response.score_breakdown?.trust?.positive?.length || 0} security features identified</p>
+                              <h4 className="text-base font-semibold text-slate-900">Strengths</h4>
+                              <p className="text-xs text-slate-500">{response.score_breakdown?.trust?.positive?.length || 0} items</p>
                             </div>
                           </div>
-                          <span className="text-xs font-medium text-blue-600 bg-blue-500/10 px-3 py-1 rounded-full border border-blue-200/60">Optimized</span>
+                          <ul className="space-y-3">
+                            {(response.score_breakdown?.trust?.positive || []).map((item, idx) => (
+                              <li key={idx} className="flex items-start space-x-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5">
+                                <div className="mt-1 w-2 h-2 rounded-full bg-teal-500 flex-shrink-0"></div>
+                                <span className="text-sm text-slate-700 leading-snug break-words whitespace-normal flex-1">{item}</span>
+                              </li>
+                            ))}
+                          </ul>
                         </div>
-                        <ul className="space-y-3">
-                          {(response.score_breakdown?.trust?.positive || []).map((item, idx) => (
-                            <li key={idx} className="group bg-gradient-to-br from-blue-50/80 via-purple-50/70 to-white border border-blue-200/50 rounded-xl p-4 flex items-start space-x-4 shadow-sm hover:shadow-lg transition-all">
-                              <div className="flex-shrink-0 w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-500 rounded-lg flex items-center justify-center shadow-md group-hover:scale-[1.05] transition-transform">
-                                <CheckCircle className="w-4 h-4 text-white" />
-                              </div>
-                              <span className="text-[15px] text-slate-700 leading-relaxed flex-1">{item}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                    
-                    {(response.score_breakdown?.trust?.improvements?.length || 0) > 0 && (
-                      <div className="bg-white/85 backdrop-blur border-2 border-purple-200/50 rounded-2xl p-6 shadow-xl">
-                        <div className="flex items-center justify-between mb-5">
-                          <div className="flex items-center space-x-3">
-                            <div className="w-11 h-11 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl flex items-center justify-center shadow-md">
-                              <Target className="w-5 h-5 text-white" />
-                            </div>
+                      )}
+                      
+                      {(response.score_breakdown?.trust?.improvements?.length || 0) > 0 && (
+                        <div className="bg-white/90 border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition">
+                          <div className="flex items-center space-x-3 mb-4">
+                            <div className="w-9 h-9 rounded-full bg-rose-100 flex items-center justify-center text-rose-700 text-sm font-bold">O</div>
                             <div>
-                              <h4 className="text-lg font-semibold text-slate-900">Opportunities</h4>
-                              <p className="text-xs text-slate-500">{response.score_breakdown?.trust?.improvements?.length || 0} targeted recommendations</p>
+                              <h4 className="text-base font-semibold text-slate-900">Opportunities</h4>
+                              <p className="text-xs text-slate-500">{response.score_breakdown?.trust?.improvements?.length || 0} items</p>
                             </div>
                           </div>
-                          <span className="text-xs font-medium text-purple-600 bg-purple-500/10 px-3 py-1 rounded-full border border-purple-200/60">Action Needed</span>
+                          <ul className="space-y-3">
+                            {(response.score_breakdown?.trust?.improvements || []).map((item, idx) => (
+                              <li key={idx} className="flex items-start space-x-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5">
+                                <div className="mt-1 w-2 h-2 rounded-full bg-rose-500 flex-shrink-0"></div>
+                                <span className="text-sm text-slate-700 leading-snug break-words whitespace-normal flex-1">{item}</span>
+                              </li>
+                            ))}
+                          </ul>
                         </div>
-                        <ul className="space-y-3">
-                          {(response.score_breakdown?.trust?.improvements || []).map((item, idx) => (
-                            <li key={idx} className="group bg-gradient-to-br from-purple-50/80 via-pink-50/70 to-white border border-purple-200/50 rounded-xl p-4 flex items-start space-x-4 shadow-sm hover:shadow-lg transition-all">
-                              <div className="flex-shrink-0 w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center shadow-md group-hover:scale-[1.05] transition-transform">
-                                <Target className="w-4 h-4 text-white" />
-                              </div>
-                              <span className="text-[15px] text-slate-700 leading-relaxed flex-1">{item}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
                   )}
                 </div>
@@ -1584,33 +1683,13 @@ What would you like to do?`,
             {/* POLICIES SECTION - Premium Subsection Design */}
             <div className="space-y-16 animate-fadeIn" style={{ animationDelay: '0.2s' }}>
               {/* PERMISSIONS POLICY */}
-              <div>
-                {/* Premium Subsection Header */}
-                <div className="flex items-center justify-between mb-6">
-                  <div>
-                    <h3 className="text-3xl font-bold text-slate-900 tracking-tight flex items-center space-x-3 mb-2">
-                      <HeadingBadge Icon={Shield} gradient="from-blue-500 to-purple-500" />
-                      <span>Permissions Policy</span>
-                    </h3>
-                    <p className="text-slate-600 text-sm font-medium">IAM permissions configuration</p>
-                  </div>
-                <button
-                  onClick={() => setShowPermissionsPolicy(!showPermissionsPolicy)}
-                    className="group flex items-center space-x-2 px-4 py-2 bg-white/80 backdrop-blur-xl hover:bg-white/90 border-2 border-slate-200 hover:border-blue-300 rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl"
-                >
-                    <span className="text-sm font-semibold text-slate-700 group-hover:text-blue-600 transition-colors duration-300">
-                      {showPermissionsPolicy ? 'Hide' : 'Show'}
-                    </span>
-                  {showPermissionsPolicy ? (
-                      <ChevronUp className="w-4 h-4 text-slate-500 group-hover:text-blue-600 transition-colors duration-300" />
-                  ) : (
-                      <ChevronDown className="w-4 h-4 text-slate-500 group-hover:text-blue-600 transition-colors duration-300" />
-                  )}
-                </button>
-                </div>
-
-                {showPermissionsPolicy && (
-                <>
+              <CollapsibleTile
+                title="Permissions Policy"
+                subtitle="IAM permissions configuration"
+                icon={<Shield className="w-6 h-6 text-blue-600" />}
+                defaultExpanded={true}
+                variant="info"
+              >
                 <div className="bg-white/80 backdrop-blur-xl border-2 border-blue-200/50 rounded-2xl overflow-hidden shadow-xl hover:shadow-2xl transition-all duration-300">
                   <div className="bg-gradient-to-r from-slate-50 to-white px-6 py-4 flex items-center justify-between border-b-2 border-slate-200/50">
                     <div className="flex items-center space-x-3">
@@ -1621,7 +1700,7 @@ What would you like to do?`,
                       </div>
                       <span className="text-slate-600 text-sm font-mono font-semibold">permissions-policy.json</span>
                     </div>
-                    <div className="flex items-center space-x-2">
+                    <div className="flex items-center space-x-2 flex-wrap gap-2">
                       <button
                         onClick={handleCopyPolicy}
                         className="group relative px-4 py-2 bg-white/80 hover:bg-white border-2 border-slate-200 hover:border-blue-300 rounded-lg transition-all duration-300 flex items-center space-x-2 hover:scale-105 shadow-sm hover:shadow-md"
@@ -1631,27 +1710,288 @@ What would you like to do?`,
                           {copied ? 'Copied!' : 'Copy'}
                         </span>
                       </button>
+                      {/* IaC Export Dropdown */}
+                      <div className="relative group">
+                        <button
+                          className="group relative px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 border border-emerald-500/50 rounded-lg transition-all duration-300 flex items-center space-x-2 hover:scale-105 shadow-lg hover:shadow-xl"
+                        >
+                          <FileCode className="w-4 h-4 text-white transition-transform duration-300 group-hover:translate-y-0.5" />
+                          <span className="text-sm font-medium text-white">Export as</span>
+                          <ChevronDownIcon className="w-3 h-3 text-white" />
+                        </button>
+                        <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-2xl border-2 border-slate-200/50 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300 z-50">
+                          <div className="py-2">
+                            <button
+                              onClick={async () => {
+                                try {
+                                  const result = await exportToIAC({
+                                    policy: response.policy,
+                                    format: 'cloudformation',
+                                    role_name: deployRoleName || 'GeneratedRole',
+                                    trust_policy: response.trust_policy
+                                  });
+                                  const blob = new Blob([result.content], { type: result.mime_type });
+                                  const url = URL.createObjectURL(blob);
+                                  const a = document.createElement('a');
+                                  a.href = url;
+                                  a.download = result.filename;
+                                  a.click();
+                                } catch (err: any) {
+                                  setError(err.message);
+                                }
+                              }}
+                              className="w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-blue-50 hover:text-blue-600 transition-colors flex items-center space-x-2"
+                            >
+                              <Cloud className="w-4 h-4" />
+                              <span>CloudFormation (YAML)</span>
+                            </button>
+                            <button
+                              onClick={async () => {
+                                try {
+                                  const result = await exportToIAC({
+                                    policy: response.policy,
+                                    format: 'terraform',
+                                    role_name: deployRoleName || 'GeneratedRole',
+                                    trust_policy: response.trust_policy
+                                  });
+                                  const blob = new Blob([result.content], { type: result.mime_type });
+                                  const url = URL.createObjectURL(blob);
+                                  const a = document.createElement('a');
+                                  a.href = url;
+                                  a.download = result.filename;
+                                  a.click();
+                                } catch (err: any) {
+                                  setError(err.message);
+                                }
+                              }}
+                              className="w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-blue-50 hover:text-blue-600 transition-colors flex items-center space-x-2"
+                            >
+                              <FileCode className="w-4 h-4" />
+                              <span>Terraform (HCL)</span>
+                            </button>
+                            <button
+                              onClick={async () => {
+                                try {
+                                  const result = await exportToIAC({
+                                    policy: response.policy,
+                                    format: 'yaml',
+                                    role_name: deployRoleName || 'GeneratedRole',
+                                    trust_policy: response.trust_policy
+                                  });
+                                  const blob = new Blob([result.content], { type: result.mime_type });
+                                  const url = URL.createObjectURL(blob);
+                                  const a = document.createElement('a');
+                                  a.href = url;
+                                  a.download = result.filename;
+                                  a.click();
+                                } catch (err: any) {
+                                  setError(err.message);
+                                }
+                              }}
+                              className="w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-blue-50 hover:text-blue-600 transition-colors flex items-center space-x-2"
+                            >
+                              <FileCode className="w-4 h-4" />
+                              <span>YAML Format</span>
+                            </button>
+                            <button
+                              onClick={() => {
+                                const blob = new Blob([JSON.stringify(response.policy, null, 2)], { type: 'application/json' });
+                                const url = URL.createObjectURL(blob);
+                                const a = document.createElement('a');
+                                a.href = url;
+                                a.download = 'permissions-policy.json';
+                                a.click();
+                              }}
+                              className="w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-blue-50 hover:text-blue-600 transition-colors flex items-center space-x-2"
+                            >
+                              <Download className="w-4 h-4" />
+                              <span>JSON Format</span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {/* Deploy/Manage AWS Button */}
+                      <button
+                        onClick={() => setShowDeployModal(true)}
+                        className="group relative px-4 py-2 bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 border border-orange-500/50 rounded-lg transition-all duration-300 flex items-center space-x-2 hover:scale-105 shadow-lg hover:shadow-xl"
+                      >
+                        <Upload className="w-4 h-4 text-white transition-transform duration-300 group-hover:translate-y-0.5" />
+                        <span className="text-sm font-medium text-white">Manage AWS</span>
+                      </button>
+                      
+                      {/* Explain in Simple Terms Button */}
+                      <button
+                        onClick={async () => {
+                          setShowExplainModal(true);
+                          setExplainLoading(true);
+                          setSimpleExplanation(null);
+                          try {
+                            const result = await explainPolicy({
+                              policy: response.policy,
+                              trust_policy: response.trust_policy,
+                              explanation_type: 'simple'
+                            });
+                            if (result.success && result.explanation) {
+                              setSimpleExplanation(result.explanation);
+                            } else {
+                              setError(result.error || 'Failed to generate explanation');
+                            }
+                          } catch (err: any) {
+                            setError(err.message || 'Failed to generate explanation');
+                            setSimpleExplanation(null);
+                          } finally {
+                            setExplainLoading(false);
+                          }
+                        }}
+                        className="group relative px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 border border-indigo-500/50 rounded-lg transition-all duration-300 flex items-center space-x-2 hover:scale-105 shadow-lg hover:shadow-xl"
+                      >
+                        <BookOpen className="w-4 h-4 text-white transition-transform duration-300 group-hover:translate-y-0.5" />
+                        <span className="text-sm font-medium text-white">Explain Simply</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Format Tabs */}
+                  <div className="border-b-2 border-slate-200/50 bg-slate-50/50 px-6 pt-4">
+                    <div className="flex items-center space-x-2">
                       <button
                         onClick={() => {
-                          const blob = new Blob([JSON.stringify(response.policy, null, 2)], { type: 'application/json' });
-                          const url = URL.createObjectURL(blob);
-                          const a = document.createElement('a');
-                          a.href = url;
-                          a.download = 'permissions-policy.json';
-                          a.click();
+                          setSelectedFormat('json');
+                          if (!formatContent['json']) {
+                            setFormatContent(prev => ({
+                              ...prev,
+                              json: JSON.stringify(response.policy, null, 2)
+                            }));
+                          }
                         }}
-                        className="group relative px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 border border-blue-500/50 rounded-lg transition-all duration-300 flex items-center space-x-2 hover:scale-105 shadow-lg hover:shadow-xl"
+                        className={`px-4 py-2 text-sm font-semibold rounded-t-lg transition-all ${
+                          selectedFormat === 'json'
+                            ? 'bg-white text-blue-600 border-t-2 border-l-2 border-r-2 border-blue-300'
+                            : 'text-slate-600 hover:text-blue-600 hover:bg-white/50'
+                        }`}
                       >
-                        <Download className="w-4 h-4 text-white transition-transform duration-300 group-hover:translate-y-0.5" />
-                        <span className="text-sm font-medium text-white">Download</span>
+                        JSON
+                      </button>
+                      <button
+                        onClick={async () => {
+                          setSelectedFormat('cloudformation');
+                          if (!formatContent['cloudformation']) {
+                            setLoadingFormat('cloudformation');
+                            try {
+                              const result = await exportToIAC({
+                                policy: response.policy,
+                                format: 'cloudformation',
+                                role_name: deployRoleName || 'GeneratedRole',
+                                trust_policy: response.trust_policy
+                              });
+                              setFormatContent(prev => ({
+                                ...prev,
+                                cloudformation: result.content
+                              }));
+                            } catch (err: any) {
+                              setError(err.message);
+                            } finally {
+                              setLoadingFormat(null);
+                            }
+                          }
+                        }}
+                        className={`px-4 py-2 text-sm font-semibold rounded-t-lg transition-all ${
+                          selectedFormat === 'cloudformation'
+                            ? 'bg-white text-emerald-600 border-t-2 border-l-2 border-r-2 border-emerald-300'
+                            : 'text-slate-600 hover:text-emerald-600 hover:bg-white/50'
+                        }`}
+                      >
+                        {loadingFormat === 'cloudformation' ? (
+                          <RefreshCw className="w-4 h-4 animate-spin" />
+                        ) : (
+                          'CloudFormation'
+                        )}
+                      </button>
+                      <button
+                        onClick={async () => {
+                          setSelectedFormat('terraform');
+                          if (!formatContent['terraform']) {
+                            setLoadingFormat('terraform');
+                            try {
+                              const result = await exportToIAC({
+                                policy: response.policy,
+                                format: 'terraform',
+                                role_name: deployRoleName || 'GeneratedRole',
+                                trust_policy: response.trust_policy
+                              });
+                              setFormatContent(prev => ({
+                                ...prev,
+                                terraform: result.content
+                              }));
+                            } catch (err: any) {
+                              setError(err.message);
+                            } finally {
+                              setLoadingFormat(null);
+                            }
+                          }
+                        }}
+                        className={`px-4 py-2 text-sm font-semibold rounded-t-lg transition-all ${
+                          selectedFormat === 'terraform'
+                            ? 'bg-white text-teal-600 border-t-2 border-l-2 border-r-2 border-teal-300'
+                            : 'text-slate-600 hover:text-teal-600 hover:bg-white/50'
+                        }`}
+                      >
+                        {loadingFormat === 'terraform' ? (
+                          <RefreshCw className="w-4 h-4 animate-spin" />
+                        ) : (
+                          'Terraform'
+                        )}
+                      </button>
+                      <button
+                        onClick={async () => {
+                          setSelectedFormat('yaml');
+                          if (!formatContent['yaml']) {
+                            setLoadingFormat('yaml');
+                            try {
+                              const result = await exportToIAC({
+                                policy: response.policy,
+                                format: 'yaml',
+                                role_name: deployRoleName || 'GeneratedRole',
+                                trust_policy: response.trust_policy
+                              });
+                              setFormatContent(prev => ({
+                                ...prev,
+                                yaml: result.content
+                              }));
+                            } catch (err: any) {
+                              setError(err.message);
+                            } finally {
+                              setLoadingFormat(null);
+                            }
+                          }
+                        }}
+                        className={`px-4 py-2 text-sm font-semibold rounded-t-lg transition-all ${
+                          selectedFormat === 'yaml'
+                            ? 'bg-white text-purple-600 border-t-2 border-l-2 border-r-2 border-purple-300'
+                            : 'text-slate-600 hover:text-purple-600 hover:bg-white/50'
+                        }`}
+                      >
+                        {loadingFormat === 'yaml' ? (
+                          <RefreshCw className="w-4 h-4 animate-spin" />
+                        ) : (
+                          'YAML'
+                        )}
                       </button>
                     </div>
                   </div>
 
                   <div className="p-6 overflow-x-auto bg-slate-50/50">
-                    <pre className="text-sm font-mono text-slate-800 leading-relaxed">
-                      {JSON.stringify(response.policy, null, 2)}
-                    </pre>
+                    {loadingFormat && loadingFormat === selectedFormat ? (
+                      <div className="flex items-center justify-center py-12">
+                        <RefreshCw className="w-6 h-6 text-blue-600 animate-spin" />
+                        <span className="ml-3 text-slate-600">Generating {selectedFormat} format...</span>
+                      </div>
+                    ) : (
+                      <pre className="text-sm font-mono text-slate-800 leading-relaxed">
+                        {formatContent[selectedFormat] || (selectedFormat === 'json' ? JSON.stringify(response.policy, null, 2) : '')}
+                      </pre>
+                    )}
                   </div>
                 </div>
 
@@ -1676,33 +2016,14 @@ What would you like to do?`,
                 </div>
 
                 {response.explanation && (
-                  <div className="bg-white/80 backdrop-blur-xl border-2 border-blue-200/50 rounded-2xl p-8 mt-6 shadow-xl">
-                    {/* Premium Subsection Header with Collapse Button */}
-                    <div className="mb-4 flex items-center justify-between">
-                      <div>
-                        <h4 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center space-x-3 mb-1">
-                        <HeadingBadge Icon={BookOpen} gradient="from-indigo-500 to-blue-500" />
-                      <span>What These Permissions Do</span>
-                    </h4>
-                      <p className="text-slate-600 text-sm font-medium">Breakdown of each permission statement</p>
-                      </div>
-                      <button
-                        onClick={() => setShowExplanation(!showExplanation)}
-                        className="group flex items-center space-x-2 px-4 py-2 bg-white/80 backdrop-blur-xl hover:bg-white/90 border-2 border-slate-200 hover:border-blue-300 rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl"
-                      >
-                        <span className="text-sm font-semibold text-slate-700 group-hover:text-blue-600 transition-colors duration-300">
-                          {showExplanation ? 'Hide' : 'Show'}
-                        </span>
-                        {showExplanation ? (
-                          <ChevronUp className="w-4 h-4 text-slate-500 group-hover:text-blue-600 transition-colors duration-300" />
-                        ) : (
-                          <ChevronDown className="w-4 h-4 text-slate-500 group-hover:text-blue-600 transition-colors duration-300" />
-                        )}
-                      </button>
-                    </div>
-                    
-                    {showExplanation && (
-                    
+                  <CollapsibleTile
+                    title="What These Permissions Do"
+                    subtitle="Breakdown of each permission statement"
+                    icon={<BookOpen className="w-6 h-6 text-indigo-600" />}
+                    defaultExpanded={false}
+                    variant="info"
+                    className="mt-6"
+                  >
                     <div className="grid grid-cols-1 gap-4">
                       {parseExplanation(response.explanation).map((section: any, index) => {
                         const { icon: ServiceIcon, gradient } = getServiceIcon(section?.title || '');
@@ -1767,42 +2088,19 @@ What would you like to do?`,
                         );
                       })}
                     </div>
-                  )}
-                  </div>
+                  </CollapsibleTile>
                 )}
-                </>
-                )}
-              </div>
+              </CollapsibleTile>
 
               {/* TRUST POLICY */}
               {response.trust_policy && (
-                <div>
-                  {/* Premium Subsection Header */}
-                  <div className="flex items-center justify-between mb-6">
-                    <div>
-                      <h3 className="text-3xl font-bold text-slate-900 tracking-tight flex items-center space-x-3 mb-2">
-                        <HeadingBadge Icon={ShieldCheck} gradient="from-purple-500 to-pink-500" />
-                        <span>Trust Policy</span>
-                      </h3>
-                      <p className="text-slate-600 text-sm font-medium">IAM role trust relationship</p>
-                    </div>
-                  <button
-                    onClick={() => setShowTrustPolicy(!showTrustPolicy)}
-                      className="group flex items-center space-x-2 px-4 py-2 bg-white/80 backdrop-blur-xl hover:bg-white/90 border-2 border-slate-200 hover:border-purple-300 rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl"
-                  >
-                      <span className="text-sm font-semibold text-slate-700 group-hover:text-purple-600 transition-colors duration-300">
-                        {showTrustPolicy ? 'Hide' : 'Show'}
-                      </span>
-                    {showTrustPolicy ? (
-                        <ChevronUp className="w-4 h-4 text-slate-500 group-hover:text-purple-600 transition-colors duration-300" />
-                    ) : (
-                        <ChevronDown className="w-4 h-4 text-slate-500 group-hover:text-purple-600 transition-colors duration-300" />
-                    )}
-                  </button>
-                  </div>
-
-                  {showTrustPolicy && (
-                  <>
+                <CollapsibleTile
+                  title="Trust Policy"
+                  subtitle="IAM role trust relationship"
+                  icon={<ShieldCheck className="w-6 h-6 text-purple-600" />}
+                  defaultExpanded={true}
+                  variant="info"
+                >
                   <div className="bg-white/80 backdrop-blur-xl border-2 border-purple-200/50 rounded-2xl overflow-hidden shadow-xl hover:shadow-2xl transition-all duration-300">
                     <div className="bg-gradient-to-r from-slate-50 to-white px-6 py-4 flex items-center justify-between border-b-2 border-slate-200/50">
                       <div className="flex items-center space-x-3">
@@ -1813,7 +2111,7 @@ What would you like to do?`,
                         </div>
                         <span className="text-slate-600 text-sm font-mono font-semibold">trust-policy.json</span>
                       </div>
-                      <div className="flex items-center space-x-2">
+                      <div className="flex items-center space-x-2 flex-wrap gap-2">
                         <button
                           onClick={handleCopyTrustPolicy}
                           className="group relative px-4 py-2 bg-white/80 hover:bg-white border-2 border-slate-200 hover:border-purple-300 rounded-lg transition-all duration-300 flex items-center space-x-2 hover:scale-105 shadow-sm hover:shadow-md"
@@ -1823,27 +2121,289 @@ What would you like to do?`,
                             {copiedTrust ? 'Copied!' : 'Copy'}
                           </span>
                         </button>
+                        
+                        {/* IaC Export Dropdown for Trust Policy */}
+                        <div className="relative group">
+                          <button
+                            className="group relative px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 border border-emerald-500/50 rounded-lg transition-all duration-300 flex items-center space-x-2 hover:scale-105 shadow-lg hover:shadow-xl"
+                          >
+                            <FileCode className="w-4 h-4 text-white transition-transform duration-300 group-hover:translate-y-0.5" />
+                            <span className="text-sm font-medium text-white">Export as</span>
+                            <ChevronDownIcon className="w-3 h-3 text-white" />
+                          </button>
+                          <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-2xl border-2 border-slate-200/50 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300 z-50">
+                            <div className="py-2">
+                              <button
+                                onClick={async () => {
+                                  try {
+                                    const result = await exportToIAC({
+                                      policy: response.trust_policy,
+                                      format: 'cloudformation',
+                                      role_name: deployRoleName || 'GeneratedRole',
+                                      trust_policy: response.trust_policy
+                                    });
+                                    const blob = new Blob([result.content], { type: result.mime_type });
+                                    const url = URL.createObjectURL(blob);
+                                    const a = document.createElement('a');
+                                    a.href = url;
+                                    a.download = result.filename;
+                                    a.click();
+                                  } catch (err: any) {
+                                    setError(err.message);
+                                  }
+                                }}
+                                className="w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-purple-50 hover:text-purple-600 transition-colors flex items-center space-x-2"
+                              >
+                                <Cloud className="w-4 h-4" />
+                                <span>CloudFormation (YAML)</span>
+                              </button>
+                              <button
+                                onClick={async () => {
+                                  try {
+                                    const result = await exportToIAC({
+                                      policy: response.trust_policy,
+                                      format: 'terraform',
+                                      role_name: deployRoleName || 'GeneratedRole',
+                                      trust_policy: response.trust_policy
+                                    });
+                                    const blob = new Blob([result.content], { type: result.mime_type });
+                                    const url = URL.createObjectURL(blob);
+                                    const a = document.createElement('a');
+                                    a.href = url;
+                                    a.download = result.filename;
+                                    a.click();
+                                  } catch (err: any) {
+                                    setError(err.message);
+                                  }
+                                }}
+                                className="w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-purple-50 hover:text-purple-600 transition-colors flex items-center space-x-2"
+                              >
+                                <FileCode className="w-4 h-4" />
+                                <span>Terraform (HCL)</span>
+                              </button>
+                              <button
+                                onClick={async () => {
+                                  try {
+                                    const result = await exportToIAC({
+                                      policy: response.trust_policy,
+                                      format: 'yaml',
+                                      role_name: deployRoleName || 'GeneratedRole',
+                                      trust_policy: response.trust_policy
+                                    });
+                                    const blob = new Blob([result.content], { type: result.mime_type });
+                                    const url = URL.createObjectURL(blob);
+                                    const a = document.createElement('a');
+                                    a.href = url;
+                                    a.download = result.filename;
+                                    a.click();
+                                  } catch (err: any) {
+                                    setError(err.message);
+                                  }
+                                }}
+                                className="w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-purple-50 hover:text-purple-600 transition-colors flex items-center space-x-2"
+                              >
+                                <FileCode className="w-4 h-4" />
+                                <span>YAML Format</span>
+                              </button>
+                              <button
+                                onClick={() => {
+                                  const blob = new Blob([JSON.stringify(response.trust_policy, null, 2)], { type: 'application/json' });
+                                  const url = URL.createObjectURL(blob);
+                                  const a = document.createElement('a');
+                                  a.href = url;
+                                  a.download = 'trust-policy.json';
+                                  a.click();
+                                }}
+                                className="w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-purple-50 hover:text-purple-600 transition-colors flex items-center space-x-2"
+                              >
+                                <Download className="w-4 h-4" />
+                                <span>JSON Format</span>
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        {/* Deploy to AWS Button for Trust Policy */}
+                        <button
+                          onClick={() => setShowDeployModal(true)}
+                          className="group relative px-4 py-2 bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 border border-orange-500/50 rounded-lg transition-all duration-300 flex items-center space-x-2 hover:scale-105 shadow-lg hover:shadow-xl"
+                        >
+                          <Upload className="w-4 h-4 text-white transition-transform duration-300 group-hover:translate-y-0.5" />
+                          <span className="text-sm font-medium text-white">Deploy to AWS</span>
+                        </button>
+                        
+                        {/* Explain Trust Policy Button */}
+                        <button
+                          onClick={async () => {
+                            setShowExplainModal(true);
+                            setExplainLoading(true);
+                            setSimpleExplanation(null);
+                            try {
+                              const result = await explainPolicy({
+                                policy: response.trust_policy,
+                                trust_policy: response.trust_policy,
+                                explanation_type: 'simple'
+                              });
+                              if (result.success && result.explanation) {
+                                setSimpleExplanation(result.explanation);
+                              } else {
+                                setError(result.error || 'Failed to generate explanation');
+                              }
+                            } catch (err: any) {
+                              setError(err.message || 'Failed to generate explanation');
+                              setSimpleExplanation(null);
+                            } finally {
+                              setExplainLoading(false);
+                            }
+                          }}
+                          className="group relative px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 border border-indigo-500/50 rounded-lg transition-all duration-300 flex items-center space-x-2 hover:scale-105 shadow-lg hover:shadow-xl"
+                        >
+                          <BookOpen className="w-4 h-4 text-white transition-transform duration-300 group-hover:translate-y-0.5" />
+                          <span className="text-sm font-medium text-white">Explain Simply</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Format Tabs for Trust Policy */}
+                    <div className="border-b-2 border-slate-200/50 bg-slate-50/50 px-6 pt-4">
+                      <div className="flex items-center space-x-2">
                         <button
                           onClick={() => {
-                            const blob = new Blob([JSON.stringify(response.trust_policy, null, 2)], { type: 'application/json' });
-                            const url = URL.createObjectURL(blob);
-                            const a = document.createElement('a');
-                            a.href = url;
-                            a.download = 'trust-policy.json';
-                            a.click();
+                            setSelectedTrustFormat('json');
+                            if (!trustFormatContent['json']) {
+                              setTrustFormatContent(prev => ({
+                                ...prev,
+                                json: JSON.stringify(response.trust_policy, null, 2)
+                              }));
+                            }
                           }}
-                          className="group relative px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 border border-purple-500/50 rounded-lg transition-all duration-300 flex items-center space-x-2 hover:scale-105 shadow-lg hover:shadow-xl"
+                          className={`px-4 py-2 text-sm font-semibold rounded-t-lg transition-all ${
+                            selectedTrustFormat === 'json'
+                              ? 'bg-white text-purple-600 border-t-2 border-l-2 border-r-2 border-purple-300'
+                              : 'text-slate-600 hover:text-purple-600 hover:bg-white/50'
+                          }`}
                         >
-                          <Download className="w-4 h-4 text-white transition-transform duration-300 group-hover:translate-y-0.5" />
-                          <span className="text-sm font-medium text-white">Download</span>
+                          JSON
+                        </button>
+                        <button
+                          onClick={async () => {
+                            setSelectedTrustFormat('cloudformation');
+                            if (!trustFormatContent['cloudformation']) {
+                              setLoadingTrustFormat('cloudformation');
+                              try {
+                                const result = await exportToIAC({
+                                  policy: response.trust_policy,
+                                  format: 'cloudformation',
+                                  role_name: deployRoleName || 'GeneratedRole',
+                                  trust_policy: response.trust_policy
+                                });
+                                setTrustFormatContent(prev => ({
+                                  ...prev,
+                                  cloudformation: result.content
+                                }));
+                              } catch (err: any) {
+                                setError(err.message);
+                              } finally {
+                                setLoadingTrustFormat(null);
+                              }
+                            }
+                          }}
+                          className={`px-4 py-2 text-sm font-semibold rounded-t-lg transition-all ${
+                            selectedTrustFormat === 'cloudformation'
+                              ? 'bg-white text-emerald-600 border-t-2 border-l-2 border-r-2 border-emerald-300'
+                              : 'text-slate-600 hover:text-emerald-600 hover:bg-white/50'
+                          }`}
+                        >
+                          {loadingTrustFormat === 'cloudformation' ? (
+                            <RefreshCw className="w-4 h-4 animate-spin" />
+                          ) : (
+                            'CloudFormation'
+                          )}
+                        </button>
+                        <button
+                          onClick={async () => {
+                            setSelectedTrustFormat('terraform');
+                            if (!trustFormatContent['terraform']) {
+                              setLoadingTrustFormat('terraform');
+                              try {
+                                const result = await exportToIAC({
+                                  policy: response.trust_policy,
+                                  format: 'terraform',
+                                  role_name: deployRoleName || 'GeneratedRole',
+                                  trust_policy: response.trust_policy
+                                });
+                                setTrustFormatContent(prev => ({
+                                  ...prev,
+                                  terraform: result.content
+                                }));
+                              } catch (err: any) {
+                                setError(err.message);
+                              } finally {
+                                setLoadingTrustFormat(null);
+                              }
+                            }
+                          }}
+                          className={`px-4 py-2 text-sm font-semibold rounded-t-lg transition-all ${
+                            selectedTrustFormat === 'terraform'
+                              ? 'bg-white text-teal-600 border-t-2 border-l-2 border-r-2 border-teal-300'
+                              : 'text-slate-600 hover:text-teal-600 hover:bg-white/50'
+                          }`}
+                        >
+                          {loadingTrustFormat === 'terraform' ? (
+                            <RefreshCw className="w-4 h-4 animate-spin" />
+                          ) : (
+                            'Terraform'
+                          )}
+                        </button>
+                        <button
+                          onClick={async () => {
+                            setSelectedTrustFormat('yaml');
+                            if (!trustFormatContent['yaml']) {
+                              setLoadingTrustFormat('yaml');
+                              try {
+                                const result = await exportToIAC({
+                                  policy: response.trust_policy,
+                                  format: 'yaml',
+                                  role_name: deployRoleName || 'GeneratedRole',
+                                  trust_policy: response.trust_policy
+                                });
+                                setTrustFormatContent(prev => ({
+                                  ...prev,
+                                  yaml: result.content
+                                }));
+                              } catch (err: any) {
+                                setError(err.message);
+                              } finally {
+                                setLoadingTrustFormat(null);
+                              }
+                            }
+                          }}
+                          className={`px-4 py-2 text-sm font-semibold rounded-t-lg transition-all ${
+                            selectedTrustFormat === 'yaml'
+                              ? 'bg-white text-purple-600 border-t-2 border-l-2 border-r-2 border-purple-300'
+                              : 'text-slate-600 hover:text-purple-600 hover:bg-white/50'
+                          }`}
+                        >
+                          {loadingTrustFormat === 'yaml' ? (
+                            <RefreshCw className="w-4 h-4 animate-spin" />
+                          ) : (
+                            'YAML'
+                          )}
                         </button>
                       </div>
                     </div>
 
                     <div className="p-6 overflow-x-auto bg-slate-50/50">
-                      <pre className="text-sm font-mono text-slate-800 leading-relaxed">
-                        {JSON.stringify(response.trust_policy, null, 2)}
-                      </pre>
+                      {loadingTrustFormat && loadingTrustFormat === selectedTrustFormat ? (
+                        <div className="flex items-center justify-center py-12">
+                          <RefreshCw className="w-6 h-6 text-purple-600 animate-spin" />
+                          <span className="ml-3 text-slate-600">Generating {selectedTrustFormat} format...</span>
+                        </div>
+                      ) : (
+                        <pre className="text-sm font-mono text-slate-800 leading-relaxed">
+                          {trustFormatContent[selectedTrustFormat] || (selectedTrustFormat === 'json' ? JSON.stringify(response.trust_policy, null, 2) : '')}
+                        </pre>
+                      )}
                     </div>
                   </div>
 
@@ -1868,16 +2428,14 @@ What would you like to do?`,
                   </div>
 
                   {response.trust_explanation && (
-                    <div className="bg-white/80 backdrop-blur-xl border-2 border-purple-200/50 rounded-2xl p-8 mt-6 shadow-xl">
-                      {/* Premium Subsection Header */}
-                      <div className="mb-6">
-                        <h4 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center space-x-3 mb-2">
-                          <HeadingBadge Icon={ShieldCheck} gradient="from-purple-500 to-pink-500" />
-                        <span>What This Trust Policy Does</span>
-                      </h4>
-                        <p className="text-slate-600 text-sm font-medium">Who can assume this role and under what conditions</p>
-                      </div>
-                      
+                    <CollapsibleTile
+                      title="What This Trust Policy Does"
+                      subtitle="Who can assume this role and under what conditions"
+                      icon={<ShieldCheck className="w-6 h-6 text-purple-600" />}
+                      defaultExpanded={true}
+                      variant="default"
+                      className="mt-6"
+                    >
                       <div className="space-y-6">
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                           <div className="bg-gradient-to-br from-purple-500/10 via-pink-500/10 to-orange-500/10 border-2 border-purple-200/60 rounded-xl p-5 shadow-lg">
@@ -1991,11 +2549,9 @@ What would you like to do?`,
                           </div>
                         </div>
                       </div>
-                    </div>
+                    </CollapsibleTile>
                   )}
-                  </>
-                  )}
-                </div>
+                </CollapsibleTile>
               )}
 
               {/* PERMISSIONS POLICY REFINEMENT SUGGESTIONS - Premium Subsection */}
@@ -2280,35 +2836,14 @@ What would you like to do?`,
 
               {/* COMPLIANCE FRAMEWORK ADHERENCE - Premium Subsection - Collapsible */}
               {compliance && compliance !== 'general' && response && response.policy && (
-                <div className="mb-16 animate-fadeIn" style={{ animationDelay: '0.35s' }}>
-                  {/* Premium Subsection Header with Collapse Button */}
-                  <div className="mb-8 flex items-center justify-between">
-                    <div>
-                      <h3 className="text-3xl font-bold text-slate-900 tracking-tight flex items-center space-x-3 mb-2">
-                        <HeadingBadge Icon={ShieldCheck} gradient="from-purple-500 to-pink-500" />
-                        <span>Compliance Framework Adherence</span>
-                      </h3>
-                      <p className="text-slate-600 text-sm font-medium">
-                        How this policy adheres to {complianceFrameworks.find(f => f.value === compliance)?.label || compliance.toUpperCase()}
-                      </p>
-                    </div>
-                    <button
-                      onClick={() => setShowComplianceAdherence(!showComplianceAdherence)}
-                      className="group flex items-center space-x-2 px-4 py-2 bg-white/80 backdrop-blur-xl hover:bg-white/90 border-2 border-slate-200 hover:border-purple-300 rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl"
-                    >
-                      <span className="text-sm font-semibold text-slate-700 group-hover:text-purple-600 transition-colors duration-300">
-                        {showComplianceAdherence ? 'Hide' : 'Show'}
-                      </span>
-                      {showComplianceAdherence ? (
-                        <ChevronUp className="w-4 h-4 text-slate-500 group-hover:text-purple-600 transition-colors duration-300" />
-                      ) : (
-                        <ChevronDown className="w-4 h-4 text-slate-500 group-hover:text-purple-600 transition-colors duration-300" />
-                      )}
-                    </button>
-                  </div>
-                  
-                  {showComplianceAdherence && (
-                    <>
+                <CollapsibleTile
+                  title="Compliance Framework Adherence"
+                  subtitle={`How this policy adheres to ${complianceFrameworks.find(f => f.value === compliance)?.label || compliance.toUpperCase()}`}
+                  icon={<ShieldCheck className="w-6 h-6 text-purple-600" />}
+                  defaultExpanded={false}
+                  variant="info"
+                  className="mb-16 animate-fadeIn"
+                >
                       {/* Compliance Framework Info Card */}
                       <div className="bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50 border-2 border-purple-200/50 rounded-2xl p-8 shadow-xl mb-6">
                     <div className="flex items-start space-x-4">
@@ -2362,225 +2897,275 @@ What would you like to do?`,
                         {/* Compliance Requirements List - Enhanced with More Details */}
                         <div className="space-y-3 mb-6">
                           <div className="text-slate-900 font-bold text-base mb-3">Key Compliance Features Implemented:</div>
-                          {compliance === 'pci-dss' && (
+                          {response.compliance_features && response.compliance_features.length > 0 ? (
                             <>
-                              <div className="flex items-start space-x-3 bg-white/60 rounded-lg p-4 border border-purple-200/50 shadow-sm hover:shadow-md transition-shadow">
-                                <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
-                                <div className="flex-1">
-                                  <div className="text-slate-900 font-bold text-sm mb-1.5">Least-Privilege Access (Requirement 7.1.2)</div>
+                              {response.compliance_features.map((feature: any, idx: number) => (
+                                <CollapsibleTile
+                                  key={idx}
+                                  title={feature.title}
+                                  subtitle={feature.subtitle}
+                                  icon={<CheckCircle className="w-5 h-5 text-green-600" />}
+                                  defaultExpanded={false}
+                                  variant="success"
+                                >
                                   <div className="text-slate-600 text-xs font-medium leading-relaxed mb-2">
-                                    Policy uses specific actions instead of wildcards, limiting access to only necessary permissions. This ensures that even if credentials are compromised, attackers can only perform the exact operations needed for the intended function, significantly reducing the attack surface.
+                                    {feature.description}
                                   </div>
                                   <div className="text-slate-500 text-xs font-semibold bg-slate-50 px-2 py-1 rounded border border-slate-200 inline-flex items-center space-x-1">
-                                    <span>PCI DSS Requirement 7.1.2: Restrict access to cardholder data by business need-to-know</span>
-                                    {/* Links should come from agent response - TODO: Use compliance_features from agent */}
+                                    <span>{feature.requirement}</span>
+                                    {feature.link && (
+                                      <a 
+                                        href={feature.link} 
+                                        target="_blank" 
+                                        rel="noopener noreferrer" 
+                                        className="text-blue-600 hover:text-blue-800 transition-colors ml-2"
+                                        title="View official compliance documentation"
+                                      >
+                                        <ExternalLink className="w-3 h-3" />
+                                      </a>
+                                    )}
                                   </div>
+                                </CollapsibleTile>
+                              ))}
+                            </>
+                          ) : (
+                            <>
+                              {/* Fallback to hardcoded features if agent doesn't provide them */}
+                              {compliance === 'pci-dss' && (
+                                <>
+                                  <CollapsibleTile
+                                    title="Least-Privilege Access (Requirement 7.1.2)"
+                                    subtitle="Policy uses specific actions instead of wildcards"
+                                    icon={<CheckCircle className="w-5 h-5 text-green-600" />}
+                                    defaultExpanded={false}
+                                    variant="success"
+                                  >
+                                    <div className="text-slate-600 text-xs font-medium leading-relaxed mb-2">
+                                      Policy uses specific actions instead of wildcards, limiting access to only necessary permissions. This ensures that even if credentials are compromised, attackers can only perform the exact operations needed for the intended function, significantly reducing the attack surface.
+                                    </div>
+                                    <div className="text-slate-500 text-xs font-semibold bg-slate-50 px-2 py-1 rounded border border-slate-200 inline-flex items-center space-x-1">
+                                      <span>PCI DSS Requirement 7.1.2: Restrict access to cardholder data by business need-to-know</span>
+                                    </div>
+                                  </CollapsibleTile>
+                              <CollapsibleTile
+                                title="Resource-Level Restrictions"
+                                subtitle="Permissions scoped to specific resources"
+                                icon={<CheckCircle className="w-5 h-5 text-green-600" />}
+                                defaultExpanded={false}
+                                variant="success"
+                              >
+                                <div className="text-slate-600 text-xs font-medium leading-relaxed mb-2">
+                                  Permissions are scoped to specific resources (tables, buckets, etc.) rather than using wildcards. This prevents unauthorized access to other resources in your account, ensuring cardholder data environments are properly isolated and protected.
                                 </div>
-                              </div>
-                              <div className="flex items-start space-x-3 bg-white/60 rounded-lg p-4 border border-purple-200/50 shadow-sm hover:shadow-md transition-shadow">
-                                <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
-                                <div className="flex-1">
-                                  <div className="text-slate-900 font-bold text-sm mb-1.5">Resource-Level Restrictions</div>
-                                  <div className="text-slate-600 text-xs font-medium leading-relaxed mb-2">
-                                    Permissions are scoped to specific resources (tables, buckets, etc.) rather than using wildcards. This prevents unauthorized access to other resources in your account, ensuring cardholder data environments are properly isolated and protected.
-                                  </div>
-                                  <div className="text-slate-500 text-xs font-semibold bg-slate-50 px-2 py-1 rounded border border-slate-200 inline-flex items-center space-x-1">
-                                    <span>PCI DSS Requirement 7.1.2: Limit access to cardholder data environment</span>
-                                    {/* Links should come from agent response - TODO: Use compliance_features from agent */}
-                                  </div>
+                                <a 
+                                  href={getComplianceLink('PCI DSS', '7.1.2') || '#'}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-slate-500 text-xs font-semibold bg-slate-50 px-2 py-1 rounded border border-slate-200 inline-flex items-center space-x-2 hover:bg-indigo-50 hover:border-indigo-300 hover:text-indigo-700 transition-all cursor-pointer"
+                                >
+                                  <span>PCI DSS Requirement 7.1.2: Limit access to cardholder data environment</span>
+                                  <ExternalLink className="w-3 h-3" />
+                                </a>
+                              </CollapsibleTile>
+                              <CollapsibleTile
+                                title="Access Logging Ready (Requirement 10)"
+                                subtitle="CloudWatch Logs permissions enable audit trails"
+                                icon={<CheckCircle className="w-5 h-5 text-green-600" />}
+                                defaultExpanded={false}
+                                variant="success"
+                              >
+                                <div className="text-slate-600 text-xs font-medium leading-relaxed mb-2">
+                                  CloudWatch Logs permissions enable comprehensive access monitoring and audit trails. All access to cardholder data can be logged and reviewed, supporting PCI DSS Requirement 10 which mandates tracking and monitoring all access to network resources and cardholder data.
                                 </div>
-                              </div>
-                              <div className="flex items-start space-x-3 bg-white/60 rounded-lg p-4 border border-purple-200/50 shadow-sm hover:shadow-md transition-shadow">
-                                <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
-                                <div className="flex-1">
-                                  <div className="text-slate-900 font-bold text-sm mb-1.5">Access Logging Ready (Requirement 10)</div>
-                                  <div className="text-slate-600 text-xs font-medium leading-relaxed mb-2">
-                                    CloudWatch Logs permissions enable comprehensive access monitoring and audit trails. All access to cardholder data can be logged and reviewed, supporting PCI DSS Requirement 10 which mandates tracking and monitoring all access to network resources and cardholder data.
-                                  </div>
-                                  <div className="text-slate-500 text-xs font-semibold bg-slate-50 px-2 py-1 rounded border border-slate-200 inline-flex items-center space-x-1">
-                                    <span>PCI DSS Requirement 10: Track and monitor all access to network resources and cardholder data</span>
-                                    {(() => {
-                                      const link = getComplianceLink('pci_dss', '10');
-                                      if (link) {
-                                        return (
-                                          <a href={link} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 transition-colors" title="View official PCI DSS documentation">
-                                            <ExternalLink className="w-3 h-3" />
-                                          </a>
-                                        );
-                                      }
-                                      return null;
-                                    })()}
-                                  </div>
+                                <a 
+                                  href={getComplianceLink('PCI DSS', '10') || '#'}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-slate-500 text-xs font-semibold bg-slate-50 px-2 py-1 rounded border border-slate-200 inline-flex items-center space-x-2 hover:bg-indigo-50 hover:border-indigo-300 hover:text-indigo-700 transition-all cursor-pointer"
+                                >
+                                  <span>PCI DSS Requirement 10: Track and monitor all access to network resources and cardholder data</span>
+                                  <ExternalLink className="w-3 h-3" />
+                                </a>
+                              </CollapsibleTile>
+                              <CollapsibleTile
+                                title="Network Segmentation Principles"
+                                subtitle="Access limited to necessary services"
+                                icon={<CheckCircle className="w-5 h-5 text-green-600" />}
+                                defaultExpanded={false}
+                                variant="success"
+                              >
+                                <div className="text-slate-600 text-xs font-medium leading-relaxed mb-2">
+                                  By restricting permissions to specific resources and services, this policy supports network segmentation principles. Access is limited to only the necessary services, reducing the risk of lateral movement if one component is compromised.
                                 </div>
-                              </div>
-                              <div className="flex items-start space-x-3 bg-white/60 rounded-lg p-4 border border-purple-200/50 shadow-sm hover:shadow-md transition-shadow">
-                                <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
-                                <div className="flex-1">
-                                  <div className="text-slate-900 font-bold text-sm mb-1.5">Network Segmentation Principles</div>
-                                  <div className="text-slate-600 text-xs font-medium leading-relaxed mb-2">
-                                    By restricting permissions to specific resources and services, this policy supports network segmentation principles. Access is limited to only the necessary services, reducing the risk of lateral movement if one component is compromised.
-                                  </div>
-                                  <div className="text-slate-500 text-xs font-semibold bg-slate-50 px-2 py-1 rounded border border-slate-200 inline-block">
-                                    PCI DSS Requirement 1: Install and maintain network security controls
-                                  </div>
+                                <div className="text-slate-500 text-xs font-semibold bg-slate-50 px-2 py-1 rounded border border-slate-200 inline-block">
+                                  PCI DSS Requirement 1: Install and maintain network security controls
                                 </div>
-                              </div>
+                              </CollapsibleTile>
+                            </>
+                          )}
                             </>
                           )}
                           
-                          {compliance === 'hipaa' && (
+                          {/* Fallback: Show hardcoded features if agent doesn't provide compliance_features */}
+                          {(!response.compliance_features || response.compliance_features.length === 0) && compliance === 'hipaa' && (
                             <>
-                              <div className="flex items-start space-x-3 bg-white/60 rounded-lg p-4 border border-purple-200/50 shadow-sm hover:shadow-md transition-shadow">
-                                <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
-                                <div className="flex-1">
-                                  <div className="text-slate-900 font-bold text-sm mb-1.5">Access Controls (164.308(a)(4))</div>
-                                  <div className="text-slate-600 text-xs font-medium leading-relaxed mb-2">
-                                    Policy implements least-privilege access controls to protect PHI (Protected Health Information). HIPAA requires covered entities to implement procedures to authorize access to ePHI only when such access is appropriate based on the user's role. This policy ensures that only necessary permissions are granted, reducing the risk of unauthorized PHI access.
-                                  </div>
-                                  <div className="text-slate-500 text-xs font-semibold bg-slate-50 px-2 py-1 rounded border border-slate-200 inline-flex items-center space-x-1">
-                                    <span>HIPAA 164.308(a)(4): Information access management</span>
-                                    {/* Links should come from agent response - TODO: Use compliance_features from agent */}
-                                  </div>
+                              <CollapsibleTile
+                                title="Access Controls (164.308(a)(4))"
+                                subtitle="Least-privilege access controls to protect PHI"
+                                icon={<CheckCircle className="w-5 h-5 text-green-600" />}
+                                defaultExpanded={false}
+                                variant="success"
+                              >
+                                <div className="text-slate-600 text-xs font-medium leading-relaxed mb-2">
+                                  Policy implements least-privilege access controls to protect PHI (Protected Health Information). HIPAA requires covered entities to implement procedures to authorize access to ePHI only when such access is appropriate based on the user's role. This policy ensures that only necessary permissions are granted, reducing the risk of unauthorized PHI access.
                                 </div>
-                              </div>
-                              <div className="flex items-start space-x-3 bg-white/60 rounded-lg p-4 border border-purple-200/50 shadow-sm hover:shadow-md transition-shadow">
-                                <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
-                                <div className="flex-1">
-                                  <div className="text-slate-900 font-bold text-sm mb-1.5">Audit Logging (164.312(b))</div>
-                                  <div className="text-slate-600 text-xs font-medium leading-relaxed mb-2">
-                                    CloudWatch Logs permissions enable audit controls for access to ePHI. HIPAA requires implementation of hardware, software, and/or procedural mechanisms that record and examine activity in information systems that contain or use ePHI. This policy ensures all access to PHI is logged and can be audited.
-                                  </div>
-                                  <div className="text-slate-500 text-xs font-semibold bg-slate-50 px-2 py-1 rounded border border-slate-200 inline-flex items-center space-x-1">
-                                    <span>HIPAA 164.312(b): Audit controls</span>
-                                    {(() => {
-                                      const link = getComplianceLink('hipaa', '164.312(b)');
-                                      if (link) {
-                                        return (
-                                          <a href={link} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 transition-colors" title="View official HIPAA documentation">
-                                            <ExternalLink className="w-3 h-3" />
-                                          </a>
-                                        );
-                                      }
-                                      return null;
-                                    })()}
-                                  </div>
+                                <a 
+                                  href={getComplianceLink('HIPAA', '164.308(a)(4)') || '#'}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-slate-500 text-xs font-semibold bg-slate-50 px-2 py-1 rounded border border-slate-200 inline-flex items-center space-x-2 hover:bg-indigo-50 hover:border-indigo-300 hover:text-indigo-700 transition-all cursor-pointer"
+                                >
+                                  <span>HIPAA 164.308(a)(4): Information access management</span>
+                                  <ExternalLink className="w-3 h-3" />
+                                </a>
+                              </CollapsibleTile>
+                              <CollapsibleTile
+                                title="Audit Logging (164.312(b))"
+                                subtitle="CloudWatch Logs enable audit controls for ePHI"
+                                icon={<CheckCircle className="w-5 h-5 text-green-600" />}
+                                defaultExpanded={false}
+                                variant="success"
+                              >
+                                <div className="text-slate-600 text-xs font-medium leading-relaxed mb-2">
+                                  CloudWatch Logs permissions enable audit controls for access to ePHI. HIPAA requires implementation of hardware, software, and/or procedural mechanisms that record and examine activity in information systems that contain or use ePHI. This policy ensures all access to PHI is logged and can be audited.
                                 </div>
-                              </div>
-                              <div className="flex items-start space-x-3 bg-white/60 rounded-lg p-4 border border-purple-200/50 shadow-sm hover:shadow-md transition-shadow">
-                                <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
-                                <div className="flex-1">
-                                  <div className="text-slate-900 font-bold text-sm mb-1.5">Data Protection & Encryption</div>
-                                  <div className="text-slate-600 text-xs font-medium leading-relaxed mb-2">
-                                    Resource-level restrictions limit access to specific data stores, reducing PHI exposure risk. HIPAA requires implementation of technical policies and procedures to allow access only to persons or software programs that have been granted access rights. This policy ensures PHI is only accessible to authorized services and processes.
-                                  </div>
-                                  <div className="text-slate-500 text-xs font-semibold bg-slate-50 px-2 py-1 rounded border border-slate-200 inline-flex items-center space-x-1">
-                                    <span>HIPAA 164.312(a)(2)(iv): Encryption and decryption</span>
-                                    {(() => {
-                                      const link = getComplianceLink('hipaa', '164.312(a)(2)(iv)');
-                                      if (link) {
-                                        return (
-                                          <a href={link} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 transition-colors" title="View official HIPAA documentation">
-                                            <ExternalLink className="w-3 h-3" />
-                                          </a>
-                                        );
-                                      }
-                                      return null;
-                                    })()}
-                                  </div>
+                                <a 
+                                  href={getComplianceLink('HIPAA', '164.312(b)') || '#'}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-slate-500 text-xs font-semibold bg-slate-50 px-2 py-1 rounded border border-slate-200 inline-flex items-center space-x-2 hover:bg-indigo-50 hover:border-indigo-300 hover:text-indigo-700 transition-all cursor-pointer"
+                                >
+                                  <span>HIPAA 164.312(b): Audit controls</span>
+                                  <ExternalLink className="w-3 h-3" />
+                                </a>
+                              </CollapsibleTile>
+                              <CollapsibleTile
+                                title="Data Protection & Encryption"
+                                subtitle="Resource-level restrictions limit PHI exposure"
+                                icon={<CheckCircle className="w-5 h-5 text-green-600" />}
+                                defaultExpanded={false}
+                                variant="success"
+                              >
+                                <div className="text-slate-600 text-xs font-medium leading-relaxed mb-2">
+                                  Resource-level restrictions limit access to specific data stores, reducing PHI exposure risk. HIPAA requires implementation of technical policies and procedures to allow access only to persons or software programs that have been granted access rights. This policy ensures PHI is only accessible to authorized services and processes.
                                 </div>
-                              </div>
-                              <div className="flex items-start space-x-3 bg-white/60 rounded-lg p-4 border border-purple-200/50 shadow-sm hover:shadow-md transition-shadow">
-                                <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
-                                <div className="flex-1">
-                                  <div className="text-slate-900 font-bold text-sm mb-1.5">Minimum Necessary Standard</div>
-                                  <div className="text-slate-600 text-xs font-medium leading-relaxed mb-2">
-                                    By using specific actions instead of wildcards, this policy implements the HIPAA "minimum necessary" standard, ensuring that access to PHI is limited to the minimum amount necessary to accomplish the intended purpose. This reduces the risk of unauthorized disclosure of PHI.
-                                  </div>
-                                  <div className="text-slate-500 text-xs font-semibold bg-slate-50 px-2 py-1 rounded border border-slate-200 inline-flex items-center space-x-1">
-                                    <span>HIPAA 164.502(b): Minimum necessary requirements</span>
-                                    {(() => {
-                                      const link = getComplianceLink('hipaa', '164.502(b)');
-                                      if (link) {
-                                        return (
-                                          <a href={link} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 transition-colors" title="View official HIPAA documentation">
-                                            <ExternalLink className="w-3 h-3" />
-                                          </a>
-                                        );
-                                      }
-                                      return null;
-                                    })()}
-                                  </div>
+                                <a 
+                                  href={getComplianceLink('HIPAA', '164.312(a)(2)(iv)') || '#'}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-slate-500 text-xs font-semibold bg-slate-50 px-2 py-1 rounded border border-slate-200 inline-flex items-center space-x-2 hover:bg-indigo-50 hover:border-indigo-300 hover:text-indigo-700 transition-all cursor-pointer"
+                                >
+                                  <span>HIPAA 164.312(a)(2)(iv): Encryption and decryption</span>
+                                  <ExternalLink className="w-3 h-3" />
+                                </a>
+                              </CollapsibleTile>
+                              <CollapsibleTile
+                                title="Minimum Necessary Standard"
+                                subtitle="Access limited to minimum amount necessary"
+                                icon={<CheckCircle className="w-5 h-5 text-green-600" />}
+                                defaultExpanded={false}
+                                variant="success"
+                              >
+                                <div className="text-slate-600 text-xs font-medium leading-relaxed mb-2">
+                                  By using specific actions instead of wildcards, this policy implements the HIPAA "minimum necessary" standard, ensuring that access to PHI is limited to the minimum amount necessary to accomplish the intended purpose. This reduces the risk of unauthorized disclosure of PHI.
                                 </div>
-                              </div>
+                                <a 
+                                  href={getComplianceLink('HIPAA', '164.502(b)') || '#'}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-slate-500 text-xs font-semibold bg-slate-50 px-2 py-1 rounded border border-slate-200 inline-flex items-center space-x-2 hover:bg-indigo-50 hover:border-indigo-300 hover:text-indigo-700 transition-all cursor-pointer"
+                                >
+                                  <span>HIPAA 164.502(b): Minimum necessary requirements</span>
+                                  <ExternalLink className="w-3 h-3" />
+                                </a>
+                              </CollapsibleTile>
                             </>
                           )}
                           
                           {compliance === 'sox' && (
                             <>
-                              <div className="flex items-start space-x-3 bg-white/60 rounded-lg p-4 border border-purple-200/50 shadow-sm hover:shadow-md transition-shadow">
-                                <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
-                                <div className="flex-1">
-                                  <div className="text-slate-900 font-bold text-sm mb-1.5">Access Controls & Segregation of Duties</div>
-                                  <div className="text-slate-600 text-xs font-medium leading-relaxed mb-2">
-                                    Policy uses specific permissions and resource restrictions to enforce access controls. This ensures that no single role has excessive privileges, supporting SOX Section 404 requirements for internal controls over financial reporting. Segregation of duties prevents conflicts of interest and reduces fraud risk.
-                                  </div>
-                                  <div className="text-slate-500 text-xs font-semibold bg-slate-50 px-2 py-1 rounded border border-slate-200 inline-flex items-center space-x-1">
-                                    <span>SOX Section 404: Management assessment of internal controls</span>
-                                    {/* Links should come from agent response - TODO: Use compliance_features from agent */}
-                                  </div>
+                              <CollapsibleTile
+                                title="Access Controls & Segregation of Duties"
+                                subtitle="Specific permissions enforce access controls"
+                                icon={<CheckCircle className="w-5 h-5 text-green-600" />}
+                                defaultExpanded={false}
+                                variant="success"
+                              >
+                                <div className="text-slate-600 text-xs font-medium leading-relaxed mb-2">
+                                  Policy uses specific permissions and resource restrictions to enforce access controls. This ensures that no single role has excessive privileges, supporting SOX Section 404 requirements for internal controls over financial reporting. Segregation of duties prevents conflicts of interest and reduces fraud risk.
                                 </div>
-                              </div>
-                              <div className="flex items-start space-x-3 bg-white/60 rounded-lg p-4 border border-purple-200/50 shadow-sm hover:shadow-md transition-shadow">
-                                <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
-                                <div className="flex-1">
-                                  <div className="text-slate-900 font-bold text-sm mb-1.5">Comprehensive Audit Logging</div>
-                                  <div className="text-slate-600 text-xs font-medium leading-relaxed mb-2">
-                                    CloudWatch Logs permissions enable detailed audit trails for financial data access. SOX requires organizations to maintain audit trails that track who accessed financial systems, when, and what changes were made. This policy ensures all access is logged and can be reviewed during SOX audits.
-                                  </div>
-                                  <div className="text-slate-500 text-xs font-semibold bg-slate-50 px-2 py-1 rounded border border-slate-200 inline-flex items-center space-x-1">
-                                    <span>SOX Section 302: CEO/CFO certification of financial statements</span>
-                                    {(() => {
-                                      const link = getComplianceLink('sox', 'Section 302');
-                                      if (link) {
-                                        return (
-                                          <a href={link} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 transition-colors" title="View official SOX documentation">
-                                            <ExternalLink className="w-3 h-3" />
-                                          </a>
-                                        );
-                                      }
-                                      return null;
-                                    })()}
-                                  </div>
+                                <a 
+                                  href={getComplianceLink('SOX', 'Section 404') || '#'}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-slate-500 text-xs font-semibold bg-slate-50 px-2 py-1 rounded border border-slate-200 inline-flex items-center space-x-2 hover:bg-indigo-50 hover:border-indigo-300 hover:text-indigo-700 transition-all cursor-pointer"
+                                >
+                                  <span>SOX Section 404: Management assessment of internal controls</span>
+                                  <ExternalLink className="w-3 h-3" />
+                                </a>
+                              </CollapsibleTile>
+                              <CollapsibleTile
+                                title="Comprehensive Audit Logging"
+                                subtitle="CloudWatch Logs enable detailed audit trails"
+                                icon={<CheckCircle className="w-5 h-5 text-green-600" />}
+                                defaultExpanded={false}
+                                variant="success"
+                              >
+                                <div className="text-slate-600 text-xs font-medium leading-relaxed mb-2">
+                                  CloudWatch Logs permissions enable detailed audit trails for financial data access. SOX requires organizations to maintain audit trails that track who accessed financial systems, when, and what changes were made. This policy ensures all access is logged and can be reviewed during SOX audits.
                                 </div>
-                              </div>
-                              <div className="flex items-start space-x-3 bg-white/60 rounded-lg p-4 border border-purple-200/50 shadow-sm hover:shadow-md transition-shadow">
-                                <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
-                                <div className="flex-1">
-                                  <div className="text-slate-900 font-bold text-sm mb-1.5">Change Management Controls</div>
-                                  <div className="text-slate-600 text-xs font-medium leading-relaxed mb-2">
-                                    Least-privilege design prevents unauthorized changes to financial systems. By limiting permissions to only what's necessary, this policy ensures that changes to financial data or systems require proper authorization and can be tracked, supporting SOX requirements for change management and preventing unauthorized modifications.
-                                  </div>
-                                  <div className="text-slate-500 text-xs font-semibold bg-slate-50 px-2 py-1 rounded border border-slate-200 inline-block">
-                                    SOX Section 404: Controls over financial reporting systems
-                                  </div>
+                                <a 
+                                  href={getComplianceLink('SOX', 'Section 302') || '#'}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-slate-500 text-xs font-semibold bg-slate-50 px-2 py-1 rounded border border-slate-200 inline-flex items-center space-x-2 hover:bg-indigo-50 hover:border-indigo-300 hover:text-indigo-700 transition-all cursor-pointer"
+                                >
+                                  <span>SOX Section 302: CEO/CFO certification of financial statements</span>
+                                  <ExternalLink className="w-3 h-3" />
+                                </a>
+                              </CollapsibleTile>
+                              <CollapsibleTile
+                                title="Change Management Controls"
+                                subtitle="Least-privilege prevents unauthorized changes"
+                                icon={<CheckCircle className="w-5 h-5 text-green-600" />}
+                                defaultExpanded={false}
+                                variant="success"
+                              >
+                                <div className="text-slate-600 text-xs font-medium leading-relaxed mb-2">
+                                  Least-privilege design prevents unauthorized changes to financial systems. By limiting permissions to only what's necessary, this policy ensures that changes to financial data or systems require proper authorization and can be tracked, supporting SOX requirements for change management and preventing unauthorized modifications.
                                 </div>
-                              </div>
-                              <div className="flex items-start space-x-3 bg-white/60 rounded-lg p-4 border border-purple-200/50 shadow-sm hover:shadow-md transition-shadow">
-                                <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
-                                <div className="flex-1">
-                                  <div className="text-slate-900 font-bold text-sm mb-1.5">Data Integrity Protection</div>
-                                  <div className="text-slate-600 text-xs font-medium leading-relaxed mb-2">
-                                    Resource-level restrictions and specific action permissions ensure that financial data can only be accessed and modified by authorized processes. This protects the integrity of financial records and supports SOX requirements for accurate financial reporting.
-                                  </div>
-                                  <div className="text-slate-500 text-xs font-semibold bg-slate-50 px-2 py-1 rounded border border-slate-200 inline-block">
-                                    SOX Section 302: Accuracy of financial records
-                                  </div>
+                                <div className="text-slate-500 text-xs font-semibold bg-slate-50 px-2 py-1 rounded border border-slate-200 inline-block">
+                                  SOX Section 404: Controls over financial reporting systems
                                 </div>
-                              </div>
+                              </CollapsibleTile>
+                              <CollapsibleTile
+                                title="Data Integrity Protection"
+                                subtitle="Resource-level restrictions protect financial data"
+                                icon={<CheckCircle className="w-5 h-5 text-green-600" />}
+                                defaultExpanded={false}
+                                variant="success"
+                              >
+                                <div className="text-slate-600 text-xs font-medium leading-relaxed mb-2">
+                                  Resource-level restrictions and specific action permissions ensure that financial data can only be accessed and modified by authorized processes. This protects the integrity of financial records and supports SOX requirements for accurate financial reporting.
+                                </div>
+                                <div className="text-slate-500 text-xs font-semibold bg-slate-50 px-2 py-1 rounded border border-slate-200 inline-block">
+                                  SOX Section 302: Accuracy of financial records
+                                </div>
+                              </CollapsibleTile>
                             </>
                           )}
                           
-                          {compliance === 'gdpr' && (
+                          {(!response.compliance_features || response.compliance_features.length === 0) && compliance === 'gdpr' && (
                             <>
                               <div className="flex items-start space-x-3 bg-white/60 rounded-lg p-4 border border-purple-200/50 shadow-sm hover:shadow-md transition-shadow">
                                 <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
@@ -2604,17 +3189,7 @@ What would you like to do?`,
                                   </div>
                                   <div className="text-slate-500 text-xs font-semibold bg-slate-50 px-2 py-1 rounded border border-slate-200 inline-flex items-center space-x-1">
                                     <span>GDPR Article 32: Security of processing</span>
-                                    {(() => {
-                                      const link = getComplianceLink('gdpr', 'Article 32');
-                                      if (link) {
-                                        return (
-                                          <a href={link} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 transition-colors" title="View official GDPR documentation">
-                                            <ExternalLink className="w-3 h-3" />
-                                          </a>
-                                        );
-                                      }
-                                      return null;
-                                    })()}
+                                    {/* Links should come from agent response - TODO: Use compliance_features from agent */}
                                   </div>
                                 </div>
                               </div>
@@ -2647,7 +3222,7 @@ What would you like to do?`,
                             </>
                           )}
                           
-                          {compliance === 'cis' && (
+                          {(!response.compliance_features || response.compliance_features.length === 0) && compliance === 'cis' && (
                             <>
                               <div className="flex items-start space-x-3 bg-white/60 rounded-lg p-4 border border-purple-200/50 shadow-sm hover:shadow-md transition-shadow">
                                 <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
@@ -2721,16 +3296,20 @@ What would you like to do?`,
                           </div>
                         </div>
                       </div>
-                    </>
-                  )}
-                </div>
+                </CollapsibleTile>
               )}
 
               {/* COMPLIANCE STATUS - Premium Subsection - Collapsible */}
               {response.compliance_status && Object.keys(response.compliance_status).length > 0 && (
-                <div className="mb-16 animate-fadeIn" style={{ animationDelay: '0.4s' }}>
-                  {/* Premium Subsection Header with Collapse Button */}
-                  <div className="mb-8 flex items-center justify-between">
+                <CollapsibleTile
+                  title="Compliance Status"
+                  subtitle="Detailed compliance validation results"
+                  icon={<ShieldCheck className="w-6 h-6 text-green-600" />}
+                  defaultExpanded={false}
+                  variant="info"
+                  className="mb-16 animate-fadeIn"
+                >
+                  <div className="mb-8">
                     <div>
                     <h3 className="text-3xl font-bold text-slate-900 tracking-tight flex items-center space-x-3 mb-2">
                       <CheckCircle className="w-7 h-7 text-blue-600" />
@@ -2753,9 +3332,7 @@ What would you like to do?`,
                     </button>
                   </div>
                   
-                  {showComplianceStatus && (
-                    <>
-                      {/* Overall Compliance Summary Banner */}
+                  {/* Overall Compliance Summary Banner */}
                       {(() => {
                     const frameworks = Object.values(response.compliance_status || {});
                     // Normalize statuses for counting
@@ -2973,9 +3550,7 @@ What would you like to do?`,
                       );
                     })}
                   </div>
-                    </>
-                  )}
-                </div>
+                </CollapsibleTile>
               )}
 
               {/* QUICK ACTIONS - Premium Subsection */}
@@ -3023,7 +3598,8 @@ What would you like to do?`,
                                 
                                 const result = await sendFollowUp(
                                   validationMessage,
-                                  conversationId
+                                  conversationId,
+                                  newCompliance
                                 );
                                 
                                 if (result) {
@@ -3035,10 +3611,11 @@ What would you like to do?`,
                                   };
                                   setChatHistory(prev => [...prev, assistantMessage]);
                                   
-                                  // Update response state - preserve policies, update compliance status
+                                  // Update response state - preserve policies, update compliance status and compliance_features
                                   setResponse(prev => prev ? {
                                     ...prev,
                                     compliance_status: result.compliance_status || prev.compliance_status,
+                                    compliance_features: result.compliance_features || prev.compliance_features,
                                     final_answer: result.final_answer || prev.final_answer,
                                     explanation: result.explanation || prev.explanation,
                                     conversation_history: result.conversation_history || prev.conversation_history
@@ -3725,6 +4302,613 @@ What would you like to do?`,
           )}
         </div>
       )}
+      
+      {/* Validation Results Section - REMOVED */}
+      {false && (
+        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="bg-white rounded-2xl shadow-xl border-2 border-emerald-200/50 p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-2xl font-bold text-slate-900 flex items-center space-x-3">
+                <Shield className="w-6 h-6 text-emerald-600" />
+                <span>Validation Results</span>
+              </h3>
+              <button
+                onClick={() => {}}
+                className="text-slate-400 hover:text-slate-600 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            {/* Risk Score */}
+            <div className="bg-gradient-to-r from-emerald-50 to-teal-50 rounded-xl p-4 mb-6">
+              <div className="text-center">
+                <div className="text-4xl font-black text-emerald-600 mb-2">
+                  {0}/100
+                </div>
+                <div className="text-sm font-semibold text-emerald-700">Security Risk Score</div>
+              </div>
+            </div>
+            
+            {/* Findings Summary */}
+            {false && (
+              <div className="mb-4">
+                <h4 className="text-lg font-bold text-slate-800 mb-3">Security Findings</h4>
+                <div className="space-y-2">
+                  {[].slice(0, 5).map((finding: any, index: number) => (
+                    <div key={index} className="flex items-start space-x-3 bg-slate-50 rounded-lg p-3">
+                      <AlertCircle className={`w-5 h-5 mt-0.5 ${
+                        finding.severity === 'Critical' ? 'text-red-600' :
+                        finding.severity === 'High' ? 'text-orange-600' :
+                        finding.severity === 'Medium' ? 'text-yellow-600' :
+                        'text-blue-600'
+                      }`} />
+                      <div className="flex-1">
+                        <div className="font-semibold text-slate-900">{finding.title}</div>
+                        <div className="text-sm text-slate-600">{finding.description}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            <div className="mt-4 text-center">
+              <button
+                onClick={() => {}}
+                className="px-6 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-semibold transition-all"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Manage AWS Modal (Deploy/Delete) */}
+      {showDeployModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border-2 border-orange-200/50">
+            <div className="sticky top-0 bg-gradient-to-r from-orange-50 to-red-50 px-6 py-4 border-b-2 border-orange-200/50">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-2xl font-bold text-slate-900 flex items-center space-x-3">
+                  <Upload className="w-6 h-6 text-orange-600" />
+                  <span>Manage IAM Roles</span>
+                </h3>
+                <button
+                  onClick={() => {
+                    setShowDeployModal(false);
+                    setDeployError(null);
+                    setDeploySuccess(null);
+                    setDeleteError(null);
+                    setDeleteSuccess(null);
+                    setManageTab('deploy');
+                  }}
+                  className="text-slate-400 hover:text-slate-600 transition-colors"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+              
+              {/* Single tab (deploy only) */}
+              <div className="flex space-x-2">
+                <button
+                  className="flex-1 px-4 py-2 rounded-lg font-semibold transition-all bg-white text-orange-600 shadow-md cursor-default"
+                  disabled
+                >
+                  Deploy Role
+                </button>
+              </div>
+            </div>
+            
+            <div className="p-6 space-y-6">
+              {/* Deploy Tab Content */}
+              {manageTab === 'deploy' && (
+                <>
+              {deploySuccess && (
+                <div className="bg-emerald-50 border-2 border-emerald-200 rounded-xl p-4">
+                  <div className="flex items-center space-x-3">
+                    <CheckCircle className="w-6 h-6 text-emerald-600" />
+                    <div>
+                      <div className="font-bold text-emerald-800">Deployment Successful!</div>
+                      <div className="text-sm text-emerald-700 mt-1">{deploySuccess}</div>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              {deployError && (
+                <div className="bg-red-50 border-2 border-red-200 rounded-xl p-4">
+                  <div className="flex items-center space-x-3">
+                    <AlertCircle className="w-6 h-6 text-red-600" />
+                    <div>
+                      <div className="font-bold text-red-800">Deployment Failed</div>
+                      <div className="text-sm text-red-700 mt-1">{deployError}</div>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-2">
+                    Role Name <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={deployRoleName}
+                    onChange={(e) => setDeployRoleName(e.target.value)}
+                    placeholder="my-lambda-role"
+                    className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:border-orange-400 focus:ring-2 focus:ring-orange-200 transition-all"
+                    required
+                  />
+                  <p className="text-xs text-slate-500 mt-1">Must be unique in your AWS account</p>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-2">
+                    AWS Region
+                  </label>
+                  <select
+                    value={deployRegion}
+                    onChange={(e) => setDeployRegion(e.target.value)}
+                    className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:border-orange-400 focus:ring-2 focus:ring-orange-200 transition-all"
+                  >
+                    <option value="us-east-1">US East (N. Virginia) - us-east-1</option>
+                    <option value="us-west-2">US West (Oregon) - us-west-2</option>
+                    <option value="eu-west-1">Europe (Ireland) - eu-west-1</option>
+                    <option value="ap-southeast-1">Asia Pacific (Singapore) - ap-southeast-1</option>
+                  </select>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-2">
+                    Description (Optional)
+                  </label>
+                  <textarea
+                    value={deployDescription}
+                    onChange={(e) => setDeployDescription(e.target.value)}
+                    placeholder="IAM role for Lambda function to access S3 and DynamoDB"
+                    rows={3}
+                    className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:border-orange-400 focus:ring-2 focus:ring-orange-200 transition-all resize-none"
+                  />
+                </div>
+                
+                <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4">
+                  <div className="flex items-start space-x-3">
+                    <Info className="w-5 h-5 text-blue-600 mt-0.5" />
+                    <div className="text-sm text-blue-800">
+                      <div className="font-bold mb-1">What will be deployed:</div>
+                      <ul className="list-disc list-inside space-y-1 text-blue-700">
+                        <li>IAM Role with the trust policy</li>
+                        <li>Permissions policy attached as inline policy</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="flex flex-col space-y-3 pt-4 border-t-2 border-slate-200">
+                <div className="flex items-center space-x-3">
+                  <button
+                    onClick={async () => {
+                      if (!deployRoleName.trim()) {
+                        setDeployError('Role name is required');
+                        return;
+                      }
+                      
+                      setDeployLoading(true);
+                      setDeployError(null);
+                      setDeploySuccess(null);
+                      
+                      try {
+                        if (!response || !response.policy) {
+                          setDeployError('No policy available to deploy');
+                          setDeployLoading(false);
+                          return;
+                        }
+                        
+                        const policy = response.policy;
+                        const trustPolicy = response.trust_policy || {};
+                        
+                        const result = await deployRole({
+                          role_name: deployRoleName.trim(),
+                          trust_policy: trustPolicy,
+                          permissions_policy: policy,
+                          description: deployDescription.trim() || undefined,
+                          aws_region: deployRegion,
+                          deploy_as_inline: true
+                        });
+                        
+                        if (result.success) {
+                          setDeploySuccess(result.message || `Role ${deployRoleName} deployed successfully! ARN: ${result.role_arn}`);
+                          setTimeout(() => {
+                            setShowDeployModal(false);
+                            setDeploySuccess(null);
+                          }, 3000);
+                        } else {
+                          setDeployError(result.error || 'Deployment failed');
+                        }
+                      } catch (err: any) {
+                        setDeployError(err.message || 'Failed to deploy role');
+                      } finally {
+                        setDeployLoading(false);
+                      }
+                    }}
+                    disabled={deployLoading || !deployRoleName.trim()}
+                    className="flex-1 px-6 py-3 bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 text-white font-bold rounded-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl flex items-center justify-center space-x-2"
+                  >
+                    {deployLoading ? (
+                      <>
+                        <RefreshCw className="w-5 h-5 animate-spin" />
+                        <span>Deploying...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="w-5 h-5" />
+                        <span>Deploy to AWS</span>
+                      </>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowDeployModal(false);
+                      setDeployError(null);
+                      setDeploySuccess(null);
+                    }}
+                    className="px-6 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition-all duration-300"
+                  >
+                    Cancel
+                  </button>
+                </div>
+                
+                {/* AWS CLI Command Option (advanced) */}
+                {response && response.policy && response.trust_policy && (
+                  <div className="border-t border-slate-200 pt-3">
+                    <button
+                      type="button"
+                      onClick={() => setShowCliCommands((prev) => !prev)}
+                      className="w-full px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition flex items-center justify-between"
+                    >
+                      <span className="flex items-center space-x-2">
+                        <Info className="w-4 h-4 text-slate-600" />
+                        <span>Advanced (optional): Show AWS CLI commands</span>
+                      </span>
+                      <span className="text-xs text-slate-500">{showCliCommands ? 'Hide' : 'Show'}</span>
+                    </button>
+
+                    {showCliCommands && (
+                      <div className="mt-3 bg-slate-50 border-2 border-slate-200 rounded-xl p-4">
+                        <div className="flex items-start justify-between space-x-3 mb-3">
+                          <div className="flex items-start space-x-2 flex-1">
+                            <Info className="w-5 h-5 text-slate-600 mt-0.5 flex-shrink-0" />
+                            <div className="text-sm text-slate-700">
+                              <div className="font-bold mb-1">💡 Deploy to Your Own AWS Account</div>
+                              <p className="text-slate-600">
+                                Copy these AWS CLI commands and run them in your terminal. This uses YOUR AWS credentials.
+                              </p>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => {
+                              const trustPolicyJson = JSON.stringify(response.trust_policy, null, 2);
+                              const permissionsPolicyJson = JSON.stringify(response.policy, null, 2);
+                              const roleName = deployRoleName.trim() || 'my-iam-role';
+                              const description = deployDescription.trim() || 'IAM role generated by Aegis IAM';
+                              
+                              const commands = `# Step 1: Create the IAM role with trust policy
+aws iam create-role \\
+  --role-name ${roleName} \\
+  --assume-role-policy-document '${trustPolicyJson.replace(/'/g, "'\"'\"'")}' \\
+  --description "${description}"
+
+# Step 2: Attach the permissions policy as an inline policy
+aws iam put-role-policy \\
+  --role-name ${roleName} \\
+  --policy-name ${roleName}-permissions \\
+  --policy-document '${permissionsPolicyJson.replace(/'/g, "'\"'\"'")}'
+
+# Verify the role was created
+aws iam get-role --role-name ${roleName}`;
+                              
+                              navigator.clipboard.writeText(commands);
+                              setCopied(true);
+                              setTimeout(() => setCopied(false), 2000);
+                            }}
+                            className="px-4 py-2 bg-slate-700 hover:bg-slate-800 text-white text-sm font-semibold rounded-lg transition-all flex items-center space-x-2 whitespace-nowrap"
+                          >
+                            {copied ? (
+                              <>
+                                <CheckCircle className="w-4 h-4" />
+                                <span>Copied!</span>
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="w-4 h-4" />
+                                <span>Copy AWS CLI Commands</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                        <div className="bg-slate-900 text-green-400 p-3 rounded-lg font-mono text-xs overflow-x-auto max-h-40 overflow-y-auto">
+                          <div className="whitespace-pre-wrap">{`# Deploy to your AWS account
+# Prerequisites: aws configure (uses YOUR credentials)
+
+# 1. Create role with trust policy
+aws iam create-role \\
+  --role-name ${deployRoleName.trim() || '[ROLE_NAME]'} \\
+  --assume-role-policy-document file://trust-policy.json \\
+  --description "${deployDescription.trim() || 'IAM role generated by Aegis IAM'}"
+
+# 2. Attach permissions as inline policy  
+aws iam put-role-policy \\
+  --role-name ${deployRoleName.trim() || '[ROLE_NAME]'} \\
+  --policy-name ${(deployRoleName.trim() || 'ROLE_NAME')}-permissions \\
+  --policy-document file://permissions-policy.json
+
+# 3. Verify creation
+aws iam get-role --role-name ${deployRoleName.trim() || '[ROLE_NAME]'}
+
+# Note: Save trust-policy.json and permissions-policy.json files first`}</div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+                </>
+              )}
+              
+              {/* Delete Tab Content */}
+              {manageTab === 'delete' && (
+                <>
+                  {deleteSuccess && (
+                    <div className="bg-emerald-50 border-2 border-emerald-200 rounded-xl p-4">
+                      <div className="flex items-center space-x-3">
+                        <CheckCircle className="w-6 h-6 text-emerald-600" />
+                        <div>
+                          <div className="font-bold text-emerald-800">Role Deleted Successfully!</div>
+                          <div className="text-sm text-emerald-700 mt-1">{deleteSuccess}</div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {deleteError && (
+                    <div className="bg-red-50 border-2 border-red-200 rounded-xl p-4">
+                      <div className="flex items-center space-x-3">
+                        <AlertCircle className="w-6 h-6 text-red-600" />
+                        <div>
+                          <div className="font-bold text-red-800">Delete Failed</div>
+                          <div className="text-sm text-red-700 mt-1">{deleteError}</div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  
+                  <div className="bg-red-50 border-2 border-red-200 rounded-xl p-4">
+                    <div className="flex items-start space-x-3">
+                      <AlertCircle className="w-5 h-5 text-red-600 mt-0.5" />
+                      <div className="text-sm text-red-800">
+                        <strong>Warning:</strong> This will permanently delete the IAM role and all attached policies. This action cannot be undone.
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-bold text-slate-700 mb-2">
+                        Role Name <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={deleteRoleName}
+                        onChange={(e) => setDeleteRoleName(e.target.value)}
+                        placeholder="test-role or my-lambda-role"
+                        className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:border-red-400 focus:ring-2 focus:ring-red-200 transition-all"
+                        required
+                      />
+                      <p className="text-xs text-slate-500 mt-1">Enter the exact role name to delete</p>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-bold text-slate-700 mb-2">
+                        AWS Region
+                      </label>
+                      <select
+                        value={deployRegion}
+                        onChange={(e) => setDeployRegion(e.target.value)}
+                        className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:border-red-400 focus:ring-2 focus:ring-red-200 transition-all"
+                      >
+                        <option value="us-east-1">US East (N. Virginia) - us-east-1</option>
+                        <option value="us-west-2">US West (Oregon) - us-west-2</option>
+                        <option value="eu-west-1">Europe (Ireland) - eu-west-1</option>
+                        <option value="ap-southeast-1">Asia Pacific (Singapore) - ap-southeast-1</option>
+                      </select>
+                    </div>
+                  </div>
+                  
+                  <div className="flex space-x-3 pt-4 border-t-2 border-slate-200">
+                    <button
+                      onClick={async () => {
+                        if (!deleteRoleName.trim()) {
+                          setDeleteError('Please enter a role name');
+                          return;
+                        }
+                        
+                        setDeleteLoading(true);
+                        setDeleteError(null);
+                        setDeleteSuccess(null);
+                        
+                        try {
+                          const result = await deleteRole({
+                            role_name: deleteRoleName,
+                            aws_region: deployRegion
+                          });
+                          
+                          if (result.success) {
+                            setDeleteSuccess(result.message || `Role "${deleteRoleName}" deleted successfully`);
+                            setDeleteRoleName('');
+                          } else {
+                            setDeleteError(result.error || 'Failed to delete role');
+                          }
+                        } catch (err) {
+                          setDeleteError(err instanceof Error ? err.message : 'An error occurred');
+                        } finally {
+                          setDeleteLoading(false);
+                        }
+                      }}
+                      disabled={deleteLoading || !deleteRoleName.trim()}
+                      className="flex-1 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white py-3 px-6 rounded-xl font-bold transition-all duration-300 shadow-lg hover:shadow-xl flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {deleteLoading ? (
+                        <>
+                          <RefreshCw className="w-5 h-5 animate-spin" />
+                          <span>Deleting...</span>
+                        </>
+                      ) : (
+                        <>
+                          <AlertCircle className="w-5 h-5" />
+                          <span>Delete Role</span>
+                        </>
+                      )}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowDeployModal(false);
+                        setDeleteError(null);
+                        setDeleteSuccess(null);
+                        setDeleteRoleName('');
+                        setManageTab('deploy');
+                      }}
+                      className="px-6 py-3 border-2 border-slate-300 text-slate-700 rounded-xl font-bold hover:bg-slate-50 transition-all"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Explain in Simple Terms Modal */}
+      {showExplainModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto border-2 border-indigo-200/50">
+            <div className="sticky top-0 bg-gradient-to-r from-indigo-50 to-purple-50 px-6 py-4 border-b-2 border-indigo-200/50 flex items-center justify-between">
+              <h3 className="text-2xl font-bold text-slate-900 flex items-center space-x-3">
+                <BookOpen className="w-6 h-6 text-indigo-600" />
+                <span>Simple Explanation</span>
+              </h3>
+              <button
+                onClick={() => {
+                  setShowExplainModal(false);
+                  setSimpleExplanation(null);
+                }}
+                className="text-slate-400 hover:text-slate-600 transition-colors"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            
+            <div className="p-6">
+              {explainLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <RefreshCw className="w-8 h-8 text-indigo-600 animate-spin" />
+                  <span className="ml-3 text-slate-600 font-medium">Generating explanation...</span>
+                </div>
+              ) : simpleExplanation ? (
+                <div className="prose prose-slate max-w-none">
+                  <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-xl p-6 border-2 border-indigo-200/50">
+                    <div className="text-slate-800 leading-relaxed space-y-4">
+                      {simpleExplanation.split('\n').map((line, index) => {
+                        // Handle headers (## headings - subsections)
+                        if (line.startsWith('## ')) {
+                          return (
+                            <h3 key={index} className="text-lg font-bold text-indigo-800 mt-4 mb-2">
+                              {line.replace('## ', '')}
+                            </h3>
+                          );
+                        }
+                        if (line.startsWith('# ')) {
+                          return (
+                            <h2 key={index} className="text-xl font-bold text-indigo-900 mb-3 border-b border-indigo-200 pb-2">
+                              {line.replace('# ', '')}
+                            </h2>
+                          );
+                        }
+                        // Handle bullet points (keep the bullet for list items, but detect if it's a heading)
+                        if (line.startsWith('- ')) {
+                          const content = line.replace('- ', '').trim();
+                          const formattedLine = content.replace(/\*\*(.*?)\*\*/g, '<strong class="text-indigo-700">$1</strong>');
+                          
+                          // Check if this is a main heading (ends with colon or question mark)
+                          const isHeading = content.endsWith(':') || content.endsWith('?');
+                          
+                          if (isHeading) {
+                            // Render as heading without bullet
+                            return (
+                              <h4 key={index} className="text-base font-bold text-indigo-800 mt-3 mb-1" dangerouslySetInnerHTML={{ __html: formattedLine }} />
+                            );
+                          }
+                          
+                          // Regular bullet point
+                          return (
+                            <div key={index} className="flex items-start gap-3 ml-4">
+                              <span className="text-indigo-500 mt-1.5">•</span>
+                              <span dangerouslySetInnerHTML={{ __html: formattedLine }} />
+                            </div>
+                          );
+                        }
+                        // Handle numbered lists
+                        const numberedMatch = line.match(/^(\d+)\.\s+(.+)/);
+                        if (numberedMatch) {
+                          const formattedLine = numberedMatch[2].replace(/\*\*(.*?)\*\*/g, '<strong class="text-indigo-700">$1</strong>');
+                          return (
+                            <div key={index} className="flex items-start gap-3 ml-4 mb-2">
+                              <span className="bg-indigo-600 text-white text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0">
+                                {numberedMatch[1]}
+                              </span>
+                              <span dangerouslySetInnerHTML={{ __html: formattedLine }} />
+                            </div>
+                          );
+                        }
+                        // Regular text with bold formatting
+                        if (line.trim()) {
+                          const formattedLine = line.replace(/\*\*(.*?)\*\*/g, '<strong class="text-indigo-700">$1</strong>');
+                          return (
+                            <p key={index} className="text-slate-700" dangerouslySetInnerHTML={{ __html: formattedLine }} />
+                          );
+                        }
+                        return null;
+                      })}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-12 text-slate-500">
+                  No explanation available
+                </div>
+              )}
+              
+              <div className="mt-6 flex justify-end">
+                <button
+                  onClick={() => {
+                    setShowExplainModal(false);
+                    setSimpleExplanation(null);
+                  }}
+                  className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      
     </div>
   );
 };
