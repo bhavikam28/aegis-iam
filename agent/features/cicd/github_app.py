@@ -17,7 +17,7 @@ import time
 import requests
 import logging
 from typing import Dict, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 logging.basicConfig(level=logging.INFO)
 
@@ -68,7 +68,7 @@ class GitHubApp:
         # Check if we have a valid token cached
         if installation_id in self.installations:
             installation = self.installations[installation_id]
-            if installation['expires_at'] > datetime.now():
+            if installation['expires_at'] > datetime.now(timezone.utc):
                 return installation['token']
         
         # Generate new token
