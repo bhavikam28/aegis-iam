@@ -381,6 +381,17 @@ def test_response():
     logging.info(f"🧪 Test endpoint returning: {test_data}")
     return JSONResponse(content=test_data)
 
+@app.get("/api/test")
+def api_test():
+    """Test /api/ routing and GitHub config"""
+    return {
+        "success": True,
+        "message": "API routing works",
+        "github_app_id_set": bool(os.getenv('GITHUB_APP_ID')),
+        "github_private_key_set": bool(os.getenv('GITHUB_PRIVATE_KEY')),
+        "github_webhook_secret_set": bool(os.getenv('GITHUB_WEBHOOK_SECRET'))
+    }
+
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
     logging.info(f"📥 Incoming request: {request.method} {request.url}")
