@@ -78,8 +78,8 @@ const AWSConfigModal: React.FC<AWSConfigModalProps> = ({ isOpen, onClose, onSave
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm">
-      <div className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 rounded-2xl shadow-2xl border border-gray-700">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+      <div className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto bg-white rounded-2xl shadow-2xl border-2 border-slate-200">
         {/* Header */}
         <div className="sticky top-0 z-10 bg-gradient-to-r from-blue-600 to-purple-600 px-6 py-4 rounded-t-2xl flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -97,12 +97,12 @@ const AWSConfigModal: React.FC<AWSConfigModalProps> = ({ isOpen, onClose, onSave
         {/* Content */}
         <div className="px-6 py-6 space-y-6">
           {/* Security Notice */}
-          <div className="bg-blue-900/30 border border-blue-500/50 rounded-lg p-4 flex items-start gap-3">
-            <AlertCircle className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
+          <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4 flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
             <div className="flex-1">
-              <h3 className="text-sm font-semibold text-blue-300 mb-1">Your Credentials Are Secure</h3>
-              <p className="text-xs text-blue-200/80 leading-relaxed">
-                Your AWS credentials are <strong>never stored</strong> on our servers. They are used only for the duration 
+              <h3 className="text-sm font-semibold text-blue-900 mb-1">Your Credentials Are Secure</h3>
+              <p className="text-xs text-slate-700 leading-relaxed">
+                Your AWS credentials are <strong className="text-blue-900">never stored</strong> on our servers. They are used only for the duration 
                 of your current session and are transmitted securely over HTTPS directly to AWS. We never log or persist 
                 your credentials.
               </p>
@@ -110,25 +110,25 @@ const AWSConfigModal: React.FC<AWSConfigModalProps> = ({ isOpen, onClose, onSave
           </div>
 
           {/* AWS Setup Guide */}
-          <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4">
-            <h3 className="text-sm font-semibold text-gray-300 mb-2 flex items-center gap-2">
-              <ExternalLink className="w-4 h-4" />
+          <div className="bg-slate-50 border-2 border-slate-200 rounded-xl p-4">
+            <h3 className="text-sm font-semibold text-slate-900 mb-2 flex items-center gap-2">
+              <ExternalLink className="w-4 h-4 text-slate-700" />
               Need AWS Credentials?
             </h3>
-            <p className="text-xs text-gray-400 mb-3">
+            <p className="text-xs text-slate-600 mb-3">
               Follow these steps to create an IAM user with programmatic access:
             </p>
-            <ol className="text-xs text-gray-400 space-y-1.5 list-decimal list-inside">
+            <ol className="text-xs text-slate-600 space-y-1.5 list-decimal list-inside">
               <li>Go to AWS Console → IAM → Users → Create User</li>
               <li>Enable "Programmatic access" (Access Key ID and Secret)</li>
-              <li>Attach policies: <code className="text-xs bg-gray-700 px-1 py-0.5 rounded">IAMFullAccess</code>, <code className="text-xs bg-gray-700 px-1 py-0.5 rounded">AmazonBedrockFullAccess</code></li>
+              <li>Attach policies: <code className="text-xs bg-white border border-slate-300 px-2 py-0.5 rounded text-slate-900 font-mono">IAMFullAccess</code>, <code className="text-xs bg-white border border-slate-300 px-2 py-0.5 rounded text-slate-900 font-mono">AmazonBedrockFullAccess</code></li>
               <li>Download the credentials CSV file</li>
             </ol>
             <a
               href="https://docs.aws.amazon.com/IAM/latest/UserGuide/id_users_create.html"
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 mt-3 transition-colors"
+              className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 font-medium mt-3 transition-colors"
             >
               Read AWS IAM User Guide <ExternalLink className="w-3 h-3" />
             </a>
@@ -138,8 +138,8 @@ const AWSConfigModal: React.FC<AWSConfigModalProps> = ({ isOpen, onClose, onSave
           <div className="space-y-4">
             {/* Access Key ID */}
             <div>
-              <label htmlFor="accessKeyId" className="block text-sm font-medium text-gray-300 mb-2">
-                Access Key ID <span className="text-red-400">*</span>
+              <label htmlFor="accessKeyId" className="block text-sm font-semibold text-slate-900 mb-2">
+                Access Key ID <span className="text-red-500">*</span>
               </label>
               <input
                 type="text"
@@ -150,25 +150,25 @@ const AWSConfigModal: React.FC<AWSConfigModalProps> = ({ isOpen, onClose, onSave
                   setErrors((prev) => ({ ...prev, accessKeyId: undefined }));
                 }}
                 placeholder="AKIAIOSFODNN7EXAMPLE"
-                className={`w-full px-4 py-3 bg-gray-800 border ${
-                  errors.accessKeyId ? 'border-red-500' : 'border-gray-600'
-                } rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all font-mono text-sm`}
+                className={`w-full px-4 py-3 bg-white border-2 ${
+                  errors.accessKeyId ? 'border-red-400' : 'border-slate-300'
+                } rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all font-mono text-sm`}
               />
               {errors.accessKeyId && (
-                <p className="text-xs text-red-400 mt-1 flex items-center gap-1">
+                <p className="text-xs text-red-600 mt-1.5 flex items-center gap-1 font-medium">
                   <AlertCircle className="w-3 h-3" />
                   {errors.accessKeyId}
                 </p>
               )}
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-xs text-slate-500 mt-1.5">
                 Format: 20 characters starting with AKIA
               </p>
             </div>
 
             {/* Secret Access Key */}
             <div>
-              <label htmlFor="secretAccessKey" className="block text-sm font-medium text-gray-300 mb-2">
-                Secret Access Key <span className="text-red-400">*</span>
+              <label htmlFor="secretAccessKey" className="block text-sm font-semibold text-slate-900 mb-2">
+                Secret Access Key <span className="text-red-500">*</span>
               </label>
               <div className="relative">
                 <input
@@ -180,40 +180,40 @@ const AWSConfigModal: React.FC<AWSConfigModalProps> = ({ isOpen, onClose, onSave
                     setErrors((prev) => ({ ...prev, secretAccessKey: undefined }));
                   }}
                   placeholder="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
-                  className={`w-full px-4 py-3 bg-gray-800 border ${
-                    errors.secretAccessKey ? 'border-red-500' : 'border-gray-600'
-                  } rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all font-mono text-sm pr-20`}
+                  className={`w-full px-4 py-3 bg-white border-2 ${
+                    errors.secretAccessKey ? 'border-red-400' : 'border-slate-300'
+                  } rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all font-mono text-sm pr-20`}
                 />
                 <button
                   type="button"
                   onClick={() => setShowSecret(!showSecret)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 hover:text-gray-300 transition-colors"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-blue-600 hover:text-blue-700 transition-colors"
                 >
                   {showSecret ? 'Hide' : 'Show'}
                 </button>
               </div>
               {errors.secretAccessKey && (
-                <p className="text-xs text-red-400 mt-1 flex items-center gap-1">
+                <p className="text-xs text-red-600 mt-1.5 flex items-center gap-1 font-medium">
                   <AlertCircle className="w-3 h-3" />
                   {errors.secretAccessKey}
                 </p>
               )}
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-xs text-slate-500 mt-1.5">
                 Format: 40 characters (alphanumeric + symbols)
               </p>
             </div>
 
             {/* Region */}
             <div>
-              <label htmlFor="region" className="block text-sm font-medium text-gray-300 mb-2">
-                <Globe className="w-4 h-4 inline-block mr-1" />
-                AWS Region <span className="text-red-400">*</span>
+              <label htmlFor="region" className="block text-sm font-semibold text-slate-900 mb-2">
+                <Globe className="w-4 h-4 inline-block mr-1 text-slate-700" />
+                AWS Region <span className="text-red-500">*</span>
               </label>
               <select
                 id="region"
                 value={region}
                 onChange={(e) => setRegion(e.target.value)}
-                className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                className="w-full px-4 py-3 bg-white border-2 border-slate-300 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all font-medium"
               >
                 {AWS_REGIONS.map((r) => (
                   <option key={r.value} value={r.value}>
@@ -225,12 +225,12 @@ const AWSConfigModal: React.FC<AWSConfigModalProps> = ({ isOpen, onClose, onSave
           </div>
 
           {/* Cost Warning */}
-          <div className="bg-yellow-900/30 border border-yellow-500/50 rounded-lg p-4 flex items-start gap-3">
-            <AlertCircle className="w-5 h-5 text-yellow-400 flex-shrink-0 mt-0.5" />
+          <div className="bg-amber-50 border-2 border-amber-300 rounded-xl p-4 flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
             <div className="flex-1">
-              <h3 className="text-sm font-semibold text-yellow-300 mb-1">AWS Charges Apply</h3>
-              <p className="text-xs text-yellow-200/80 leading-relaxed">
-                Using Aegis IAM will invoke AWS Bedrock API calls on <strong>your AWS account</strong>. These calls incur 
+              <h3 className="text-sm font-semibold text-amber-900 mb-1">AWS Charges Apply</h3>
+              <p className="text-xs text-slate-700 leading-relaxed">
+                Using Aegis IAM will invoke AWS Bedrock API calls on <strong className="text-amber-900">your AWS account</strong>. These calls incur 
                 charges based on AWS Bedrock pricing (~$3-15 per 1M tokens). You are responsible for all AWS costs.
               </p>
             </div>
@@ -238,11 +238,11 @@ const AWSConfigModal: React.FC<AWSConfigModalProps> = ({ isOpen, onClose, onSave
 
           {/* Success Message (if reconfiguring) */}
           {currentCredentials && (
-            <div className="bg-green-900/30 border border-green-500/50 rounded-lg p-4 flex items-start gap-3">
-              <CheckCircle className="w-5 h-5 text-green-400 flex-shrink-0 mt-0.5" />
+            <div className="bg-emerald-50 border-2 border-emerald-300 rounded-xl p-4 flex items-start gap-3">
+              <CheckCircle className="w-5 h-5 text-emerald-600 flex-shrink-0 mt-0.5" />
               <div className="flex-1">
-                <h3 className="text-sm font-semibold text-green-300 mb-1">Credentials Already Configured</h3>
-                <p className="text-xs text-green-200/80">
+                <h3 className="text-sm font-semibold text-emerald-900 mb-1">Credentials Already Configured</h3>
+                <p className="text-xs text-slate-700">
                   You can update your credentials below and save to reconfigure.
                 </p>
               </div>
@@ -251,16 +251,16 @@ const AWSConfigModal: React.FC<AWSConfigModalProps> = ({ isOpen, onClose, onSave
         </div>
 
         {/* Footer */}
-        <div className="sticky bottom-0 bg-gray-800/95 backdrop-blur-sm px-6 py-4 rounded-b-2xl flex items-center justify-between border-t border-gray-700">
+        <div className="sticky bottom-0 bg-slate-50 border-t-2 border-slate-200 px-6 py-4 rounded-b-2xl flex items-center justify-between">
           <button
             onClick={handleCancel}
-            className="px-5 py-2.5 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors font-medium"
+            className="px-6 py-2.5 bg-white border-2 border-slate-300 hover:border-slate-400 hover:bg-slate-50 text-slate-700 rounded-xl transition-all font-semibold"
           >
             Cancel
           </button>
           <button
             onClick={handleSave}
-            className="px-5 py-2.5 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-lg transition-all font-medium shadow-lg"
+            className="px-6 py-2.5 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-xl transition-all font-semibold shadow-lg hover:shadow-xl"
           >
             Save & Continue
           </button>
