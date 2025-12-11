@@ -20,6 +20,7 @@ from features.validation.policy_scorer import calculate_policy_scores, generate_
 from utils.compliance_links import get_compliance_link
 from utils.iac_exporter import export_to_cloudformation, export_to_terraform, export_to_yaml
 from utils.iam_deployer import IAMDeployer
+from utils.secure_credentials import SecureCredentials, RateLimiter
 
 # Standard library imports
 import uuid
@@ -34,6 +35,45 @@ from dotenv import load_dotenv
 load_dotenv()
 
 logging.basicConfig(level=logging.INFO)
+
+# ============================================
+# REQUEST MODELS WITH SECURE CREDENTIALS
+# ============================================
+
+class AWSCredentials(BaseModel):
+    """
+    User-provided AWS credentials
+    
+    SECURITY: These credentials are:
+    - Never stored in database
+    - Never logged
+    - Used only for the current request
+    - Passed directly to AWS SDK
+    """
+    access_key_id: str
+    secret_access_key: str
+    region: str = "us-east-1"
+    
+    @field_validator('access_key_id')
+    @classmethod
+    def validate_access_key(cls, v):
+        if not SecureCredentials.validate_access_key_id(v):
+            raise ValueError("Invalid AWS Access Key ID format")
+        return v
+    
+    @field_validator('secret_access_key')
+    @classmethod
+    def validate_secret_key(cls, v):
+        if not SecureCredentials.validate_secret_access_key(v):
+            raise ValueError("Invalid AWS Secret Access Key format")
+        return v
+    
+    @field_validator('region')
+    @classmethod
+    def validate_region(cls, v):
+        if not SecureCredentials.validate_region(v):
+            raise ValueError("Invalid AWS region")
+        return v
 
 def extract_score_breakdown(text: str) -> dict:
     """Extract separate score breakdowns for permissions and trust policies"""
@@ -325,6 +365,7 @@ class GenerationRequest(BaseModel):
     is_followup: bool = False
     compliance: Optional[str] = 'general'
     restrictive: Optional[bool] = True
+    aws_credentials: Optional[AWSCredentials] = None  # User-provided credentials
     
     @field_validator('description')
     @classmethod
@@ -348,11 +389,13 @@ class ValidationRequest(BaseModel):
     role_arn: Optional[str] = None
     compliance_frameworks: Optional[List[str]] = ["general"]
     mode: str = "quick"
+    aws_credentials: Optional[AWSCredentials] = None  # User-provided credentials
 
 class AuditRequest(BaseModel):
     mode: str = "full"  # full or quick
     aws_region: str = "us-east-1"
     compliance_frameworks: Optional[List[str]] = ["pci_dss", "hipaa", "sox", "gdpr", "cis"]
+    aws_credentials: Optional[AWSCredentials] = None  # User-provided credentials
 
 conversations: Dict[str, List[Dict]] = {}
 conversation_cache: Dict[str, Dict[str, Any]] = {}
