@@ -9,9 +9,19 @@ env/
 ENV/
 .venv
 
-# Environment variables
+# Environment variables (CRITICAL: Never commit these!)
 .env
 .env.local
+.env.production
+.env.*.local
+*.pem
+*.key
+
+# AWS Credentials (CRITICAL: Never commit these!)
+credentials
+config
+*.csv
+*credentials.json
 
 # IDE
 .vscode/
@@ -30,4 +40,16 @@ build/
 
 # Logs
 *.log
+
+# Test files
+test_*.py
+*_test.py
+verify_*.py
+post_*.py
+
+# Internal docs (keep only README.md)
+*_GUIDE.md
+*_SETUP.md
+*_STEPS.txt
+*_IMPLEMENTATION.md
 

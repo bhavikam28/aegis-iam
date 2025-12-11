@@ -1,555 +1,537 @@
-# Aegis IAM - AI-Powered IAM Policy Generator
+# 🛡️ Aegis IAM
 
-Aegis IAM is an intelligent conversational agent that generates secure, least-privilege AWS IAM policies using natural language processing. Built on Amazon Bedrock with Claude 3.7 Sonnet, the system enables users to create compliant IAM policies through iterative dialogue while maintaining adherence to AWS Foundational Security Best Practices.
+### AI-Powered IAM Security Platform for AWS
 
----
+<div align="center">
 
-## Table of Contents
-- [Features](#features)
-- [Architecture](#architecture)
-- [Security Validation](#security-validation)
-- [Technology Stack](#technology-stack)
-- [Prerequisites](#prerequisites)
-- [Installation](#installation)
-- [Configuration](#configuration)
-- [Usage](#usage)
-- [Project Structure](#project-structure)
-- [API Documentation](#api-documentation)
-- [Security Standards](#security-standards)
-- [Development](#development)
-- [Extensibility](#extensibility)
-- [Troubleshooting](#troubleshooting)
-- [Future Roadmap](#future-roadmap)
-- [Contributing](#contributing)
-- [License](#license)
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-aegis--iam.vercel.app-blue?style=for-the-badge)](https://aegis-iam.vercel.app)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg?style=for-the-badge)](LICENSE)
+[![Powered by Claude](https://img.shields.io/badge/Powered%20by-Claude%203.7-purple?style=for-the-badge)](https://www.anthropic.com/claude)
+
+**Generate, validate, and audit AWS IAM policies using AI-powered autonomous agents**
+
+[Live Demo](https://aegis-iam.vercel.app) · [Report Bug](https://github.com/bhavikam28/aegis-iam/issues) · [Request Feature](https://github.com/bhavikam28/aegis-iam/issues)
+
+</div>
 
 ---
 
-## Features
+## 🚀 What is Aegis IAM?
 
-### Core Capabilities
-* **Conversational Policy Generation**: Generate IAM policies using natural language descriptions rather than manual JSON crafting.
-* **Iterative Refinement**: Refine policies through follow-up conversations with contextual awareness.
-* **Real-time Security Scoring**: Validate policies against AWS Foundational Security Best Practices with a dynamic score (0-100).
-* **Least Privilege by Default**: Automatically generates restrictive policies following the principle of least privilege.
-* **Multi-standard Compliance**: Validation against CIS AWS Foundations Benchmark, NIST 800-53, and PCI DSS requirements.
-* **Chat History**: Full conversation context is maintained for transparency and auditability.
+Aegis IAM is an **AI-powered security platform** that helps you create, validate, and audit AWS IAM policies using **Claude 3.7 Sonnet**. It combines natural language processing with AWS security best practices to make IAM policy management accessible to everyone—from beginners to security experts.
 
-### User Experience
-* **Intelligent Suggestions**: AI-powered refinement suggestions are provided after initial policy generation.
-* **Visual Policy Display**: Syntax-highlighted JSON with copy/download functionality.
-* **Detailed Explanations**: Human-readable explanations of policy permissions and restrictions.
-* **Security Insights**: Real-time feedback on policy security posture with actionable recommendations.
+### ✨ Key Features
+
+#### 🤖 **AI Policy Generation**
+Transform natural language descriptions into production-ready IAM policies with comprehensive security analysis.
+- **Natural language input** → Complete IAM policies (Permissions + Trust)
+- **Security scoring** (0-100) with detailed breakdown
+- **Compliance validation** (PCI DSS, HIPAA, SOX, GDPR, CIS)
+- **Conversational refinement** via AI chatbot
+- **Multi-format export** (JSON, Terraform, CloudFormation, YAML)
+
+#### 🔍 **Deep Security Validation**
+Analyze existing IAM policies for security vulnerabilities and compliance violations.
+- **Risk assessment** with severity-based findings
+- **Compliance framework** validation
+- **Actionable recommendations** with code snippets
+- **Quick wins** for immediate security improvements
+- **PDF/Email export** for sharing reports
+
+#### 🔬 **Autonomous Account Audit**
+Full AWS account security scan powered by autonomous AI agents.
+- **Automatic role discovery** across your entire account
+- **CloudTrail analysis** (90-day usage comparison)
+- **Unused permission detection**
+- **Pattern recognition** for systemic issues
+- **Comprehensive reporting** with prioritized risks
+
+#### 🔄 **CI/CD Integration**
+Proactive security analysis in your development workflow.
+- **GitHub App integration** (zero config)
+- **Automatic PR analysis** for IAM policy changes
+- **Inline security comments** on pull requests
+- **CloudTrail usage comparison** for new permissions
+- **Works with Terraform, CloudFormation, CDK**, and raw JSON
 
 ---
 
-## Architecture
+## 🎯 Why Aegis IAM?
+
+### The Problem
+- IAM policies are complex and error-prone
+- Security best practices are hard to implement
+- Compliance requirements are overwhelming
+- Manual audits are time-consuming
+- Overprivileged roles create security risks
+
+### The Solution
+Aegis IAM uses **AI agents** powered by Claude 3.7 Sonnet to:
+- ✅ Generate secure policies from plain English
+- ✅ Validate against 5+ compliance frameworks
+- ✅ Audit entire AWS accounts autonomously
+- ✅ Catch security issues before they're merged
+- ✅ Provide actionable, specific recommendations
+
+---
+
+## 🏗️ Architecture
+
+### Tech Stack
+
+**Frontend:**
+- React 18 + TypeScript
+- Tailwind CSS
+- Vite
+- Real-time SSE (Server-Sent Events)
+
+**Backend:**
+- FastAPI (Python 3.11+)
+- AWS Bedrock (Claude 3.7 Sonnet)
+- boto3 (AWS SDK)
+- Strands Agents SDK
+- MCP (Model Context Protocol)
+
+**AWS Services:**
+- Amazon Bedrock
+- AWS IAM
+- AWS CloudTrail
+- AWS STS
+
+**CI/CD:**
+- GitHub App (OAuth)
+- Webhook integration
+- Automated analysis
 
 ### System Design
 
-┌─────────────────────────────────────────────────────────────┐
-│                     Frontend Layer                           │
-│            React + TypeScript + Tailwind CSS                 │
-└──────────────────────┬──────────────────────────────────────┘
-│ HTTP REST API
-↓
-┌─────────────────────────────────────────────────────────────┐
-│                   Backend Layer (FastAPI)                    │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │          Conversation Management                     │   │
-│  │          Security Validation Module                  │   │
-│  └─────────────────────┬───────────────────────────────┘   │
-└────────────────────────┼───────────────────────────────────┘
-│
-↓
-┌─────────────────────────────────────────────────────────────┐
-│              AI Agent Layer (Strands Framework)              │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │  Policy Agent: Plan → Act → Reflect                 │   │
-│  │  System Prompt: IAM Security Expert                 │   │
-│  └─────────────────────┬───────────────────────────────┘   │
-└────────────────────────┼───────────────────────────────────┘
-│ Tool Invocation
-↓
-┌─────────────────────────────────────────────────────────────┐
-│           Amazon Bedrock (Claude 3.7 Sonnet)                │
-│          Model: us.anthropic.claude-3-7-sonnet              │
-└─────────────────────────────────────────────────────────────┘
+```
+┌─────────────────┐
+│  React Frontend │ ← User enters AWS credentials
+│  (Vercel)       │
+└────────┬────────┘
+         │ HTTPS (credentials in request body)
+         ▼
+┌─────────────────┐
+│  FastAPI Backend│ ← Credentials used for request only
+│  (Render)       │ ← NEVER stored or logged
+└────────┬────────┘
+         │
+         ├─► Amazon Bedrock (Claude 3.7)
+         ├─► AWS IAM API
+         ├─► AWS CloudTrail
+         └─► AWS STS
+```
 
-
-### Component Interaction Flow
-1.  **User Input**: User describes IAM requirements in natural language.
-2.  **API Layer**: FastAPI receives the request and manages the conversation state.
-3.  **Agent Processing**: The Strands agent analyzes the request with contextual awareness.
-4.  **LLM Generation**: Claude 3.7 Sonnet generates an IAM policy following security prompts.
-5.  **Security Validation**: The policy is validated against AWS security controls.
-6.  **Response Delivery**: A formatted policy, explanation, and security score are returned to the user.
-7.  **Iterative Refinement**: The user can send follow-up messages to modify the policy.
+**Security Model:**
+- User credentials stored **only in React state** (memory)
+- Transmitted via **HTTPS** to backend
+- Backend uses credentials **only for current request**
+- Automatically **cleared after request**
+- **Never logged or persisted** anywhere
 
 ---
 
-## Security Validation
+## 🚀 Getting Started
 
-### Validation Framework
-Aegis IAM implements a pluggable security validation architecture based on AWS Foundational Security Best Practices. The system validates policies against documented AWS Security Hub IAM controls.
+### Prerequisites
 
-### Implemented Controls
-| Control ID      | Severity | Description                                           | Impact      |
-| --------------- | -------- | ----------------------------------------------------- | ----------- |
-| **IAM.1** | HIGH     | No full `*:` administrative privileges                | -35 points  |
-| **IAM.21** | LOW      | No wildcard service actions (e.g., `ec2:*`)           | -10 points  |
-| **Resource Wildcard** | MEDIUM   | No wildcard resources (`Resource: "*"`)             | -20 points  |
-| **Condition Check** | MEDIUM   | Policies should include conditions (IP, VPC, MFA) | -10 points  |
+**For Users:**
+- AWS Account with:
+  - IAM access (to manage policies)
+  - Bedrock access (Claude 3.7 Sonnet enabled)
+- AWS Access Key ID and Secret Access Key
 
-### Scoring Algorithm
-The final score is calculated based on a starting score of 100, with penalties applied for each failed control.
-`Final Score = max(0, 100 - Σ(severity_penalties))`
+**For Developers:**
+- Node.js 18+
+- Python 3.11+
+- AWS CLI configured
 
-| Score Range | Grade | Meaning              |
-| ----------- | ----- | -------------------- |
-| 90-100      | A     | Excellent            |
-| 80-89       | B     | Good                 |
-| 70-79       | C     | Acceptable           |
-| 60-69       | D     | Needs Improvement    |
-| 0-59        | F     | Critical Issues      |
+### Using Aegis IAM (Hosted)
 
-### Control Selection Rationale
-Out of 28 AWS Security Hub IAM controls, only **IAM.1** and **IAM.21** directly validate IAM policy JSON content. The remaining controls (IAM.2-IAM.28) address user/role management, account-level policies, and root user security, which are outside the scope of Aegis IAM's policy generation capabilities.
+1. **Visit the live app:** [https://aegis-iam.vercel.app](https://aegis-iam.vercel.app)
 
----
+2. **Configure AWS credentials** when prompted:
+   - Access Key ID
+   - Secret Access Key
+   - AWS Region
 
-## Technology Stack
-* **Backend**
-    * **Python 3.13**: Core backend language
-    * **FastAPI**: Modern async web framework for REST API
-    * **Strands Agents SDK**: Agentic AI framework with tool calling
-    * **Boto3**: AWS SDK for Bedrock integration
-    * **Uvicorn**: ASGI server for production deployment
-    * **Pydantic**: Data validation and settings management
-* **Frontend**
-    * **React 18**: UI component framework
-    * **TypeScript**: Type-safe JavaScript
-    * **Vite**: Fast build tool and dev server
-    * **Tailwind CSS**: Utility-first CSS framework
-    * **Lucide React**: Icon library
-* **AI/ML**
-    * **Amazon Bedrock**: Managed service for foundation models
-    * **Claude 3.7 Sonnet**: Anthropic's latest language model
-    * **Model ID**: `us.anthropic.claude-3-7-sonnet-20250219-v1:0`
+3. **Choose a feature:**
+   - Generate Policy → Create new IAM policies
+   - Validate Policy → Analyze existing policies
+   - Audit Account → Scan entire AWS account
+   - CI/CD Integration → Automate PR reviews
 
----
+4. **Get results** instantly with AI-powered analysis!
 
-## Prerequisites
+### Running Locally
 
-### System Requirements
-* **Operating System**: Windows 10/11, macOS 11+, or Linux
-* **Python**: 3.10 or higher
-* **Node.js**: 18.0 or higher
-* **npm**: 9.0 or higher
-
-### AWS Requirements
-* **AWS Account**: Free tier eligible
-* **AWS CLI**: Configured with credentials
-* **Bedrock Access**: Claude 3.7 Sonnet model access in the `us-east-1` region
-* **IAM Permissions**: `bedrock:InvokeModel` permission
-
----
-
-## Installation
-
-### Backend Setup
+#### 1. Clone the repository
 ```bash
-# Navigate to agent directory
+git clone https://github.com/bhavikam28/aegis-iam.git
+cd aegis-iam
+```
+
+#### 2. Backend Setup
+```bash
 cd agent
 
 # Create virtual environment
 python -m venv venv
-
-# Activate virtual environment
-# Windows:
-venv\Scripts\activate
-# macOS/Linux:
-source venv/bin/activate
+source venv/bin/activate  # On Windows: venv\Scripts\activate
 
 # Install dependencies
 pip install -r requirements.txt
-Frontend Setup
-Bash
 
-# Navigate to frontend directory
+# Run backend
+uvicorn main:app --reload --port 8000
+```
+
+#### 3. Frontend Setup (New Terminal)
+```bash
 cd frontend
 
 # Install dependencies
 npm install
-Configuration
-AWS Credentials
-Configure your AWS credentials using one of the following methods:
 
-Method 1: AWS CLI Configuration
+# Create .env file
+echo "VITE_API_URL=http://localhost:8000" > .env
 
-Bash
-
-aws configure
-# Enter Access Key ID, Secret Access Key, and Region (us-east-1)
-Method 2: Environment Variables
-
-Bash
-
-export AWS_ACCESS_KEY_ID=your_access_key
-export AWS_SECRET_ACCESS_KEY=your_secret_key
-export AWS_REGION=us-east-1
-Method 3: IAM Roles (for EC2/Lambda deployment)
-Attach an IAM role with the bedrock:InvokeModel permission to your compute resource.
-
-Bedrock Model Access
-Navigate to the AWS Bedrock console.
-
-Go to "Model access" in the sidebar.
-
-Request access to Anthropic Claude 3.7 Sonnet.
-
-Wait for approval (typically instant for supported regions).
-
-Usage
-Starting the Application
-Terminal 1 - Backend:
-
-Bash
-
-cd agent
-# On Windows: venv\Scripts\activate
-# On macOS/Linux: source venv/bin/activate
-uvicorn main:app --reload
-# Server runs on http://localhost:8000
-Terminal 2 - Frontend:
-
-Bash
-
-cd frontend
+# Run frontend
 npm run dev
-# Application runs on http://localhost:5173
-Basic Workflow
-Initial Request: Enter permission requirements in natural language.
+```
 
-Example: "IAM policy for read-only access to S3 bucket named 'company-documents'"
+#### 4. Access the app
+Open [http://localhost:5173](http://localhost:5173) in your browser.
 
-Review Generated Policy: Examine the JSON policy, explanation, and security score.
+---
 
-Refine Policy: Use suggested refinements or ask custom follow-up questions.
+## 💰 AWS Costs
 
-Example: "Restrict to red-team/* prefix only"
+**Important:** Aegis IAM invokes AWS Bedrock on **your AWS account**. You are responsible for AWS charges.
 
-Example: "Add organization ID condition for o-abc123xyz"
+### Pricing Breakdown (as of Dec 2024)
+- **Claude 3.7 Sonnet:** ~$3-15 per 1M tokens
+- **Typical costs per operation:**
+  - Policy generation: $0.01 - $0.05
+  - Policy validation: $0.02 - $0.08
+  - Full account audit: $0.10 - $0.50
+- **IAM/STS/CloudTrail API calls:** Included in AWS Free Tier
 
-Iterate: Continue refining until the policy meets your requirements.
+**The Aegis IAM application itself is FREE.** All AWS costs are based on your Bedrock usage.
 
-Export: Copy or download the final JSON policy.
+---
 
-Example Interaction
-User: "IAM policy for read-only access to S3 bucket named 'company-documents'"
-Agent: [Generates policy with s3:GetObject and s3:ListBucket]
-Security Score: 100/100
+## 🔒 Security & Privacy
 
-User: "Restrict to marketing/* prefix and add IP condition for 10.0.0.0/16"
-Agent: [Updates policy with prefix restriction and IP condition]
-Security Score: 100/100
+### We Never Store Your Credentials
 
-Project Structure
-aegis-iam/
-├── agent/                          # Backend directory
-│   ├── main.py                     # FastAPI server & API endpoints
-│   ├── policy_agent.py             # Strands AI agent configuration
-│   ├── bedrock_tool.py             # Amazon Bedrock integration tool
-│   ├── security_validator.py       # Security validation module
-│   ├── requirements.txt            # Python dependencies
-│   └── venv/                       # Python virtual environment
-│
-├── frontend/                       # Frontend directory
-│   ├── src/
-│   │   ├── components/
-│   │   │   ├── Pages/
-│   │   │   │   ├── GeneratePolicy.tsx  # Main policy generation UI
-│   │   │   │   ├── ValidatePolicy.tsx  # Policy validation UI
-│   │   │   │   └── AnalyzeHistory.tsx  # Usage analysis UI
-│   │   │   ├── UI/
-│   │   │   │   ├── LoadingSpinner.tsx
-│   │   │   │   ├── SecurityScore.tsx
-│   │   │   │   └── CodeBlock.tsx
-│   │   │   └── Layout/
-│   │   │       └── Dashboard.tsx
-│   │   ├── services/
-│   │   │   ├── api.ts              # Backend API integration
-│   │   │   └── mockData.ts         # Mock data for development
-│   │   ├── types/
-│   │   │   └── index.ts            # TypeScript type definitions
-│   │   ├── App.tsx                 # Root component
-│   │   └── main.tsx                # Application entry point
-│   ├── package.json
-│   └── vite.config.ts
-│
-└── README.md                       # This file
-API Documentation
-Endpoints
-GET /
+Your AWS credentials are:
+- ✅ **Never stored** in any database
+- ✅ **Never logged** to files or monitoring
+- ✅ **Never persisted** to localStorage/sessionStorage
+- ✅ **Used only for the current request**
+- ✅ **Transmitted over HTTPS** only
+- ✅ **Automatically cleared** after each request
 
-Health check endpoint.
+### How It Works
+1. You enter credentials in the modal → Stored in React state (memory only)
+2. Credentials sent to backend with API request → Used immediately
+3. Backend calls AWS on your behalf → Using your credentials
+4. Request completes → Credentials cleared from backend memory
+5. You close browser → Credentials cleared from React state
 
-Response:
+**Result:** Zero-trust architecture. Your credentials exist only for the duration of your active session.
 
-JSON
+### Additional Security Measures
+- Request-scoped context variables (thread-safe)
+- Automatic cleanup in `finally` blocks
+- Input validation and sanitization
+- CORS protection
+- No credential logging anywhere in codebase
 
+---
+
+## 🎨 Features in Detail
+
+### 1️⃣ Generate IAM Policy
+
+**Create production-ready IAM policies from natural language**
+
+**Example:**
+```
+Input: "Lambda function to read from S3 bucket customer-uploads and write to DynamoDB table transactions"
+
+Output:
+✓ Permissions Policy (JSON)
+✓ Trust Policy (JSON)
+✓ Security Score (0-100)
+✓ Compliance Status (PCI DSS, HIPAA, etc.)
+✓ Refinement Suggestions
+✓ Export (Terraform, CloudFormation, YAML)
+```
+
+**Features:**
+- Conversational chatbot for policy refinement
+- Account ID auto-detection
+- Service-specific best practices
+- Compliance framework support
+- One-click AWS deployment
+
+---
+
+### 2️⃣ Validate IAM Policy
+
+**Deep security analysis of existing policies**
+
+**Input Options:**
+- Paste policy JSON
+- Provide Role ARN (auto-fetches policy)
+
+**Analysis Includes:**
+- Risk score with severity breakdown
+- Security findings (Critical/High/Medium/Low)
+- Compliance validation (5+ frameworks)
+- Quick wins for immediate fixes
+- Detailed recommendations with code
+
+**Export Options:**
+- PDF report
+- Email sharing
+- Copy to clipboard
+
+---
+
+### 3️⃣ Autonomous Account Audit
+
+**Full AWS account security scan**
+
+**What It Does:**
+1. Discovers all IAM roles automatically
+2. Analyzes CloudTrail for actual usage (90 days)
+3. Identifies unused permissions
+4. Detects security vulnerabilities
+5. Checks compliance across frameworks
+6. Generates comprehensive report
+
+**Output:**
+- Audit summary (roles, findings, risks)
+- Top 5 riskiest roles
+- Detailed findings with remediation
+- Compliance status
+- Systemic pattern detection
+
+---
+
+### 4️⃣ CI/CD Integration
+
+**Automated IAM policy analysis in Pull Requests**
+
+**Features:**
+- GitHub App (one-click install)
+- Automatic PR comments with security analysis
+- CloudTrail usage comparison
+- Supports Terraform, CloudFormation, CDK
+- Works on JSON files with comments
+- Dashboard view of recent analyses
+
+**How It Works:**
+1. Install GitHub App on your repository
+2. Create PR with IAM policy changes
+3. Aegis IAM analyzes policies automatically
+4. Get security feedback as PR comments
+5. View analysis history in dashboard
+
+---
+
+## 🛠️ Tech Stack Details
+
+### AI & Agents
+- **Claude 3.7 Sonnet** (Amazon Bedrock)
+- **Strands Agents SDK** for autonomous decision-making
+- **MCP (Model Context Protocol)** for AWS API integration
+
+### Backend Stack
+- **FastAPI** for high-performance async API
+- **boto3** for AWS operations
+- **Context variables** for secure credential handling
+- **SSE** for real-time audit streaming
+
+### Frontend Stack
+- **React 18** with functional components
+- **TypeScript** for type safety
+- **Tailwind CSS** for beautiful UI
+- **Lucide icons** for consistent design
+
+### AWS Integration
+- **MCP Servers:** aws-iam, aws-cloudtrail, aws-api
+- **Graceful fallback** to boto3 if MCP unavailable
+- **Multi-region support**
+
+---
+
+## 📖 Documentation
+
+### AWS Credentials Setup
+
+**Required IAM Permissions:**
+```json
 {
-  "status": "healthy",
-  "message": "Aegis IAM Agent is running"
-}
-POST /generate
-
-Generate or refine an IAM policy.
-
-Request:
-
-JSON
-
-{
-  "description": "IAM policy for read-only S3 access",
-  "service": "S3",
-  "conversation_id": "uuid-string",  // Optional for follow-ups
-  "is_followup": false
-}
-Response:
-
-JSON
-
-{
-  "final_answer": "Full agent response with policy and explanation",
-  "conversation_id": "uuid-string",
-  "message_count": 2,
-  "security_score": 85,
-  "security_notes": ["List of security issues"],
-  "refinement_suggestions": ["Suggested improvements"],
-  "conversation_history": [
+  "Version": "2012-10-17",
+  "Statement": [
     {
-      "role": "user",
-      "content": "User message",
-      "timestamp": "uuid"
-    },
-    {
-      "role": "assistant",
-      "content": "Agent response",
-      "timestamp": "uuid"
+      "Effect": "Allow",
+      "Action": [
+        "bedrock:InvokeModel",
+        "iam:GetRole",
+        "iam:GetPolicy",
+        "iam:ListRoles",
+        "iam:ListPolicies",
+        "sts:GetCallerIdentity",
+        "cloudtrail:LookupEvents"
+      ],
+      "Resource": "*"
     }
   ]
 }
-GET /conversation/{conversation_id}
+```
 
-Retrieve conversation history.
+**Setup Steps:**
+1. Go to AWS Console → IAM → Users → Create User
+2. Enable "Programmatic access"
+3. Attach policies: `IAMFullAccess`, `AmazonBedrockFullAccess`
+4. Download credentials CSV
+5. Enter credentials in Aegis IAM modal
 
-Response:
+**Security Best Practice:** Create a dedicated IAM user for Aegis IAM with minimum required permissions.
 
-JSON
+---
 
-{
-  "conversation_id": "uuid-string",
-  "messages": [...],
-  "message_count": 5
-}
-DELETE /conversation/{conversation_id}
+## 🏃 Development
 
-Clear conversation history.
+### Project Structure
+```
+aegis-iam/
+├── frontend/              # React + TypeScript frontend
+│   ├── src/
+│   │   ├── components/    # React components
+│   │   ├── services/      # API client
+│   │   ├── utils/         # Utility functions
+│   │   └── types/         # TypeScript types
+│   └── package.json
+│
+├── agent/                 # FastAPI backend
+│   ├── features/          # Feature modules
+│   │   ├── policy_generation/
+│   │   ├── validation/
+│   │   ├── audit/
+│   │   └── cicd/
+│   ├── utils/             # Utilities
+│   ├── core/              # MCP client
+│   └── main.py            # FastAPI app
+│
+└── README.md
+```
 
-Security Standards
-Compliance Frameworks
-Aegis IAM validates policies against multiple security frameworks:
+### Environment Variables
 
-AWS Foundational Security Best Practices: Primary validation standard.
+**Backend (Optional - for CI/CD feature):**
+```bash
+# GitHub App credentials (only needed for CI/CD integration)
+GITHUB_APP_ID=your_app_id
+GITHUB_PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY-----\n..."
+GITHUB_WEBHOOK_SECRET=your_webhook_secret
+```
 
-CIS AWS Foundations Benchmark: Industry security benchmarks.
+**Frontend:**
+```bash
+VITE_API_URL=http://localhost:8000  # For local dev
+# Or: https://your-backend.onrender.com for production
+```
 
-NIST 800-53: Federal information security standards.
-
-PCI DSS: Payment card industry requirements.
-
-Documentation References
-AWS Security Hub IAM Controls
-
-IAM Best Practices
-
-Least Privilege Principle
-
-Development
-Running Tests
-Bash
-
-# Backend tests (when implemented)
+### Running Tests
+```bash
+# Backend tests
 cd agent
 pytest
 
-# Frontend tests
+# Frontend
 cd frontend
 npm test
-Code Style
-Python:
+```
 
-Follow PEP 8 style guide.
+---
 
-Use type hints where applicable.
+## 🌟 Use Cases
 
-Document functions with docstrings.
+### For Developers
+- **Learn IAM:** Generate policies to understand IAM structure
+- **Speed up development:** Stop googling IAM actions
+- **Avoid errors:** Validate before deploying
 
-TypeScript:
+### For Security Teams
+- **Audit entire accounts:** Discover unused permissions
+- **Enforce compliance:** Check against regulatory frameworks
+- **Shift-left security:** Catch issues in CI/CD
 
-Follow the Airbnb style guide.
+### For DevOps Engineers
+- **Automate reviews:** GitHub App integration
+- **Reduce privilege creep:** CloudTrail usage analysis
+- **Generate IaC:** Export to Terraform/CloudFormation
 
-Use strict type checking.
+---
 
-Prefer functional components.
+## 🤝 Contributing
 
-Adding New Features
-Create a feature branch: git checkout -b feature/your-feature
+Contributions are welcome! Please feel free to submit a Pull Request.
 
-Implement changes with tests.
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
 
-Update documentation.
+---
 
-Submit a pull request.
+## 📝 License
 
-Extensibility
-Security Validation Architecture
-The security validation system is designed for easy extension.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-Current Implementation:
+---
 
-SecurityValidator class in security_validator.py.
+## 🙏 Acknowledgments
 
-Local validation using hardcoded AWS controls.
+- **Anthropic Claude 3.7 Sonnet** for AI capabilities
+- **Amazon Bedrock** for serverless AI inference
+- **Strands Agents SDK** for agentic workflows
+- **MCP Protocol** for AWS integration
 
-No external API dependencies.
+---
 
-Future Integration:
-To integrate the AWS Security Hub API, you would implement a SecurityHubValidator class with the same interface, add AWS Security Hub API calls using boto3, and update the security_validator.py file to use the new validator.
+## ⚠️ Disclaimer
 
-Python
+**AWS Charges:** This application invokes AWS Bedrock API on your AWS account. You are responsible for all AWS charges incurred.
 
-# In security_validator.py
+**Security:** While Aegis IAM follows security best practices, always review generated policies before deploying to production. This tool is for assistance and should not replace human security review.
 
-# Change from:
-validator = SecurityValidator()
+**Not Affiliated:** This project is not affiliated with, endorsed by, or sponsored by Amazon Web Services (AWS) or Anthropic.
 
-# To:
-validator = SecurityHubValidator()
-Adding New Scenarios
-Scenario 2: Policy Validation (Planned)
+---
 
-Analyze existing policies for security issues.
+## 📧 Contact
 
-Compare against organizational policies.
+**Bhavika M** - [@bhavikam28](https://github.com/bhavikam28)
 
-Generate remediation recommendations.
+**Project Link:** [https://github.com/bhavikam28/aegis-iam](https://github.com/bhavikam28/aegis-iam)
 
-Scenario 3: Historical Usage Analysis (Planned)
+**Live Demo:** [https://aegis-iam.vercel.app](https://aegis-iam.vercel.app)
 
-Analyze CloudTrail logs for actual permission usage.
+---
 
-Generate right-sized policies based on usage.
+<div align="center">
 
-Identify unused permissions.
+### ⭐ Star this repo if you find it helpful!
 
-Troubleshooting
-Common Issues
-Issue: Backend fails to start.
+Made with ❤️ and 🤖 AI
 
-Solution: Ensure Python 3.10+ is installed and the virtual environment is activated.
-
-Issue: Bedrock access denied.
-
-Solution: 1. Verify AWS credentials are configured. 2. Check IAM permissions include bedrock:InvokeModel. 3. Confirm Claude 3.7 Sonnet access is enabled in the Bedrock console.
-
-Issue: Frontend shows CORS errors.
-
-Solution: Ensure the backend is running on port 8000 and CORS is enabled in main.py.
-
-Issue: The security score always shows 85.
-
-Solution: Check that security_validator.py is created and imported correctly in main.py.
-
-Debug Mode
-Enable debug logging in main.py:
-
-Python
-
-# In main.py
-import logging
-logging.basicConfig(level=logging.DEBUG)
-Future Roadmap
-Phase 1: Core Enhancement (Current)
-
-✅ Conversational policy generation
-
-✅ Security validation framework
-
-✅ Chat history visualization
-
-🔄 AWS Security Hub integration preparation
-
-Phase 2: Advanced Features (Q2 2025)
-
-Policy validation against existing policies
-
-CloudTrail integration for usage analysis
-
-Policy comparison and diff tools
-
-Bulk policy generation
-
-Phase 3: Enterprise Features (Q3 2025)
-
-Multi-account support
-
-Policy approval workflows
-
-Audit trail and compliance reporting
-
-Role-based access control
-
-Phase 4: Production Deployment (Q4 2025)
-
-AgentCore Runtime integration
-
-Database persistence
-
-API rate limiting
-
-Production monitoring
-
-Contributing
-Contributions are welcome! Please follow these guidelines:
-
-Fork the repository.
-
-Create a feature branch.
-
-Commit changes with clear messages.
-
-Add tests for new functionality.
-
-Update documentation.
-
-Submit a pull request.
-
-License
-This project is developed as an educational tool for AWS IAM policy management. It is not intended for production use without proper security review and testing.
-
-Acknowledgments
-Amazon Web Services: For Bedrock and Security Hub documentation.
-
-Anthropic: For the Claude AI models.
-
-Strands AI: For the agent framework.
-
-Open Source Community: For React, FastAPI, and supporting libraries.
-
-Developed by: Bhavika Mantri
-Project: Aegis IAM - AI Security Shield for AWS
-Last Updated: September 30, 2025
-
-For questions or support, please open an issue in the repository.
+</div>
