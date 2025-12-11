@@ -254,18 +254,47 @@ class GitHubClient:
             return None
     
     def _is_iam_file(self, path: str) -> bool:
-        """Check if file is IAM-related"""
-        iam_extensions = ['.tf', '.yaml', '.yml', '.json', '.ts', '.py']
-        iam_keywords = ['iam', 'policy', 'role', 'permission']
+        """
+        Check if file is IAM-related
+        Supports: Terraform, CloudFormation, CDK, raw JSON, and more
+        """
+        # Comprehensive list of file extensions that might contain IAM policies
+        iam_extensions = [
+            '.tf', '.tfvars',  # Terraform
+            '.yaml', '.yml',  # CloudFormation, Kubernetes
+            '.json',  # Raw IAM policies, CloudFormation
+            '.ts', '.js',  # AWS CDK TypeScript/JavaScript
+            '.py',  # AWS CDK Python, Troposphere
+            '.rb',  # AWS CDK Ruby
+            '.java',  # AWS CDK Java
+            '.cs',  # AWS CDK C#
+            '.go',  # AWS CDK Go
+            '.hcl',  # HashiCorp Configuration Language
+            '.toml',  # Some config formats
+        ]
+        
+        # Keywords that indicate IAM-related content
+        iam_keywords = [
+            'iam', 'policy', 'role', 'permission', 'permissions',
+            'cloudformation', 'cfn', 'cdk',
+            'assume', 'trust',
+            'aws_iam', 'iam_role', 'iam_policy',
+            'security', 'access',
+        ]
         
         path_lower = path.lower()
         
-        # Check extension
+        # Check file extension
         if any(path_lower.endswith(ext) for ext in iam_extensions):
             return True
         
-        # Check keywords in path
+        # Check keywords in filename or path
         if any(keyword in path_lower for keyword in iam_keywords):
+            return True
+        
+        # Check for common infrastructure directories
+        infra_paths = ['terraform/', 'cloudformation/', 'cdk/', 'iac/', 'infrastructure/', 'policies/']
+        if any(infra_path in path_lower for infra_path in infra_paths):
             return True
         
         return False

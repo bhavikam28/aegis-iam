@@ -334,7 +334,9 @@ class PolicyExtractor:
         errors = []
         
         try:
-            data = json.loads(content)
+            # Strip comments from JSON (many developers add comments even though JSON spec doesn't support them)
+            content_clean = self._strip_json_comments(content)
+            data = json.loads(content_clean)
             
             # Check if it's a direct policy document
             if isinstance(data, dict) and 'Version' in data and 'Statement' in data:
@@ -383,6 +385,38 @@ class PolicyExtractor:
             'format': 'json',
             'errors': errors
         }
+    
+    def _strip_json_comments(self, content: str) -> str:
+        """
+        Strip comments from JSON content to support developer-friendly JSON files
+        Handles:
+        - Single-line comments: // comment
+        - Multi-line comments: /* comment */
+        - Hash comments: # comment (common in some tools)
+        """
+        import re
+        
+        # Remove single-line comments (// ...)
+        content = re.sub(r'//.*?$', '', content, flags=re.MULTILINE)
+        
+        # Remove multi-line comments (/* ... */)
+        content = re.sub(r'/\*.*?\*/', '', content, flags=re.DOTALL)
+        
+        # Remove hash comments (# ...) but be careful with strings
+        # Only remove # comments that are not inside quoted strings
+        lines = []
+        for line in content.split('\n'):
+            # Simple heuristic: if # appears before any quotes, it's likely a comment
+            hash_pos = line.find('#')
+            if hash_pos != -1:
+                # Check if # is inside a string
+                before_hash = line[:hash_pos]
+                quote_count = before_hash.count('"') - before_hash.count('\\"')
+                if quote_count % 2 == 0:  # Even number of quotes = not inside string
+                    line = line[:hash_pos]
+            lines.append(line)
+        
+        return '\n'.join(lines)
     
     def _auto_detect_and_extract(self, content: str, file_path: str) -> Dict[str, Any]:
         """Auto-detect format and extract"""
