@@ -105,8 +105,8 @@ const GeneratePolicy: React.FC<GeneratePolicyProps> = ({ awsCredentials: propCre
         const demoResponse = mockGeneratePolicyResponse({
           description: 'Lambda function to read from S3 bucket my-app-bucket and write logs to CloudWatch',
           service: 'Lambda',
-          compliance: request.compliance || 'general',
-          restrictive: request.restrictive || false
+          compliance: 'general',
+          restrictive: true
         });
         setResponse(demoResponse);
         setShowInitialForm(false);
