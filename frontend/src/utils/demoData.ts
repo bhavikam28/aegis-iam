@@ -534,7 +534,7 @@ export const mockAuditAccountResponse = () => {
       high_issues: 8,
       medium_issues: 10,
       low_issues: 3,
-      cloudtrail_events_analyzed: 125000,
+      cloudtrail_events_analyzed: 12500,
       unused_permissions_found: 156
     },
     risk_score: 65,
@@ -626,7 +626,7 @@ export const mockAuditAccountResponse = () => {
       }
     },
     cloudtrail_analysis: {
-      total_events: 125000,
+      total_events: 12500,
       unused_actions: 156,
       roles_with_unused_permissions: 23,
       date_range: "Last 90 days"
