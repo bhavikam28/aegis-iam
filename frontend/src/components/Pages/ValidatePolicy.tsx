@@ -6,7 +6,7 @@ import CollapsibleTile from '@/components/Common/CollapsibleTile';
 import SecurityTips from '@/components/Common/SecurityTips';
 import AWSConfigModal from '@/components/Modals/AWSConfigModal';
 import { AWSCredentials, validateCredentials, maskAccessKeyId, getRegionDisplayName } from '@/utils/awsCredentials';
-import { API_URL } from '@/config/api.js';
+import { API_URL } from '@/config/api';
 
 // ============================================
 // TYPE DEFINITIONS
