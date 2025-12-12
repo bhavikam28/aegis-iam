@@ -476,7 +476,19 @@ async def generate(request: GenerationRequest):
             'region': request.aws_credentials.region
         }
         set_user_credentials(creds_dict)
-        logging.info(f"✅ User credentials set for region: {request.aws_credentials.region}")
+        logging.info(f"✅ User credentials set in context for region: {request.aws_credentials.region}")
+        logging.info(f"   Access Key ID: {request.aws_credentials.access_key_id[:8]}...{request.aws_credentials.access_key_id[-4:] if len(request.aws_credentials.access_key_id) > 12 else '****'}")
+        
+        # Verify credentials are retrievable
+        from features.policy_generation.bedrock_tool import _user_credentials as test_creds
+        try:
+            test_retrieved = test_creds.get()
+            if test_retrieved:
+                logging.info(f"✅ Verified: Credentials are retrievable from context (region: {test_retrieved.get('region')})")
+            else:
+                logging.error("❌ CRITICAL: Credentials not retrievable from context after setting!")
+        except LookupError:
+            logging.error("❌ CRITICAL: Context variable lookup failed!")
     
     try:
         # AUTO-DETECT ACTUAL AWS ACCOUNT ID from credentials

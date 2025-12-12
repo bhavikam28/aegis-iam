@@ -29,30 +29,65 @@ def get_bedrock_client(aws_credentials: dict = None):
     
     # If not provided, check context variable (set by endpoint)
     if not creds:
-        creds = _user_credentials.get()
+        try:
+            creds = _user_credentials.get()
+            if creds:
+                logging.info(f"✅ Retrieved credentials from context variable (region: {creds.get('region', 'us-east-1')})")
+            else:
+                logging.warning("⚠️ No credentials in context variable")
+        except LookupError:
+            logging.warning("⚠️ Context variable not set (LookupError)")
+            creds = None
     
     if creds:
+        # Validate credentials structure
+        if not creds.get('access_key_id') or not creds.get('secret_access_key'):
+            logging.error("❌ Invalid credentials structure: missing access_key_id or secret_access_key")
+            raise ValueError("Invalid credentials: missing required fields")
+        
         # Use user-provided credentials
         region = creds.get('region', 'us-east-1')
-        logging.info(f"🔧 Creating Bedrock client with user credentials (region: {region})")
-        return boto3.client(
-            service_name='bedrock-runtime',
-            aws_access_key_id=creds['access_key_id'],
-            aws_secret_access_key=creds['secret_access_key'],
-            region_name=region
-        )
+        access_key_id = creds['access_key_id']
+        secret_access_key = creds['secret_access_key']
+        
+        logging.info(f"🔧 Creating Bedrock client with user credentials")
+        logging.info(f"   Region: {region}")
+        logging.info(f"   Access Key ID: {access_key_id[:8]}...{access_key_id[-4:] if len(access_key_id) > 12 else '****'}")
+        
+        try:
+            client = boto3.client(
+                service_name='bedrock-runtime',
+                aws_access_key_id=access_key_id,
+                aws_secret_access_key=secret_access_key,
+                region_name=region
+            )
+            logging.info("✅ Bedrock client created successfully with user credentials")
+            return client
+        except Exception as e:
+            logging.error(f"❌ Failed to create Bedrock client with user credentials: {e}")
+            raise
     else:
         # Use default credentials (for development/testing only)
+        logging.warning("⚠️ No user credentials provided, attempting to use default credentials (may fail)")
         global bedrock_runtime
         if bedrock_runtime is None:
             logging.info("🔧 Initializing Bedrock client with default credentials...")
-            bedrock_runtime = boto3.client(service_name='bedrock-runtime', region_name='us-east-1')
-            logging.info("✅ Bedrock client initialized")
+            try:
+                bedrock_runtime = boto3.client(service_name='bedrock-runtime', region_name='us-east-1')
+                logging.info("✅ Bedrock client initialized with default credentials")
+            except Exception as e:
+                logging.error(f"❌ Failed to initialize Bedrock client with default credentials: {e}")
+                raise ValueError(f"Cannot create Bedrock client: {e}. Please provide valid AWS credentials.")
         return bedrock_runtime
 
 def set_user_credentials(credentials: dict):
     """Set user credentials for current request context"""
-    _user_credentials.set(credentials)
+    if credentials:
+        logging.info(f"🔐 Setting user credentials in context (region: {credentials.get('region', 'us-east-1')})")
+        _user_credentials.set(credentials)
+    else:
+        logging.warning("⚠️ Attempted to set None credentials")
+        _user_credentials.set(None)
 
 def clear_user_credentials():
     """Clear user credentials after request"""
