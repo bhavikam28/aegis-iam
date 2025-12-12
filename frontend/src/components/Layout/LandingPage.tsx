@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Shield, Zap, Lock, ChevronRight, CheckCircle, Search, BarChart3, Code, Sparkles, ArrowRight, Star, TrendingUp, Users, Globe, Brain, Cpu, Activity, Target, Award, Rocket, Layers, FileCheck, Play, XCircle, AlertTriangle, Database, Eye, Settings, Cloud, Server, Key, Fingerprint, Network, ShieldCheck, Bot } from 'lucide-react';
+import { Shield, Zap, Lock, ChevronRight, CheckCircle, Search, BarChart3, Code, Sparkles, ArrowRight, Star, TrendingUp, Users, Globe, Brain, Cpu, Activity, Target, Award, Rocket, Layers, FileCheck, Play, XCircle, AlertTriangle, Database, Eye, Settings, Cloud, Server, Key, Fingerprint, Network, ShieldCheck, Bot, GitBranch } from 'lucide-react';
 import Dashboard from './Dashboard';
 import PremiumLogo from '../UI/PremiumLogo';
 import { AWSCredentials } from '../../utils/awsCredentials';
@@ -159,6 +159,14 @@ const LandingPage: React.FC<LandingPageProps> = ({
                 <div className="absolute inset-0 bg-white/10 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700"></div>
               </button>
 
+              <button
+                onClick={handleGetStarted}
+                className="group px-8 sm:px-10 py-4 sm:py-5 bg-white/90 backdrop-blur-sm border-2 border-slate-200 rounded-2xl text-slate-700 hover:text-slate-900 font-bold text-base sm:text-lg hover:border-blue-300 hover:shadow-lg transition-all inline-flex items-center space-x-2 hover:scale-105"
+              >
+                <Play className="w-5 h-5 sm:w-6 sm:h-6" />
+                <span>Demo Mode</span>
+              </button>
+
               <a
                 href="https://github.com/bhavikam28/aegis-iam"
                 target="_blank"
@@ -306,83 +314,83 @@ const LandingPage: React.FC<LandingPageProps> = ({
           </div>
         </section>
 
-        {/* Trust Signals Section - Build Confidence */}
-        <section className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 sm:py-16">
-          {/* Cost & Security Transparency Banner */}
-          <div className="bg-gradient-to-r from-blue-50 via-purple-50 to-pink-50 border-2 border-blue-200/50 rounded-3xl p-6 sm:p-8 mb-8">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-8">
-              {/* 💰 Zero Cost for You */}
-              <div className="flex flex-col items-center text-center">
-                <div className="w-16 h-16 bg-gradient-to-br from-emerald-500 to-green-500 rounded-2xl flex items-center justify-center mb-4 shadow-lg">
-                  <span className="text-3xl">💰</span>
-                </div>
-                <h4 className="text-lg font-bold text-slate-900 mb-2">Zero Cost for You</h4>
-                <p className="text-sm text-slate-600 font-medium">
-                  Use your AWS credentials. All Bedrock/AWS costs go to <span className="font-bold text-emerald-600">your AWS account</span>, not ours.
-                </p>
-              </div>
+        {/* Trust Signals Section - Seamlessly Integrated */}
+        <section className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-20">
+          <div className="text-center mb-12">
+            <h3 className="text-3xl sm:text-4xl font-extrabold mb-4">
+              <span className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 bg-clip-text text-transparent">
+                Trusted by Developers
+              </span>
+            </h3>
+            <p className="text-lg text-slate-600 font-medium max-w-2xl mx-auto">
+              Built with security, privacy, and transparency at the core
+            </p>
+          </div>
 
-              {/* 🔐 Privacy First */}
-              <div className="flex flex-col items-center text-center">
-                <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-500 rounded-2xl flex items-center justify-center mb-4 shadow-lg">
-                  <Lock className="w-8 h-8 text-white" />
+          {/* Premium Trust Cards - Horizontal Layout */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+            {/* Zero Cost */}
+            <div className="group relative bg-white/90 backdrop-blur-xl border-2 border-slate-200/50 rounded-2xl p-6 hover:shadow-2xl hover:-translate-y-1 transition-all duration-300">
+              <div className="flex items-start space-x-4">
+                <div className="w-14 h-14 bg-gradient-to-br from-emerald-500 to-green-500 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0 group-hover:scale-110 transition-transform">
+                  <span className="text-2xl">💰</span>
                 </div>
-                <h4 className="text-lg font-bold text-slate-900 mb-2">Privacy First</h4>
-                <p className="text-sm text-slate-600 font-medium">
-                  <span className="font-bold text-blue-600">Zero storage.</span> Your credentials live only in memory during your session.
-                </p>
+                <div className="flex-1">
+                  <h4 className="text-lg font-bold text-slate-900 mb-2">Zero Cost for You</h4>
+                  <p className="text-sm text-slate-600 font-medium leading-relaxed">
+                    Use your AWS credentials. All Bedrock/AWS costs go to <span className="font-bold text-emerald-600">your AWS account</span>, not ours.
+                  </p>
+                </div>
               </div>
+            </div>
 
-              {/* 🌐 Open Source */}
-              <div className="flex flex-col items-center text-center">
-                <div className="w-16 h-16 bg-gradient-to-br from-pink-500 to-orange-500 rounded-2xl flex items-center justify-center mb-4 shadow-lg">
-                  <Globe className="w-8 h-8 text-white" />
+            {/* Privacy First */}
+            <div className="group relative bg-white/90 backdrop-blur-xl border-2 border-slate-200/50 rounded-2xl p-6 hover:shadow-2xl hover:-translate-y-1 transition-all duration-300">
+              <div className="flex items-start space-x-4">
+                <div className="w-14 h-14 bg-gradient-to-br from-blue-500 to-purple-500 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0 group-hover:scale-110 transition-transform">
+                  <Lock className="w-7 h-7 text-white" />
                 </div>
-                <h4 className="text-lg font-bold text-slate-900 mb-2">100% Open Source</h4>
-                <p className="text-sm text-slate-600 font-medium">
-                  Fully transparent. Audit our code on <a href="https://github.com/bhavikam28/aegis-iam" target="_blank" rel="noopener noreferrer" className="font-bold text-pink-600 underline hover:text-pink-700">GitHub</a>.
-                </p>
+                <div className="flex-1">
+                  <h4 className="text-lg font-bold text-slate-900 mb-2">Privacy First</h4>
+                  <p className="text-sm text-slate-600 font-medium leading-relaxed">
+                    <span className="font-bold text-blue-600">Zero storage.</span> Your credentials live only in memory during your session.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Open Source */}
+            <div className="group relative bg-white/90 backdrop-blur-xl border-2 border-slate-200/50 rounded-2xl p-6 hover:shadow-2xl hover:-translate-y-1 transition-all duration-300">
+              <div className="flex items-start space-x-4">
+                <div className="w-14 h-14 bg-gradient-to-br from-pink-500 to-orange-500 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0 group-hover:scale-110 transition-transform">
+                  <Globe className="w-7 h-7 text-white" />
+                </div>
+                <div className="flex-1">
+                  <h4 className="text-lg font-bold text-slate-900 mb-2">100% Open Source</h4>
+                  <p className="text-sm text-slate-600 font-medium leading-relaxed">
+                    Fully transparent. Audit our code on <a href="https://github.com/bhavikam28/aegis-iam" target="_blank" rel="noopener noreferrer" className="font-bold text-pink-600 underline hover:text-pink-700">GitHub</a>.
+                  </p>
+                </div>
               </div>
             </div>
           </div>
 
-          {/* Trust Badges Grid */}
+          {/* Feature Badges - Compact Grid */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {/* AI-Powered */}
-            <div className="bg-white/90 backdrop-blur-xl border-2 border-slate-200/50 rounded-2xl p-4 hover:shadow-xl transition-all text-center">
-              <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-500 rounded-xl flex items-center justify-center mx-auto mb-3">
-                <Brain className="w-6 h-6 text-white" />
+            {[
+              { icon: Brain, label: 'AI-Powered', desc: 'Claude 3.7 Sonnet', gradient: 'from-blue-500 to-purple-500' },
+              { icon: ShieldCheck, label: 'Enterprise Ready', desc: 'Multi-Compliance', gradient: 'from-purple-500 to-pink-500' },
+              { icon: Activity, label: 'Real-Time', desc: 'Live Analysis', gradient: 'from-pink-500 to-orange-500' },
+              { icon: Users, label: 'Community', desc: 'Open Source', gradient: 'from-amber-500 to-yellow-500' },
+            ].map((item, idx) => (
+              <div key={idx} className="bg-white/90 backdrop-blur-xl border-2 border-slate-200/50 rounded-xl p-4 hover:shadow-xl hover:border-blue-300 transition-all text-center">
+                <div className={`w-12 h-12 bg-gradient-to-br ${item.gradient} rounded-xl flex items-center justify-center mx-auto mb-3 shadow-md`}>
+                  <item.icon className="w-6 h-6 text-white" />
+                </div>
+                <div className="text-xs font-bold text-slate-900">{item.label}</div>
+                <div className="text-xs text-slate-500 mt-1">{item.desc}</div>
               </div>
-              <div className="text-xs font-bold text-slate-900">AI-Powered</div>
-              <div className="text-xs text-slate-500 mt-1">Claude 3.7 Sonnet</div>
-            </div>
-
-            {/* Enterprise Ready */}
-            <div className="bg-white/90 backdrop-blur-xl border-2 border-slate-200/50 rounded-2xl p-4 hover:shadow-xl transition-all text-center">
-              <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl flex items-center justify-center mx-auto mb-3">
-                <ShieldCheck className="w-6 h-6 text-white" />
-              </div>
-              <div className="text-xs font-bold text-slate-900">Enterprise Ready</div>
-              <div className="text-xs text-slate-500 mt-1">Multi-Compliance</div>
-            </div>
-
-            {/* Real-Time Audit */}
-            <div className="bg-white/90 backdrop-blur-xl border-2 border-slate-200/50 rounded-2xl p-4 hover:shadow-xl transition-all text-center">
-              <div className="w-12 h-12 bg-gradient-to-br from-pink-500 to-orange-500 rounded-xl flex items-center justify-center mx-auto mb-3">
-                <Activity className="w-6 h-6 text-white" />
-              </div>
-              <div className="text-xs font-bold text-slate-900">Real-Time</div>
-              <div className="text-xs text-slate-500 mt-1">Live Analysis</div>
-            </div>
-
-            {/* Community Driven */}
-            <div className="bg-white/90 backdrop-blur-xl border-2 border-slate-200/50 rounded-2xl p-4 hover:shadow-xl transition-all text-center">
-              <div className="w-12 h-12 bg-gradient-to-br from-amber-500 to-yellow-500 rounded-xl flex items-center justify-center mx-auto mb-3">
-                <Users className="w-6 h-6 text-white" />
-              </div>
-              <div className="text-xs font-bold text-slate-900">Community</div>
-              <div className="text-xs text-slate-500 mt-1">Open Source</div>
-            </div>
+            ))}
           </div>
         </section>
 
@@ -537,7 +545,83 @@ const LandingPage: React.FC<LandingPageProps> = ({
           </div>
         </section>
 
-        {/* Feature Section 3: AI-Powered Policy Generation & Validation */}
+        {/* Feature Section 3: CI/CD Integration */}
+        <section className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 sm:py-24 bg-gradient-to-br from-slate-50/50 via-white to-blue-50/30 rounded-3xl">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center">
+            {/* Left Visual */}
+            <div className="relative animate-fadeIn" style={{ animationDelay: '0.5s' }}>
+              <div className="absolute inset-0 bg-gradient-to-r from-blue-500/5 via-purple-500/5 to-pink-500/5 rounded-3xl blur-2xl"></div>
+              <div className="relative bg-white/90 backdrop-blur-xl border-2 border-slate-200/50 rounded-2xl p-6 shadow-xl">
+                {/* GitHub PR Comment Preview */}
+                <div className="space-y-4">
+                  <div className="flex items-center space-x-3 mb-4">
+                    <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-500 rounded-xl flex items-center justify-center">
+                      <Bot className="w-5 h-5 text-white" />
+                    </div>
+                    <div>
+                      <div className="text-sm font-bold text-slate-900">aegis-iam bot</div>
+                      <div className="text-xs text-slate-500">commented 2 hours ago</div>
+                    </div>
+                  </div>
+                  <div className="bg-slate-50 rounded-xl p-4 border-l-4 border-blue-500">
+                    <div className="flex items-center space-x-2 mb-2">
+                      <Shield className="w-4 h-4 text-blue-600" />
+                      <span className="text-sm font-bold text-slate-900">IAM Policy Security Analysis</span>
+                    </div>
+                    <p className="text-xs text-slate-600 mb-3">
+                      🔒 Security Review Recommended: 2 high and 1 medium severity issues found.
+                    </p>
+                    <div className="space-y-2">
+                      <div className="flex items-center space-x-2 text-xs">
+                        <div className="w-2 h-2 rounded-full bg-orange-500"></div>
+                        <span className="text-slate-700">Wildcard Permissions Detected</span>
+                      </div>
+                      <div className="flex items-center space-x-2 text-xs">
+                        <div className="w-2 h-2 rounded-full bg-amber-500"></div>
+                        <span className="text-slate-700">Unused Permissions Found</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-2 text-xs text-slate-500">
+                    <CheckCircle className="w-4 h-4 text-emerald-500" />
+                    <span>Automatically analyzed on PR #42</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Right Content */}
+            <div className="animate-fadeIn" style={{ animationDelay: '0.6s' }}>
+              <h3 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold mb-6 leading-tight">
+                <span className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 bg-clip-text text-transparent">
+                  CI/CD Integration
+                </span>
+                <br />
+                <span className="bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">
+                  Automated PR Reviews
+                </span>
+              </h3>
+              <p className="text-lg sm:text-xl text-slate-600 mb-8 leading-relaxed font-medium">
+                Catch IAM security issues before they're merged. Our GitHub App automatically analyzes IAM policies in pull requests and provides actionable security feedback—zero configuration required.
+              </p>
+              <ul className="space-y-4 mb-8">
+                {[
+                  'One-click GitHub App installation—no YAML files or secrets needed',
+                  'Automatic analysis on every PR and push to main/master',
+                  'CloudTrail usage comparison to detect unused permissions',
+                  'Supports Terraform, CloudFormation, CDK, and raw JSON',
+                ].map((item, idx) => (
+                  <li key={idx} className="flex items-start space-x-3">
+                    <CheckCircle className="w-6 h-6 text-emerald-500 mt-0.5 flex-shrink-0" />
+                    <span className="text-slate-700 font-medium text-base">{item}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </section>
+
+        {/* Feature Section 4: AI-Powered Policy Generation & Validation */}
         <section className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 sm:py-24">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center">
             {/* Left Content */}
@@ -635,9 +719,9 @@ const LandingPage: React.FC<LandingPageProps> = ({
               { icon: Shield, title: 'IAM Policy Generation', desc: 'Generate secure IAM policies from plain English using AI-powered natural language processing.' },
               { icon: Search, title: 'Security Policy Validation', desc: 'Validate existing IAM policies against security best practices and compliance frameworks.' },
               { icon: Activity, title: 'Autonomous Account Auditing', desc: 'Automatically scan your entire AWS account for IAM vulnerabilities and compliance issues.' },
+              { icon: GitBranch, title: 'CI/CD Integration', desc: 'Automatically analyze IAM policies in pull requests with GitHub App integration—zero configuration.' },
               { icon: CheckCircle, title: 'Multi-Framework Compliance', desc: 'Ensure compliance with PCI DSS, HIPAA, SOX, GDPR, and CIS Benchmarks.' },
               { icon: BarChart3, title: 'CloudTrail Analysis', desc: 'Analyze CloudTrail logs to identify unused permissions and optimize IAM policies.' },
-              { icon: Sparkles, title: 'AI-Powered Remediation', desc: 'Get intelligent recommendations and automated fixes for IAM security issues.' },
             ].map((solution, idx) => (
               <div 
                 key={idx}

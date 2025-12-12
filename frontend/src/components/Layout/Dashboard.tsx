@@ -45,7 +45,7 @@ const Dashboard: React.FC<DashboardProps> = ({
           />
         );
       case 'cicd':
-        return <CICDIntegration />; // CI/CD doesn't need credentials
+        return <CICDIntegration />; // CI/CD doesn't need AWS credentials (uses GitHub App)
       default:
         return (
           <GeneratePolicy 
@@ -62,8 +62,8 @@ const Dashboard: React.FC<DashboardProps> = ({
         activeSection={activeSection} 
         onSectionChange={setActiveSection}
         onReturnHome={onReturnHome}
-        awsCredentials={awsCredentials}
-        onOpenCredentialsModal={onOpenCredentialsModal}
+        awsCredentials={activeSection !== 'cicd' ? awsCredentials : null} // Hide AWS button on CI/CD page
+        onOpenCredentialsModal={activeSection !== 'cicd' ? onOpenCredentialsModal : undefined} // Hide AWS button on CI/CD page
       />
         <main className="flex-1 overflow-auto">
           {renderActiveSection()}

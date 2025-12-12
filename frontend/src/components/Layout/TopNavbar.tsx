@@ -123,8 +123,8 @@ const TopNavbar: React.FC<TopNavbarProps> = ({
                   onClick={onOpenCredentialsModal}
                   className={`hidden sm:flex items-center space-x-2 px-3 py-2 rounded-xl transition-all duration-300 ${
                     awsCredentials
-                      ? 'bg-gradient-to-r from-emerald-50 to-green-50 border-2 border-emerald-200 text-emerald-700 hover:border-emerald-300 hover:shadow-lg'
-                      : 'bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-amber-200 text-amber-700 hover:border-amber-300 hover:shadow-lg animate-pulse'
+                      ? 'bg-gradient-to-r from-blue-50 to-purple-50 border-2 border-blue-200 text-blue-700 hover:border-blue-300 hover:shadow-lg'
+                      : 'bg-white/90 backdrop-blur-sm border-2 border-slate-200 text-slate-600 hover:border-blue-300 hover:shadow-lg hover:text-blue-600 animate-pulse'
                   }`}
                   aria-label={awsCredentials ? "Manage AWS credentials" : "Add AWS credentials"}
                 >
