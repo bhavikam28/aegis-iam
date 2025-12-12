@@ -307,89 +307,171 @@ export const mockGeneratePolicyResponse = (request: any): any => {
 // VALIDATE POLICY DEMO DATA
 // ============================================
 
-export const mockValidatePolicyResponse = (request: ValidatePolicyRequest): ValidatePolicyResponse => {
-  const findings: SecurityFinding[] = [
+export const mockValidatePolicyResponse = (request: any): any => {
+  const findings: any[] = [
     {
       id: "finding-1",
       severity: "High",
       type: "OverPrivileged",
       title: "Overly Broad S3 Permissions",
-      description: "The policy grants s3:* permissions on all resources, which provides unnecessary access to all S3 operations across all buckets.",
-      recommendation: "Restrict S3 actions to specific operations (GetObject, PutObject) and limit to specific bucket resources.",
+      description: "The policy grants s3:* permissions on all resources, which provides unnecessary access to all S3 operations across all buckets in your AWS account.",
+      recommendation: "Restrict S3 actions to specific operations (GetObject, PutObject, ListBucket) and limit to specific bucket resources using ARN patterns.",
       affectedStatement: 0,
-      codeSnippet: `"Action": "s3:*",
-"Resource": "*"`
+      why_it_matters: "Wildcard permissions create security risks. If this role is compromised, an attacker could read, modify, or delete data across ALL S3 buckets in your account.",
+      impact: "High - Potential data breach or data loss across all S3 buckets",
+      detailed_remediation: "Replace 's3:*' with specific actions: ['s3:GetObject', 's3:PutObject', 's3:ListBucket']. Replace 'Resource: *' with specific bucket ARNs like 'arn:aws:s3:::my-specific-bucket/*'.",
+      compliance_violations: ["PCI DSS 7.1.2 - Least privilege principle"],
+      policy_snippet: `{
+  "Effect": "Allow",
+  "Action": "s3:*",
+  "Resource": "*"
+}`
     },
     {
       id: "finding-2",
       severity: "Medium",
       type: "Security",
-      title: "Missing Resource Constraints",
-      description: "Several actions are granted on '*' resources without proper scoping.",
-      recommendation: "Add specific resource ARNs to limit the scope of permissions.",
+      title: "Missing Resource Constraints for CloudWatch Logs",
+      description: "CloudWatch Logs permissions are granted on '*' resources without proper scoping, allowing access to all log groups.",
+      recommendation: "Add specific log group ARNs to limit the scope of logging permissions to only the required log groups.",
       affectedStatement: 1,
-      codeSnippet: `"Action": ["logs:CreateLogGroup", "logs:PutLogEvents"],
-"Resource": "*"`
+      why_it_matters: "Broad log permissions can expose sensitive application logs or allow log tampering.",
+      impact: "Medium - Potential exposure of sensitive information in logs",
+      detailed_remediation: "Scope the Resource to specific log groups: 'arn:aws:logs:us-east-1:123456789012:log-group:/aws/lambda/my-function:*'",
+      compliance_violations: ["SOX - Access control requirements"],
+      policy_snippet: `{
+  "Action": ["logs:CreateLogGroup", "logs:PutLogEvents"],
+  "Resource": "*"
+}`
     },
     {
       id: "finding-3",
       severity: "Low",
       type: "BestPractice",
       title: "Missing Condition Constraints",
-      description: "No conditional access controls are applied to limit when and how permissions can be used.",
-      recommendation: "Add conditions like IP restrictions, time-based access, or MFA requirements.",
+      description: "No conditional access controls are applied to limit when and how permissions can be used (e.g., IP restrictions, time-based access, MFA).",
+      recommendation: "Add conditions like IP restrictions, time-based access, or MFA requirements for sensitive operations.",
       affectedStatement: 0,
-      codeSnippet: `"Effect": "Allow",
-"Action": "s3:*"`
+      why_it_matters: "Conditions add defense-in-depth. Even if credentials are compromised, conditions can prevent misuse.",
+      impact: "Low - Additional security layer missing",
+      detailed_remediation: "Add a Condition block with IpAddress, DateGreaterThan/DateLessThan, or aws:MultiFactorAuthPresent constraints.",
+      policy_snippet: `{
+  "Effect": "Allow",
+  "Action": "s3:*",
+  "Resource": "*"
+  // Missing: "Condition": {...}
+}`
     }
   ];
 
-  const riskScore = request.policy_json?.includes('"*"') ? 75 : 45;
+  const riskScore = 55;
+  const securityScore = 45; // 100 - riskScore
   
   const recommendations = [
     "Apply the principle of least privilege by restricting actions to only what's needed",
     "Use specific resource ARNs instead of wildcard (*) resources",
-    "Add conditional access controls for enhanced security",
-    "Enable CloudTrail logging to monitor policy usage",
-    "Regularly review and audit policy permissions"
+    "Add conditional access controls for enhanced security (IP restrictions, MFA requirements)",
+    "Enable CloudTrail logging to monitor policy usage and detect anomalies",
+    "Regularly review and audit policy permissions every 90 days",
+    "Implement resource tagging strategy for better access control governance"
+  ];
+
+  const quickWins = [
+    "Replace 's3:*' with specific required actions (e.g., s3:GetObject, s3:PutObject)",
+    "Scope CloudWatch Logs permissions to specific log group ARNs",
+    "Add Condition blocks to require MFA for sensitive S3 delete operations"
   ];
 
   const complianceStatus: Record<string, any> = {
     "pci-dss": {
       name: "PCI DSS",
       status: "Partial",
-      gaps: ["Network access controls", "Encryption requirements"],
-      details: "Policy requires additional restrictions to fully comply with PCI DSS requirements.",
-      link: "https://docs.aws.amazon.com/securityhub/latest/userguide/securityhub-standards-pci-dss.html"
+      gaps: ["Least privilege violations (Requirement 7.1.2)", "Missing network segmentation controls"],
+      details: "The policy grants overly broad permissions that violate PCI DSS Requirement 7.1.2 (limit access to system components and cardholder data to only those individuals whose job requires such access). Specific resource-level restrictions are needed to comply.",
+      link: "https://docs.aws.amazon.com/securityhub/latest/userguide/securityhub-standards-pci-dss.html",
+      violations: [
+        {
+          requirement: "7.1.2 - Restrict access to privileged user IDs to least privileges necessary",
+          description: "Policy uses wildcard permissions (s3:*) which grants more access than necessary",
+          fix: "Replace s3:* with specific actions like s3:GetObject, s3:PutObject"
+        }
+      ]
     },
     "hipaa": {
       name: "HIPAA",
       status: "NonCompliant",
-      gaps: ["Access logging", "Encryption controls", "Audit trails"],
-      details: "Policy lacks required HIPAA compliance controls for access logging and encryption.",
-      link: "https://aws.amazon.com/compliance/hipaa-compliance/"
+      gaps: ["Access logging not enforced", "Encryption controls missing", "Audit trails insufficient"],
+      details: "HIPAA requires access controls (164.308(a)(4)) and audit controls (164.312(b)). This policy lacks encryption enforcement and detailed logging requirements for PHI access.",
+      link: "https://aws.amazon.com/compliance/hipaa-compliance/",
+      violations: [
+        {
+          requirement: "164.308(a)(4) - Information Access Management",
+          description: "Overly permissive access controls do not implement minimum necessary access",
+          fix: "Limit permissions to specific actions and resources based on job function"
+        },
+        {
+          requirement: "164.312(b) - Audit Controls",
+          description: "No logging conditions to ensure audit trails for PHI access",
+          fix: "Add conditions to enforce CloudTrail logging and S3 access logging"
+        }
+      ]
+    },
+    "sox": {
+      name: "SOX",
+      status: "Partial",
+      gaps: ["Insufficient access control specificity", "Missing separation of duties controls"],
+      details: "SOX Section 404 requires internal controls over financial reporting. This policy's broad permissions could allow unauthorized access to financial data stored in S3.",
+      link: "https://aws.amazon.com/compliance/sox/",
+      violations: [
+        {
+          requirement: "Section 404 - Internal Controls",
+          description: "Wildcard permissions reduce the effectiveness of access controls",
+          fix: "Implement resource-level restrictions and separation of duties"
+        }
+      ]
     },
     "gdpr": {
       name: "GDPR",
       status: "Partial",
-      gaps: ["Data protection measures", "Access controls"],
-      details: "Some GDPR requirements are met, but additional data protection measures are needed.",
-      link: "https://aws.amazon.com/compliance/gdpr-center/"
+      gaps: ["Data protection measures unclear", "Access control granularity insufficient"],
+      details: "GDPR Article 32 requires appropriate technical measures for data security. The wildcard permissions don't provide sufficient controls for personal data protection.",
+      link: "https://aws.amazon.com/compliance/gdpr-center/",
+      violations: [
+        {
+          requirement: "Article 32 - Security of Processing",
+          description: "Overly broad permissions may not ensure appropriate security for personal data",
+          fix: "Limit permissions to specific actions and implement encryption requirements via Conditions"
+        }
+      ]
     }
   };
 
   return {
     findings,
     risk_score: riskScore,
+    security_score: securityScore,
     security_issues: [
       "Excessive permissions granted beyond functional requirements",
-      "Lack of resource-level restrictions",
-      "Missing security conditions and constraints"
+      "Lack of resource-level restrictions (use of wildcard resources)",
+      "Missing security conditions and constraints (IP, MFA, encryption)",
+      "No audit logging requirements enforced in the policy"
     ],
     recommendations,
+    quick_wins: quickWins,
     compliance_status: complianceStatus,
-    permissions_explanation: "This policy grants broad access to S3 and CloudWatch Logs services. The permissions allow reading, writing, and deleting objects across all S3 buckets, which exceeds typical operational requirements.",
-    trust_explanation: "The trust policy allows the Lambda service to assume this role. However, it lacks additional conditions that could restrict which specific Lambda functions or accounts can use this role."
+    permissions_explanation: "This policy grants broad access to S3 and CloudWatch Logs services. The wildcard permissions (s3:*) allow ALL S3 operations including reading, writing, deleting, and modifying bucket configurations across ALL buckets in your account. Similarly, CloudWatch Logs permissions apply to all log groups without scoping. This exceeds typical operational requirements and creates unnecessary security risks.",
+    trust_explanation: "The trust policy allows the Lambda service (lambda.amazonaws.com) to assume this role. However, it lacks additional conditions that could restrict which specific Lambda functions, accounts, or regions can use this role. Adding conditions like aws:SourceArn or aws:SourceAccount would significantly improve security.",
+    role_details: {
+      role_arn: "arn:aws:iam::123456789012:role/DemoLambdaExecutionRole",
+      role_name: "DemoLambdaExecutionRole",
+      attached_policies: [
+        {
+          name: "CustomS3Access",
+          arn: "arn:aws:iam::123456789012:policy/CustomS3Access"
+        }
+      ],
+      inline_policies: []
+    }
   };
 };
 
