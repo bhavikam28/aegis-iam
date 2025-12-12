@@ -45,30 +45,46 @@ const CICDIntegration: React.FC<CICDIntegrationProps> = ({ demoMode = false }) =
 
   const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
-  // Demo mode: Load demo data
+  // Demo mode: ALWAYS load demo data when in demo mode (including after refresh)
   useEffect(() => {
     if (demoMode) {
-      import('@/utils/demoData').then(({ mockCICDAnalysisResponse }) => {
-        setAnalysisResults([mockCICDAnalysisResponse()]);
-        setStatus({
-          success: true,
-          configured: true,
-          app_id_set: true,
-          private_key_set: true,
-          webhook_secret_set: true,
-          app_slug: 'aegis-iam',
-          install_url: 'https://github.com/apps/aegis-iam/installations/new',
-          webhook_url: 'https://aegis-iam-backend.onrender.com/api/github/webhook'
+      // Always restore demo data if it's missing
+      if (analysisResults.length === 0) {
+        import('@/utils/demoData').then(({ mockCICDAnalysisResponse }) => {
+          setAnalysisResults([mockCICDAnalysisResponse()]);
         });
+      }
+      // Always set demo status
+      setStatus({
+        success: true,
+        configured: true,
+        app_id_set: true,
+        private_key_set: true,
+        webhook_secret_set: true,
+        app_slug: 'aegis-iam',
+        install_url: 'https://github.com/apps/aegis-iam/installations/new',
+        webhook_url: 'https://aegis-iam-backend.onrender.com/api/github/webhook'
       });
     } else {
       // Fetch recent analysis results
       fetchAnalysisResults();
       fetchStatus();
     }
-  }, [demoMode]);
+  }, [demoMode, analysisResults.length]);
 
   const fetchAnalysisResults = async () => {
+    // In demo mode, restore demo data instead of fetching
+    if (demoMode) {
+      setLoadingResults(true);
+      setTimeout(() => {
+        import('@/utils/demoData').then(({ mockCICDAnalysisResponse }) => {
+          setAnalysisResults([mockCICDAnalysisResponse()]);
+          setLoadingResults(false);
+        });
+      }, 500);
+      return;
+    }
+    
     setLoadingResults(true);
     try {
       const response = await fetch(`${apiUrl}/api/cicd/analyses`);
