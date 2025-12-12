@@ -996,30 +996,31 @@ What would you like to do?`,
                       <CheckCircle className="w-5 h-5 text-green-600" />
                       <div className="flex flex-col sm:flex-row sm:items-center sm:gap-3">
                         <span className="text-sm font-semibold text-green-900">
-                        AWS Configured: {getRegionDisplayName(awsCredentials.region)}
-                      </span>
-                      <span className="text-xs text-green-700 font-mono">
-                        {maskAccessKeyId(awsCredentials.access_key_id)}
-                      </span>
+                          AWS Configured: {getRegionDisplayName(awsCredentials.region)}
+                        </span>
+                        <span className="text-xs text-green-700 font-mono">
+                          {maskAccessKeyId(awsCredentials.access_key_id)}
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => onOpenCredentialsModal()}
+                        className="ml-2 text-green-700 hover:text-green-900 transition-colors"
+                        title="Reconfigure credentials"
+                      >
+                        <Settings className="w-4 h-4" />
+                      </button>
                     </div>
+                  ) : (
                     <button
                       onClick={() => onOpenCredentialsModal()}
-                      className="ml-2 text-green-700 hover:text-green-900 transition-colors"
-                      title="Reconfigure credentials"
+                      className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold px-6 py-3 rounded-xl shadow-lg transition-all duration-300 transform hover:scale-105"
                     >
-                      <Settings className="w-4 h-4" />
+                      <Key className="w-5 h-5" />
+                      Configure AWS Credentials
                     </button>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => onOpenCredentialsModal()}
-                    className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold px-6 py-3 rounded-xl shadow-lg transition-all duration-300 transform hover:scale-105"
-                  >
-                    <Key className="w-5 h-5" />
-                    Configure AWS Credentials
-                  </button>
-                )}
-              </div>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="max-w-4xl mx-auto">
