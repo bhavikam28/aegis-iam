@@ -335,7 +335,7 @@ const LandingPage: React.FC<LandingPageProps> = ({
             </div>
             <h3 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold mb-6 leading-tight">
               <span className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 bg-clip-text text-transparent">
-                Built for Developers
+                Why Use Aegis IAM
               </span>
             </h3>
             <p className="text-xl sm:text-2xl text-slate-600 font-medium max-w-3xl mx-auto leading-relaxed">
@@ -343,67 +343,49 @@ const LandingPage: React.FC<LandingPageProps> = ({
             </p>
           </div>
 
-          {/* Premium Trust Cards - Enhanced Design */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-16">
+          {/* Premium Trust Cards - Clean & Elegant (3 Main Points Only) */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto">
             {/* Zero Cost */}
-            <div className="group relative bg-white/95 backdrop-blur-xl border-2 border-slate-200/60 rounded-3xl p-8 hover:shadow-2xl hover:-translate-y-2 hover:border-blue-300 transition-all duration-300">
+            <div className="group relative bg-white/95 backdrop-blur-xl border-2 border-slate-200/60 rounded-3xl p-10 hover:shadow-2xl hover:-translate-y-2 hover:border-blue-300 transition-all duration-300">
               <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 to-green-500/5 rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity"></div>
-              <div className="relative">
-                <div className="w-20 h-20 bg-gradient-to-br from-emerald-500 to-green-500 rounded-2xl flex items-center justify-center shadow-xl mb-6 group-hover:scale-110 transition-transform">
-                  <span className="text-4xl">💰</span>
+              <div className="relative text-center">
+                <div className="w-24 h-24 bg-gradient-to-br from-emerald-500 to-green-500 rounded-3xl flex items-center justify-center shadow-xl mb-6 mx-auto group-hover:scale-110 transition-transform">
+                  <span className="text-5xl">💰</span>
                 </div>
                 <h4 className="text-2xl font-bold text-slate-900 mb-4">Zero Cost for You</h4>
-                <p className="text-base text-slate-700 font-medium leading-relaxed">
+                <p className="text-lg text-slate-700 font-medium leading-relaxed">
                   Use your AWS credentials. All Bedrock/AWS costs go to <span className="font-bold text-emerald-600">your AWS account</span>, not ours.
                 </p>
               </div>
             </div>
 
             {/* Privacy First */}
-            <div className="group relative bg-white/95 backdrop-blur-xl border-2 border-slate-200/60 rounded-3xl p-8 hover:shadow-2xl hover:-translate-y-2 hover:border-blue-300 transition-all duration-300">
+            <div className="group relative bg-white/95 backdrop-blur-xl border-2 border-slate-200/60 rounded-3xl p-10 hover:shadow-2xl hover:-translate-y-2 hover:border-blue-300 transition-all duration-300">
               <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-purple-500/5 rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity"></div>
-              <div className="relative">
-                <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-purple-500 rounded-2xl flex items-center justify-center shadow-xl mb-6 group-hover:scale-110 transition-transform">
-                  <Lock className="w-10 h-10 text-white" />
+              <div className="relative text-center">
+                <div className="w-24 h-24 bg-gradient-to-br from-blue-500 to-purple-500 rounded-3xl flex items-center justify-center shadow-xl mb-6 mx-auto group-hover:scale-110 transition-transform">
+                  <Lock className="w-12 h-12 text-white" />
                 </div>
                 <h4 className="text-2xl font-bold text-slate-900 mb-4">Privacy First</h4>
-                <p className="text-base text-slate-700 font-medium leading-relaxed">
+                <p className="text-lg text-slate-700 font-medium leading-relaxed">
                   <span className="font-bold text-blue-600">Zero storage.</span> Your credentials live only in memory during your session.
                 </p>
               </div>
             </div>
 
             {/* Open Source */}
-            <div className="group relative bg-white/95 backdrop-blur-xl border-2 border-slate-200/60 rounded-3xl p-8 hover:shadow-2xl hover:-translate-y-2 hover:border-blue-300 transition-all duration-300">
+            <div className="group relative bg-white/95 backdrop-blur-xl border-2 border-slate-200/60 rounded-3xl p-10 hover:shadow-2xl hover:-translate-y-2 hover:border-blue-300 transition-all duration-300">
               <div className="absolute inset-0 bg-gradient-to-br from-pink-500/5 to-orange-500/5 rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity"></div>
-              <div className="relative">
-                <div className="w-20 h-20 bg-gradient-to-br from-pink-500 to-orange-500 rounded-2xl flex items-center justify-center shadow-xl mb-6 group-hover:scale-110 transition-transform">
-                  <Globe className="w-10 h-10 text-white" />
+              <div className="relative text-center">
+                <div className="w-24 h-24 bg-gradient-to-br from-pink-500 to-orange-500 rounded-3xl flex items-center justify-center shadow-xl mb-6 mx-auto group-hover:scale-110 transition-transform">
+                  <Globe className="w-12 h-12 text-white" />
                 </div>
                 <h4 className="text-2xl font-bold text-slate-900 mb-4">100% Open Source</h4>
-                <p className="text-base text-slate-700 font-medium leading-relaxed">
+                <p className="text-lg text-slate-700 font-medium leading-relaxed">
                   Fully transparent. Audit our code on <a href="https://github.com/bhavikam28/aegis-iam" target="_blank" rel="noopener noreferrer" className="font-bold text-pink-600 underline hover:text-pink-700 transition-colors">GitHub</a>.
                 </p>
               </div>
             </div>
-          </div>
-
-          {/* Feature Badges - Enhanced Grid */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-            {[
-              { icon: Brain, label: 'AI-Powered', desc: 'Claude 3.7 Sonnet', gradient: 'from-blue-500 to-purple-500' },
-              { icon: ShieldCheck, label: 'Enterprise Ready', desc: 'Multi-Compliance', gradient: 'from-purple-500 to-pink-500' },
-              { icon: Activity, label: 'Real-Time', desc: 'Live Analysis', gradient: 'from-pink-500 to-orange-500' },
-              { icon: Users, label: 'Community', desc: 'Open Source', gradient: 'from-amber-500 to-yellow-500' },
-            ].map((item, idx) => (
-              <div key={idx} className="group bg-white/95 backdrop-blur-xl border-2 border-slate-200/60 rounded-2xl p-6 hover:shadow-xl hover:border-blue-300 hover:-translate-y-1 transition-all text-center">
-                <div className={`w-16 h-16 bg-gradient-to-br ${item.gradient} rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg group-hover:scale-110 transition-transform`}>
-                  <item.icon className="w-8 h-8 text-white" />
-                </div>
-                <div className="text-base font-bold text-slate-900 mb-1">{item.label}</div>
-                <div className="text-sm text-slate-600 font-medium">{item.desc}</div>
-              </div>
-            ))}
           </div>
         </section>
 
