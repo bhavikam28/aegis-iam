@@ -590,21 +590,82 @@ const CICDIntegration: React.FC<CICDIntegrationProps> = ({ demoMode = false }) =
                       </div>
                     )}
 
-                    <div className="flex items-center space-x-4 pt-4 border-t-2 border-slate-200">
-                      <div className="text-sm text-slate-600">
-                        <span className="font-semibold">Files Analyzed:</span> {result.files_analyzed}
+                    {/* Analysis Summary */}
+                    <div className="bg-gradient-to-br from-slate-50 to-blue-50 rounded-xl p-5 border-2 border-slate-200 mt-4">
+                      <h5 className="font-bold text-slate-900 mb-4 flex items-center gap-2">
+                        <Info className="w-4 h-4 text-blue-600" />
+                        Analysis Summary
+                      </h5>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
+                        <div className="bg-white rounded-lg p-3 border border-slate-200">
+                          <p className="text-xs text-slate-500 mb-1 font-medium">Files Analyzed</p>
+                          <p className="text-xl font-bold text-slate-900">{result.files_analyzed}</p>
+                        </div>
+                        <div className="bg-white rounded-lg p-3 border border-slate-200">
+                          <p className="text-xs text-slate-500 mb-1 font-medium">Policies Analyzed</p>
+                          <p className="text-xl font-bold text-slate-900">{result.policies_analyzed}</p>
+                        </div>
+                        <div className="bg-white rounded-lg p-3 border border-slate-200">
+                          <p className="text-xs text-slate-500 mb-1 font-medium">Total Findings</p>
+                          <p className="text-xl font-bold text-slate-900">{result.findings.length}</p>
+                        </div>
+                        <div className="bg-white rounded-lg p-3 border border-slate-200">
+                          <p className="text-xs text-slate-500 mb-1 font-medium">Risk Score</p>
+                          <p className={`text-xl font-bold ${getRiskScoreColor(result.risk_score)}`}>
+                            {result.risk_score}/100
+                          </p>
+                        </div>
                       </div>
-                      <div className="text-sm text-slate-600">
-                        <span className="font-semibold">Policies Analyzed:</span> {result.policies_analyzed}
-                      </div>
+                      
+                      {/* Severity Breakdown */}
+                      {result.findings.length > 0 && (
+                        <div className="mt-4 pt-4 border-t border-slate-200">
+                          <p className="text-xs font-semibold text-slate-600 mb-2">Severity Breakdown</p>
+                          <div className="flex flex-wrap gap-2">
+                            {['Critical', 'High', 'Medium', 'Low'].map((severity) => {
+                              const count = result.findings.filter(f => f.severity === severity).length;
+                              if (count === 0) return null;
+                              return (
+                                <span
+                                  key={severity}
+                                  className={`text-xs font-semibold px-3 py-1.5 rounded-lg ${
+                                    severity === 'Critical' ? 'bg-red-100 text-red-700' :
+                                    severity === 'High' ? 'bg-orange-100 text-orange-700' :
+                                    severity === 'Medium' ? 'bg-amber-100 text-amber-700' :
+                                    'bg-yellow-100 text-yellow-700'
+                                  }`}
+                                >
+                                  {severity}: {count}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Action Links */}
+                    <div className="flex flex-wrap items-center gap-3 pt-4 border-t-2 border-slate-200">
                       {result.pr_number && (
                         <a
                           href={`https://github.com/${result.repo}/pull/${result.pr_number}`}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="flex items-center space-x-1 text-blue-600 hover:text-blue-700 text-sm"
+                          className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-lg transition-all shadow-md hover:shadow-lg text-sm font-semibold"
                         >
-                          <span>View PR</span>
+                          <Github className="w-4 h-4" />
+                          <span>View Pull Request</span>
+                          <ExternalLink className="w-4 h-4" />
+                        </a>
+                      )}
+                      {result.commit_sha && (
+                        <a
+                          href={`https://github.com/${result.repo}/commit/${result.commit_sha}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center space-x-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-all text-sm font-semibold"
+                        >
+                          <span>View Commit</span>
                           <ExternalLink className="w-4 h-4" />
                         </a>
                       )}
