@@ -75,9 +75,10 @@ const AVAILABLE_FRAMEWORKS = [
 interface ValidatePolicyProps {
   awsCredentials: AWSCredentials | null;
   onOpenCredentialsModal: () => void;
+  demoMode?: boolean;
 }
 
-const ValidatePolicy: React.FC<ValidatePolicyProps> = ({ awsCredentials: propCredentials, onOpenCredentialsModal }) => {
+const ValidatePolicy: React.FC<ValidatePolicyProps> = ({ awsCredentials: propCredentials, onOpenCredentialsModal, demoMode = false }) => {
   // State management
   const [inputType, setInputType] = useState<'policy' | 'arn'>('policy');
   const [inputValue, setInputValue] = useState('');

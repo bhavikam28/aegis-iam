@@ -52,9 +52,10 @@ interface AuditResponse {
 interface AuditAccountProps {
   awsCredentials: AWSCredentials | null;
   onOpenCredentialsModal: () => void;
+  demoMode?: boolean;
 }
 
-const AuditAccount: React.FC<AuditAccountProps> = ({ awsCredentials: propCredentials, onOpenCredentialsModal }) => {
+const AuditAccount: React.FC<AuditAccountProps> = ({ awsCredentials: propCredentials, onOpenCredentialsModal, demoMode = false }) => {
   const [isAuditing, setIsAuditing] = useState(false);
   const [auditResults, setAuditResults] = useState<AuditResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
