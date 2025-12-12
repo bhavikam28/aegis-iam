@@ -440,11 +440,11 @@ What would you like to do?`,
         
         setTimeout(() => {
           const demoResponse = mockGeneratePolicyResponse({
-          description: 'Lambda function to read from S3 bucket my-app-bucket and write logs to CloudWatch',
-          service: 'Lambda',
-          compliance: request.compliance || 'general',
-          restrictive: request.restrictive || false
-        });
+            description,
+            service: 'Lambda',
+            compliance: compliance || 'pci-dss', // Use selected compliance or default to PCI DSS
+            restrictive
+          });
           setResponse(demoResponse);
           setShowInitialForm(false);
           setLoading(false);
