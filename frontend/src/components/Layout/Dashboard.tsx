@@ -28,6 +28,7 @@ const Dashboard: React.FC<DashboardProps> = ({
           <GeneratePolicy 
             awsCredentials={awsCredentials}
             onOpenCredentialsModal={onOpenCredentialsModal}
+            demoMode={demoMode}
           />
         );
       case 'validate':
@@ -35,6 +36,7 @@ const Dashboard: React.FC<DashboardProps> = ({
           <ValidatePolicy 
             awsCredentials={awsCredentials}
             onOpenCredentialsModal={onOpenCredentialsModal}
+            demoMode={demoMode}
           />
         );
       case 'audit':
@@ -42,15 +44,17 @@ const Dashboard: React.FC<DashboardProps> = ({
           <AuditAccount 
             awsCredentials={awsCredentials}
             onOpenCredentialsModal={onOpenCredentialsModal}
+            demoMode={demoMode}
           />
         );
       case 'cicd':
-        return <CICDIntegration />; // CI/CD doesn't need AWS credentials (uses GitHub App)
+        return <CICDIntegration demoMode={demoMode} />; // CI/CD doesn't need AWS credentials (uses GitHub App)
       default:
         return (
           <GeneratePolicy 
             awsCredentials={awsCredentials}
             onOpenCredentialsModal={onOpenCredentialsModal}
+            demoMode={demoMode}
           />
         );
     }
