@@ -314,12 +314,12 @@ const LandingPage: React.FC<LandingPageProps> = ({
           </div>
         </section>
 
-        {/* Trust Signals Section - Seamlessly Integrated */}
+        {/* Why Choose Aegis IAM Section */}
         <section className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-20">
           <div className="text-center mb-12">
             <h3 className="text-3xl sm:text-4xl font-extrabold mb-4">
               <span className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 bg-clip-text text-transparent">
-                Trusted by Developers
+                Why Choose Aegis IAM
               </span>
             </h3>
             <p className="text-lg text-slate-600 font-medium max-w-2xl mx-auto">
@@ -394,18 +394,169 @@ const LandingPage: React.FC<LandingPageProps> = ({
           </div>
         </section>
 
-        {/* Feature Section 1: Autonomous Account Auditing */}
+        {/* Feature 1: AI-Powered Policy Generation */}
         <section className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 sm:py-24">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center">
             {/* Left Content */}
             <div className="animate-fadeIn" style={{ animationDelay: '0.3s' }}>
+              <div className="inline-flex items-center space-x-2 bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-pink-500/10 border border-blue-200/50 rounded-full px-4 py-2 mb-6">
+                <Shield className="w-4 h-4 text-blue-600" />
+                <span className="text-blue-700 text-sm font-semibold">Feature 1 of 4</span>
+              </div>
+              <h3 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold mb-6 leading-tight">
+                <span className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 bg-clip-text text-transparent">
+                  AI-Powered Policy
+                </span>
+                <br />
+                <span className="bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">
+                  Generation
+                </span>
+              </h3>
+              <p className="text-lg sm:text-xl text-slate-600 mb-8 leading-relaxed font-medium">
+                Transform your permission requirements into production-ready IAM policies using natural language. 
+                Our AI automatically enforces least-privilege principles and validates policies against security best practices and compliance frameworks.
+              </p>
+              <ul className="space-y-4 mb-8">
+                {[
+                  'Generate secure IAM policies from plain English in seconds',
+                  'Interactive refinement through conversational AI chatbot',
+                  'Automatic security scoring and compliance validation',
+                  'Export to Terraform, CloudFormation, CDK, and YAML',
+                ].map((item, idx) => (
+                  <li key={idx} className="flex items-start space-x-3">
+                    <CheckCircle className="w-6 h-6 text-emerald-500 mt-0.5 flex-shrink-0" />
+                    <span className="text-slate-700 font-medium text-base">{item}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {/* Right Visual - Policy Cards */}
+            <div className="relative animate-fadeIn" style={{ animationDelay: '0.4s' }}>
+              <div className="absolute inset-0 bg-gradient-to-r from-blue-500/5 via-purple-500/5 to-pink-500/5 rounded-3xl blur-2xl"></div>
+              <div className="relative bg-white/90 backdrop-blur-xl border-2 border-slate-200/50 rounded-2xl p-6 shadow-xl">
+                <div className="space-y-4">
+                  <div className="bg-gradient-to-br from-white to-slate-50/50 border-2 border-blue-200/50 rounded-xl p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center space-x-2">
+                        <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-500 rounded-lg flex items-center justify-center">
+                          <Shield className="w-4 h-4 text-white" />
+                        </div>
+                        <span className="text-slate-900 font-bold text-sm">Permissions Policy</span>
+                      </div>
+                      <span className="px-2 py-1 bg-blue-500/10 text-blue-700 rounded text-xs font-semibold">Score: 85</span>
+                    </div>
+                    <div className="text-xs text-slate-600 font-medium">Least-privilege enforced</div>
+                  </div>
+                  <div className="bg-gradient-to-br from-white to-slate-50/50 border-2 border-purple-200/50 rounded-xl p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center space-x-2">
+                        <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center">
+                          <Lock className="w-4 h-4 text-white" />
+                        </div>
+                        <span className="text-slate-900 font-bold text-sm">Trust Policy</span>
+                      </div>
+                      <span className="px-2 py-1 bg-purple-500/10 text-purple-700 rounded text-xs font-semibold">Score: 90</span>
+                    </div>
+                    <div className="text-xs text-slate-600 font-medium">Principal restrictions applied</div>
+                  </div>
+                  <div className="bg-slate-50 rounded-xl p-3 border border-slate-200">
+                    <div className="flex items-center space-x-2 mb-2">
+                      <Bot className="w-4 h-4 text-blue-600" />
+                      <span className="text-xs font-semibold text-slate-700">AI Assistant</span>
+                    </div>
+                    <div className="text-xs text-slate-600 font-medium">Ready to refine your policies</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Feature 2: Security Policy Validation */}
+        <section className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 sm:py-24 bg-gradient-to-br from-white via-slate-50/30 to-blue-50/20 rounded-3xl my-12">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center">
+            {/* Left Visual - Validation Results */}
+            <div className="relative animate-fadeIn" style={{ animationDelay: '0.5s' }}>
+              <div className="absolute inset-0 bg-gradient-to-r from-purple-500/5 via-pink-500/5 to-orange-500/5 rounded-3xl blur-2xl"></div>
+              <div className="relative bg-white/90 backdrop-blur-xl border-2 border-slate-200/50 rounded-2xl p-6 shadow-xl">
+                <div className="mb-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-slate-900 font-bold text-lg">Security Score</span>
+                    <span className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">78/100</span>
+                  </div>
+                  <div className="w-full bg-slate-100 rounded-full h-2">
+                    <div className="bg-gradient-to-r from-blue-500 to-purple-500 h-2 rounded-full" style={{ width: '78%' }}></div>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  {[
+                    { title: 'Wildcard Permissions', severity: 'High', color: 'orange' },
+                    { title: 'Missing MFA', severity: 'Medium', color: 'amber' },
+                    { title: 'Unused Permissions', severity: 'Low', color: 'blue' },
+                  ].map((item, idx) => (
+                    <div key={idx} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
+                      <span className="text-sm font-medium text-slate-700">{item.title}</span>
+                      <span className={`px-2 py-1 rounded text-xs font-semibold bg-${item.color}-100 text-${item.color}-700`}>
+                        {item.severity}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Right Content */}
+            <div className="animate-fadeIn" style={{ animationDelay: '0.6s' }}>
+              <div className="inline-flex items-center space-x-2 bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-pink-500/10 border border-blue-200/50 rounded-full px-4 py-2 mb-6">
+                <Search className="w-4 h-4 text-blue-600" />
+                <span className="text-blue-700 text-sm font-semibold">Feature 2 of 4</span>
+              </div>
+              <h3 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold mb-6 leading-tight">
+                <span className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 bg-clip-text text-transparent">
+                  Security Policy
+                </span>
+                <br />
+                <span className="bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">
+                  Validation
+                </span>
+              </h3>
+              <p className="text-lg sm:text-xl text-slate-600 mb-8 leading-relaxed font-medium">
+                Analyze existing IAM policies for security vulnerabilities and compliance violations. Get detailed risk assessments, actionable recommendations, and compliance status across multiple frameworks.
+              </p>
+              <ul className="space-y-4 mb-8">
+                {[
+                  'Deep security analysis with severity-based risk scoring',
+                  'Multi-framework compliance validation (PCI DSS, HIPAA, SOX, GDPR, CIS)',
+                  'Actionable recommendations with code snippets and quick wins',
+                  'PDF and email export for sharing security reports',
+                ].map((item, idx) => (
+                  <li key={idx} className="flex items-start space-x-3">
+                    <CheckCircle className="w-6 h-6 text-emerald-500 mt-0.5 flex-shrink-0" />
+                    <span className="text-slate-700 font-medium text-base">{item}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </section>
+
+        {/* Feature 3: Autonomous Account Auditing */}
+        <section className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 sm:py-24">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center">
+            {/* Left Content */}
+            <div className="animate-fadeIn" style={{ animationDelay: '0.7s' }}>
+              <div className="inline-flex items-center space-x-2 bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-pink-500/10 border border-blue-200/50 rounded-full px-4 py-2 mb-6">
+                <Activity className="w-4 h-4 text-blue-600" />
+                <span className="text-blue-700 text-sm font-semibold">Feature 3 of 4</span>
+              </div>
               <h3 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold mb-6 leading-tight">
                 <span className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 bg-clip-text text-transparent">
                   Autonomous Account
                 </span>
                 <br />
                 <span className="bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">
-                  Auditing with AI
+                  Auditing
                 </span>
               </h3>
               <p className="text-lg sm:text-xl text-slate-600 mb-8 leading-relaxed font-medium">
@@ -416,36 +567,19 @@ const LandingPage: React.FC<LandingPageProps> = ({
                 {[
                   'Autonomously scan your entire AWS account for IAM vulnerabilities',
                   'Multi-framework compliance validation (PCI DSS, HIPAA, SOX, GDPR, CIS)',
+                  'CloudTrail analysis to detect unused permissions',
                   'Intelligent risk prioritization with actionable remediation steps',
                 ].map((item, idx) => (
                   <li key={idx} className="flex items-start space-x-3">
                     <CheckCircle className="w-6 h-6 text-emerald-500 mt-0.5 flex-shrink-0" />
                     <span className="text-slate-700 font-medium text-base">{item}</span>
-              </li>
+                  </li>
                 ))}
-            </ul>
-              <div className="flex items-center space-x-4">
-                <button
-                  onClick={handleGetStarted}
-                  className="group bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 hover:from-blue-700 hover:via-purple-700 hover:to-pink-700 text-white px-6 py-3 rounded-xl font-bold shadow-lg hover:shadow-xl transition-all inline-flex items-center space-x-2 transform hover:scale-105"
-                >
-                  <span>Try It Now</span>
-                  <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                </button>
-                <a
-                  href="https://github.com/bhavikam28/aegis-iam"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="group px-6 py-3 bg-white/80 backdrop-blur-sm border-2 border-slate-200 rounded-xl text-slate-700 hover:text-slate-900 font-semibold hover:border-blue-300 hover:shadow-lg transition-all inline-flex items-center space-x-2"
-                >
-                  <span>View on GitHub</span>
-                  <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                </a>
-              </div>
+              </ul>
             </div>
 
             {/* Right Visual - Audit Findings */}
-            <div className="relative animate-fadeIn" style={{ animationDelay: '0.4s' }}>
+            <div className="relative animate-fadeIn" style={{ animationDelay: '0.8s' }}>
               <div className="absolute inset-0 bg-gradient-to-r from-blue-500/5 via-purple-500/5 to-pink-500/5 rounded-3xl blur-2xl"></div>
               <div className="relative bg-white/90 backdrop-blur-xl border-2 border-slate-200/50 rounded-3xl p-6 shadow-2xl">
                 <div className="space-y-4">
@@ -484,114 +618,57 @@ const LandingPage: React.FC<LandingPageProps> = ({
           </div>
         </section>
 
-        {/* Feature Section 2: Unify cloud security in a single platform */}
-        <section className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 sm:py-24 bg-gradient-to-br from-white via-slate-50/30 to-blue-50/20 rounded-3xl my-12">
+        {/* Feature 4: CI/CD Integration - Redesigned to Match Theme */}
+        <section className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 sm:py-24 bg-gradient-to-br from-slate-50/50 via-white to-blue-50/30 rounded-3xl my-12">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center">
-            {/* Left Visual - Matching Image 1 */}
-            <div className="relative animate-fadeIn" style={{ animationDelay: '0.5s' }}>
-              <div className="absolute inset-0 bg-gradient-to-r from-purple-500/5 via-pink-500/5 to-orange-500/5 rounded-3xl blur-2xl"></div>
-              <div className="relative bg-white rounded-2xl p-6 shadow-lg">
-                <div className="space-y-3">
-                  {[
-                    { service: 'IAM Policy Generator', status: 'Active', icon: Shield },
-                    { service: 'Security Validator', status: 'Active', icon: Search },
-                    { service: 'Autonomous Auditor', status: 'Active', icon: Activity },
-                    { service: 'Compliance Checker', status: 'Active', icon: CheckCircle },
-                  ].map((item, idx) => (
-                    <div key={idx} className="flex items-center justify-between">
-                      <div className="flex items-center space-x-3">
-                        <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-blue-500 rounded-lg flex items-center justify-center">
-                          <item.icon className="w-5 h-5 text-white" />
-                        </div>
-                        <span className="text-slate-900 font-semibold text-sm">{item.service}</span>
-                      </div>
-                      <span className="px-3 py-1 bg-green-100 text-green-700 rounded-lg text-xs font-semibold">
-                        {item.status}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Right Content */}
-            <div className="animate-fadeIn" style={{ animationDelay: '0.6s' }}>
-              <h3 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold mb-6 leading-tight">
-                <span className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 bg-clip-text text-transparent">
-                  Unify IAM security
-                </span>
-                <br />
-                <span className="bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">
-                  in a single platform
-                </span>
-              </h3>
-              <p className="text-lg sm:text-xl text-slate-600 mb-8 leading-relaxed font-medium">
-                Three powerful features in one platform: Generate secure IAM policies from natural language, 
-                validate existing policies for security issues, and autonomously audit your entire AWS account—all powered by agentic AI.
-              </p>
-              <ul className="space-y-4 mb-8">
-                {[
-                  'Generate IAM policies from plain English with AI-powered natural language processing',
-                  'Validate existing policies against security best practices and compliance frameworks',
-                  'Autonomously audit your AWS account with intelligent vulnerability detection',
-                ].map((item, idx) => (
-                  <li key={idx} className="flex items-start space-x-3">
-                    <CheckCircle className="w-6 h-6 text-emerald-500 mt-0.5 flex-shrink-0" />
-                    <span className="text-slate-700 font-medium text-base">{item}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
-        </section>
-
-        {/* Feature Section 3: CI/CD Integration */}
-        <section className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 sm:py-24 bg-gradient-to-br from-slate-50/50 via-white to-blue-50/30 rounded-3xl">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center">
-            {/* Left Visual */}
-            <div className="relative animate-fadeIn" style={{ animationDelay: '0.5s' }}>
+            {/* Left Visual - GitHub Integration */}
+            <div className="relative animate-fadeIn" style={{ animationDelay: '0.9s' }}>
               <div className="absolute inset-0 bg-gradient-to-r from-blue-500/5 via-purple-500/5 to-pink-500/5 rounded-3xl blur-2xl"></div>
               <div className="relative bg-white/90 backdrop-blur-xl border-2 border-slate-200/50 rounded-2xl p-6 shadow-xl">
-                {/* GitHub PR Comment Preview */}
+                {/* GitHub PR Comment Preview - Matched to Landing Page Theme */}
                 <div className="space-y-4">
-                  <div className="flex items-center space-x-3 mb-4">
-                    <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-500 rounded-xl flex items-center justify-center">
-                      <Bot className="w-5 h-5 text-white" />
+                  <div className="flex items-center space-x-3 mb-4 pb-4 border-b border-slate-200">
+                    <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-500 rounded-xl flex items-center justify-center shadow-md">
+                      <GitBranch className="w-6 h-6 text-white" />
                     </div>
                     <div>
                       <div className="text-sm font-bold text-slate-900">aegis-iam bot</div>
-                      <div className="text-xs text-slate-500">commented 2 hours ago</div>
+                      <div className="text-xs text-slate-500">commented on PR #42</div>
                     </div>
                   </div>
-                  <div className="bg-slate-50 rounded-xl p-4 border-l-4 border-blue-500">
-                    <div className="flex items-center space-x-2 mb-2">
-                      <Shield className="w-4 h-4 text-blue-600" />
+                  <div className="bg-gradient-to-br from-blue-50/50 to-purple-50/30 rounded-xl p-4 border-2 border-blue-200/50">
+                    <div className="flex items-center space-x-2 mb-3">
+                      <Shield className="w-5 h-5 text-blue-600" />
                       <span className="text-sm font-bold text-slate-900">IAM Policy Security Analysis</span>
                     </div>
-                    <p className="text-xs text-slate-600 mb-3">
+                    <p className="text-xs text-slate-700 font-medium mb-3">
                       🔒 Security Review Recommended: 2 high and 1 medium severity issues found.
                     </p>
                     <div className="space-y-2">
-                      <div className="flex items-center space-x-2 text-xs">
+                      <div className="flex items-center space-x-2 text-xs bg-white/80 rounded-lg p-2">
                         <div className="w-2 h-2 rounded-full bg-orange-500"></div>
-                        <span className="text-slate-700">Wildcard Permissions Detected</span>
+                        <span className="text-slate-700 font-medium">Wildcard Permissions Detected</span>
                       </div>
-                      <div className="flex items-center space-x-2 text-xs">
+                      <div className="flex items-center space-x-2 text-xs bg-white/80 rounded-lg p-2">
                         <div className="w-2 h-2 rounded-full bg-amber-500"></div>
-                        <span className="text-slate-700">Unused Permissions Found</span>
+                        <span className="text-slate-700 font-medium">Unused Permissions Found</span>
                       </div>
                     </div>
                   </div>
-                  <div className="flex items-center space-x-2 text-xs text-slate-500">
-                    <CheckCircle className="w-4 h-4 text-emerald-500" />
-                    <span>Automatically analyzed on PR #42</span>
+                  <div className="flex items-center space-x-2 text-xs text-slate-600 bg-emerald-50 rounded-lg p-2">
+                    <CheckCircle className="w-4 h-4 text-emerald-600" />
+                    <span className="font-medium">Automatically analyzed • Zero configuration</span>
                   </div>
                 </div>
               </div>
             </div>
 
             {/* Right Content */}
-            <div className="animate-fadeIn" style={{ animationDelay: '0.6s' }}>
+            <div className="animate-fadeIn" style={{ animationDelay: '1.0s' }}>
+              <div className="inline-flex items-center space-x-2 bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-pink-500/10 border border-blue-200/50 rounded-full px-4 py-2 mb-6">
+                <GitBranch className="w-4 h-4 text-blue-600" />
+                <span className="text-blue-700 text-sm font-semibold">Feature 4 of 4</span>
+              </div>
               <h3 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold mb-6 leading-tight">
                 <span className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 bg-clip-text text-transparent">
                   CI/CD Integration
@@ -617,82 +694,6 @@ const LandingPage: React.FC<LandingPageProps> = ({
                   </li>
                 ))}
               </ul>
-            </div>
-          </div>
-        </section>
-
-        {/* Feature Section 4: AI-Powered Policy Generation & Validation */}
-        <section className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 sm:py-24">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center">
-            {/* Left Content */}
-            <div className="animate-fadeIn" style={{ animationDelay: '0.7s' }}>
-              <h3 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold mb-6 leading-tight">
-                <span className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 bg-clip-text text-transparent">
-                  AI-Powered Policy
-                </span>
-                <br />
-                <span className="bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">
-                  Generation & Validation
-                </span>
-              </h3>
-              <p className="text-lg sm:text-xl text-slate-600 mb-8 leading-relaxed font-medium">
-                Transform your permission requirements into production-ready IAM policies using natural language. 
-                Our AI automatically enforces least-privilege principles and validates policies against security best practices and compliance frameworks.
-              </p>
-              <ul className="space-y-4 mb-8">
-                {[
-                  'Generate secure IAM policies from plain English in seconds',
-                  'Interactive refinement through conversational AI chatbot',
-                  'Automatic security scoring and compliance validation',
-                ].map((item, idx) => (
-                  <li key={idx} className="flex items-start space-x-3">
-                    <CheckCircle className="w-6 h-6 text-emerald-500 mt-0.5 flex-shrink-0" />
-                    <span className="text-slate-700 font-medium text-base">{item}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            {/* Right Visual - Policy Cards Matching Generate Policy Feature */}
-            <div className="relative animate-fadeIn" style={{ animationDelay: '0.8s' }}>
-              <div className="absolute inset-0 bg-gradient-to-r from-pink-500/5 via-orange-500/5 to-amber-500/5 rounded-3xl blur-2xl"></div>
-              <div className="relative bg-white rounded-2xl p-6 shadow-lg">
-                {/* Policy Cards */}
-                <div className="space-y-4">
-                  <div className="bg-gradient-to-br from-white to-slate-50/50 border-2 border-blue-200/50 rounded-xl p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center space-x-2">
-                        <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-500 rounded-lg flex items-center justify-center">
-                          <Shield className="w-4 h-4 text-white" />
-                        </div>
-                        <span className="text-slate-900 font-bold text-sm">Permissions Policy</span>
-                      </div>
-                      <span className="px-2 py-1 bg-blue-500/10 text-blue-700 rounded text-xs font-semibold">Score: 85</span>
-                    </div>
-                    <div className="text-xs text-slate-600 font-medium">Least-privilege enforced</div>
-                  </div>
-                  <div className="bg-gradient-to-br from-white to-slate-50/50 border-2 border-purple-200/50 rounded-xl p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center space-x-2">
-                        <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center">
-                          <Lock className="w-4 h-4 text-white" />
-                        </div>
-                        <span className="text-slate-900 font-bold text-sm">Trust Policy</span>
-                      </div>
-                      <span className="px-2 py-1 bg-purple-500/10 text-purple-700 rounded text-xs font-semibold">Score: 90</span>
-                    </div>
-                    <div className="text-xs text-slate-600 font-medium">Principal restrictions applied</div>
-                  </div>
-                  {/* Chatbot Preview */}
-                  <div className="bg-slate-50 rounded-xl p-3 border border-slate-200">
-                    <div className="flex items-center space-x-2 mb-2">
-                      <Bot className="w-4 h-4 text-blue-600" />
-                      <span className="text-xs font-semibold text-slate-700">AI Assistant</span>
-                    </div>
-                    <div className="text-xs text-slate-600 font-medium">Ready to refine your policies</div>
-                  </div>
-                </div>
-              </div>
             </div>
           </div>
         </section>
