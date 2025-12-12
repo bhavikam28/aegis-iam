@@ -2557,7 +2557,7 @@ Let me know if you have any questions!
                 "security_notes": security_notes or {"permissions": [], "trust": []},
                 "security_features": security_features or {"permissions": [], "trust": []},
                 "score_breakdown": score_breakdown or {},
-                "is_question": is_question if isinstance(is_question, bool) else False,
+                "is_question": is_question if isinstance(is_question, bool) else (not bool(policy or trust_policy)),  # Only mark as question if no policies AND it looks like a question
                 "conversation_history": conversation_history or [],
                 "refinement_suggestions": refinement_suggestions or {"permissions": [], "trust": []},
                 "compliance_status": compliance_status or {},
