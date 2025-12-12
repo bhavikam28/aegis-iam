@@ -549,10 +549,10 @@ export const mockAnalyzeHistoryResponse = (request: AnalyzeHistoryRequest): Anal
 
 export const mockCICDAnalysisResponse = () => {
   return {
-    id: "demo-analysis-" + Date.now(),
-    repo: "your-org/your-repo",
+    id: "analysis-" + Math.random().toString(36).substring(2, 15),
+    repo: "bhavikam28/aegis-iam",
     pr_number: 42,
-    commit_sha: "abc123def456",
+    commit_sha: "7f8e9a2b",
     timestamp: new Date().toISOString(),
     risk_score: 55,
     findings: [
@@ -565,16 +565,11 @@ export const mockCICDAnalysisResponse = () => {
         severity: "Medium" as const,
         title: "Wildcard Resources Used",
         description: "Policy uses Resource:'*' allowing actions on all S3 buckets in the account instead of specific buckets."
-      },
-      {
-        severity: "Low" as const,
-        title: "Missing Encryption Requirements",
-        description: "No condition requiring encryption in transit (aws:SecureTransport) for S3 operations."
       }
     ],
     policies_analyzed: 2,
-    files_analyzed: 3,
+    files_analyzed: 1,
     status: "success" as const,
-    message: "Security analysis completed. Found 3 issues across 2 IAM policies in 3 files."
+    message: "Security analysis completed. Found 2 issues across 2 IAM policies."
   };
 };

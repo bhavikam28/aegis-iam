@@ -544,6 +544,24 @@ const ValidatePolicy: React.FC<ValidatePolicyProps> = ({ awsCredentials: propCre
 
   return (
     <div className="min-h-screen relative overflow-hidden">
+      {/* Demo Mode Banner */}
+      {demoMode && (
+        <div className="relative z-30 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white py-3 px-4 shadow-lg">
+          <div className="max-w-7xl mx-auto flex items-center justify-center space-x-3">
+            <Sparkles className="w-5 h-5" />
+            <span className="font-bold text-sm sm:text-base">
+              Demo Mode: This is sample data. Add your AWS credentials to use the real service.
+            </span>
+            <button
+              onClick={onOpenCredentialsModal}
+              className="bg-white/20 hover:bg-white/30 px-4 py-1.5 rounded-lg font-semibold text-sm transition-colors"
+            >
+              Add Credentials
+            </button>
+          </div>
+        </div>
+      )}
+      
       {/* Premium Animated Background - Light Theme */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-0 right-0 w-[800px] h-[800px] bg-gradient-to-br from-blue-400/8 via-purple-400/6 to-pink-400/4 rounded-full blur-3xl animate-pulse"></div>

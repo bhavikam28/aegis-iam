@@ -129,6 +129,18 @@ const CICDIntegration: React.FC<CICDIntegrationProps> = ({ demoMode = false }) =
 
   return (
     <div className="min-h-screen relative overflow-hidden">
+      {/* Demo Mode Banner */}
+      {demoMode && (
+        <div className="relative z-30 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white py-3 px-4 shadow-lg">
+          <div className="max-w-7xl mx-auto flex items-center justify-center space-x-3">
+            <Sparkles className="w-5 h-5" />
+            <span className="font-bold text-sm sm:text-base">
+              Demo Mode: This is sample data. No credentials needed for this feature.
+            </span>
+          </div>
+        </div>
+      )}
+      
       {/* Premium Animated Background - Matching Website Theme */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-0 right-0 w-[800px] h-[800px] bg-gradient-to-br from-blue-400/8 via-purple-400/6 to-pink-400/4 rounded-full blur-3xl animate-pulse"></div>
