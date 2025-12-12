@@ -480,6 +480,7 @@ async def generate(request: GenerationRequest):
     
     try:
         # AUTO-DETECT ACTUAL AWS ACCOUNT ID from credentials
+        actual_account_id = None
         try:
             import boto3
             # Use user credentials if provided, otherwise default
@@ -495,25 +496,29 @@ async def generate(request: GenerationRequest):
             
             actual_account_id = sts.get_caller_identity()['Account']
             logging.info(f"✅ Detected AWS Account ID: {actual_account_id}")
+        except Exception as e:
+            logging.warning(f"⚠️ Could not auto-detect AWS Account ID: {e}")
+            # Continue without modification if detection fails
         
-        # Replace any user-provided account ID with the ACTUAL account ID
-        import re
-        # Match patterns like "AWS Account ID: 123456789012" or "Account ID: 123456789012"
-        account_id_pattern = r'(?:AWS\s+)?Account\s+ID:\s*(\d{12})'
-        
-        if re.search(account_id_pattern, request.description, re.IGNORECASE):
-            original_desc = request.description
-            request.description = re.sub(
-                account_id_pattern,
-                f'AWS Account ID: {actual_account_id}',
-                request.description,
-                flags=re.IGNORECASE
-            )
-            logging.info(f"🔄 Replaced user-provided Account ID with actual Account ID: {actual_account_id}")
-        else:
-            # If no account ID provided, append the actual one
-            request.description += f"\n\nAWS Account ID: {actual_account_id}"
-            logging.info(f"➕ Added actual Account ID to description: {actual_account_id}")
+        # Replace any user-provided account ID with the ACTUAL account ID (if detected)
+        if actual_account_id:
+            import re
+            # Match patterns like "AWS Account ID: 123456789012" or "Account ID: 123456789012"
+            account_id_pattern = r'(?:AWS\s+)?Account\s+ID:\s*(\d{12})'
+            
+            if re.search(account_id_pattern, request.description, re.IGNORECASE):
+                original_desc = request.description
+                request.description = re.sub(
+                    account_id_pattern,
+                    f'AWS Account ID: {actual_account_id}',
+                    request.description,
+                    flags=re.IGNORECASE
+                )
+                logging.info(f"🔄 Replaced user-provided Account ID with actual Account ID: {actual_account_id}")
+            else:
+                # If no account ID provided, append the actual one
+                request.description += f"\n\nAWS Account ID: {actual_account_id}"
+                logging.info(f"➕ Added actual Account ID to description: {actual_account_id}")
     except Exception as e:
         logging.warning(f"⚠️ Could not auto-detect AWS Account ID: {e}")
         # Continue without modification if detection fails
@@ -525,20 +530,21 @@ async def generate(request: GenerationRequest):
         if isinstance(result, JSONResponse):
             logging.info(f"   JSONResponse status: {result.status_code}")
             return result
-        except Exception as outer_error:
-            logging.error(f"❌ CRITICAL: Outer exception handler caught error: {outer_error}")
-            logging.exception(outer_error)
-            # Return guaranteed minimal response as plain dict (let FastAPI serialize)
-            error_response = {
-                "conversation_id": str(uuid.uuid4()),
-                "final_answer": f"An error occurred: {str(outer_error)[:200]}. Please try again.",
-                "error": str(outer_error)[:200],
-                "message_count": 1,
-                "policy": None,
-                "trust_policy": None
-            }
-            logging.info(f"⚠️ Returning error response from outer handler: {error_response}")
-            return error_response  # Return dict, not JSONResponse - let FastAPI handle it
+        return result
+    except Exception as outer_error:
+        logging.error(f"❌ CRITICAL: Outer exception handler caught error: {outer_error}")
+        logging.exception(outer_error)
+        # Return guaranteed minimal response as plain dict (let FastAPI serialize)
+        error_response = {
+            "conversation_id": str(uuid.uuid4()),
+            "final_answer": f"An error occurred: {str(outer_error)[:200]}. Please try again.",
+            "error": str(outer_error)[:200],
+            "message_count": 1,
+            "policy": None,
+            "trust_policy": None
+        }
+        logging.info(f"⚠️ Returning error response from outer handler: {error_response}")
+        return error_response  # Return dict, not JSONResponse - let FastAPI handle it
     finally:
         # SECURITY: Always clear user credentials after request
         if request.aws_credentials:
