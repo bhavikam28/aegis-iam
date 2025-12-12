@@ -139,6 +139,23 @@ const AuditAccount: React.FC<AuditAccountProps> = ({ awsCredentials: propCredent
   }, [auditResults, chatMessages, selectedFindings, severityFilter, roleFilter, searchQuery, viewMode, currentPage, groupBy]);
 
   const handleStartAudit = async () => {
+    // Demo mode: Show demo data with full loading flow
+    if (demoMode) {
+      setIsAuditing(true);
+      setError(null);
+      
+      // Show loading for 2-3 seconds to simulate audit process
+      setTimeout(() => {
+        import('@/utils/demoData').then(({ mockAuditAccountResponse }) => {
+          const demoResponse = mockAuditAccountResponse();
+          setAuditResults(demoResponse);
+          setIsAuditing(false);
+          setError(null);
+        });
+      }, 2500);
+      return;
+    }
+    
     // CRITICAL: Check for AWS credentials first
     if (!awsCredentials) {
       setError('Please configure your AWS credentials first');
