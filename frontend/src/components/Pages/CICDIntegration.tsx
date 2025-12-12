@@ -2,8 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { Shield, Github, CheckCircle, AlertCircle, Info, Zap, Activity, RefreshCw, ExternalLink, FileText, AlertTriangle, Copy } from 'lucide-react';
 import CollapsibleTile from '@/components/Common/CollapsibleTile';
 
-interface CICDIntegrationProps {}
-
 interface GitHubStatus {
   success: boolean;
   configured: boolean;
