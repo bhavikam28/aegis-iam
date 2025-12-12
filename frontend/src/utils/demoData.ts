@@ -13,9 +13,9 @@ import {
 // GENERATE POLICY DEMO DATA
 // ============================================
 
-export const mockGeneratePolicyResponse = (request: GeneratePolicyRequest): GeneratePolicyResponse => {
+export const mockGeneratePolicyResponse = (request: any): any => {
   // Use common AWS services that everyone knows: S3, Lambda, EC2
-  const service = request.service.toLowerCase();
+  const service = (request.service || 'lambda').toLowerCase();
   
   let policy: IAMPolicy;
   let trustPolicy: IAMPolicy;
@@ -214,41 +214,81 @@ export const mockGeneratePolicyResponse = (request: GeneratePolicyRequest): Gene
     };
   }
 
+  // Build comprehensive response matching actual API structure
   return {
+    conversation_id: "demo-conversation-" + Date.now(),
+    final_answer: explanation,
+    message_count: 1,
     policy,
     trust_policy: trustPolicy,
-    explanation,
-    permissions_explanation: permissionsExplanation,
+    explanation: permissionsExplanation,
     trust_explanation: trustExplanation,
-    security_notes: securityNotes,
-    compliance_notes: complianceNotes,
-    security_score: securityScore,
+    permissions_score: securityScore,
     trust_score: 95,
-    compliance_status: complianceStatus,
-    refinements: {
-      permissions: [
-        {
-          title: "Add KMS key permissions if encryption is required",
-          description: "If you're using AWS KMS to encrypt your S3 objects or Lambda environment variables, add kms:Decrypt and kms:Encrypt permissions for the specific KMS key.",
-          impact: "Enables encryption at rest for sensitive data",
-          severity: "Medium"
-        },
-        {
-          title: "Consider adding S3 bucket policy conditions",
-          description: "Add conditions to restrict S3 access by IP address or require MFA for sensitive operations to enhance security.",
-          impact: "Adds additional security layers for sensitive data access",
-          severity: "Low"
-        }
-      ],
+    overall_score: Math.round((securityScore + 95) / 2),
+    security_notes: {
+      permissions: securityNotes,
       trust: [
-        {
-          title: "Consider adding aws:SourceArn condition",
-          description: "Add aws:SourceArn condition to the trust policy to restrict which specific Lambda function can assume this role, further reducing the attack surface.",
-          impact: "Prevents other Lambda functions from assuming this role even within the same account",
-          severity: "Medium"
-        }
+        "Trust policy properly restricts role assumption to the intended AWS service",
+        "Source account condition prevents confused deputy attacks",
+        "No wildcard principals that could allow unauthorized access"
       ]
     },
+    score_breakdown: {
+      permissions: {
+        positive: [
+          "Specific resource ARNs used instead of wildcards",
+          "Actions limited to minimum required operations",
+          "Conditional access controls applied where appropriate"
+        ],
+        improvements: [
+          "Consider adding time-based access restrictions for sensitive operations",
+          "Implement MFA requirements for critical actions"
+        ]
+      },
+      trust: {
+        positive: [
+          "Service principal properly configured",
+          "Source account condition prevents cross-account abuse",
+          "No overly permissive wildcards in trust relationships"
+        ],
+        improvements: [
+          "Consider adding aws:SourceArn for additional specificity",
+          "Review external ID requirements for third-party access"
+        ]
+      }
+    },
+    security_features: {
+      permissions: [
+        "Resource-level restrictions prevent access to unintended resources",
+        "Least-privilege principle applied throughout the policy",
+        "Conditional constraints enhance security posture"
+      ],
+      trust: [
+        "Service-specific trust relationship configured",
+        "Account-level restrictions prevent cross-account misuse"
+      ]
+    },
+    refinement_suggestions: {
+      permissions: [
+        "Add KMS permissions if encryption is required for data at rest",
+        "Consider VPC endpoint policies for enhanced network security",
+        "Implement tag-based access controls for better governance"
+      ],
+      trust: [
+        "Add aws:SourceArn condition to specify exact service ARN",
+        "Consider external ID if this role will be assumed by third parties",
+        "Review session duration and add aws:MultiFactorAuthPresent for sensitive roles"
+      ]
+    },
+    compliance_status: complianceStatus,
+    compliance_features: Object.values(complianceStatus).map((framework: any) => ({
+      title: framework.name,
+      subtitle: framework.status,
+      requirement: `${framework.name} Requirement`,
+      description: framework.details || "Policy follows security best practices for this compliance framework.",
+      link: framework.link
+    })),
     reasoning: {
       plan: "Analyzed the permission requirements and identified the minimum necessary AWS actions and resources needed for the described functionality.",
       actions: [

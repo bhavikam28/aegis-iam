@@ -96,7 +96,7 @@ const GeneratePolicy: React.FC<GeneratePolicyProps> = ({ awsCredentials: propCre
   useEffect(() => {
     if (demoMode && !response && !loading) {
       // Auto-fill with demo example and show results
-      setDescription('Lambda function to read from DynamoDB table customer-uploads and write logs to CloudWatch');
+      setDescription('Lambda function to read from S3 bucket my-app-bucket and write logs to CloudWatch');
       setRestrictive(true);
       setCompliance('general');
       
