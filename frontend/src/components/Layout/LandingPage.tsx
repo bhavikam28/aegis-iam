@@ -62,16 +62,18 @@ const LandingPage: React.FC<LandingPageProps> = ({
 
   if (showDashboard) {
     return (
-      <Dashboard 
-        onReturnHome={() => {
-          setShowDashboard(false);
-          setDemoMode(false);
-        }}
-        awsCredentials={demoMode ? null : awsCredentials} // Demo mode doesn't need credentials
-        onCredentialsChange={onCredentialsChange}
-        onOpenCredentialsModal={onOpenCredentialsModal}
-        demoMode={demoMode}
-      />
+      <div className="min-h-screen">
+        <Dashboard 
+          onReturnHome={() => {
+            setShowDashboard(false);
+            setDemoMode(false);
+          }}
+          awsCredentials={demoMode ? null : awsCredentials} // Demo mode doesn't need credentials
+          onCredentialsChange={onCredentialsChange}
+          onOpenCredentialsModal={onOpenCredentialsModal}
+          demoMode={demoMode}
+        />
+      </div>
     );
   }
 
