@@ -112,9 +112,9 @@ const ValidatePolicy: React.FC<ValidatePolicyProps> = ({ awsCredentials: propCre
   
   const chatEndRef = useRef<HTMLDivElement>(null);
 
-  // Demo mode: Load demo data on mount - supports both policy and ARN validation
+  // Demo mode: Load demo data on mount - defaults to policy validation
   useEffect(() => {
-    if (demoMode && !response) {
+    if (demoMode && !response && inputType === 'policy') {
       import('@/utils/demoData').then(({ mockValidatePolicyResponse }) => {
         // Default to policy validation demo
         const demoRequest: ValidatePolicyRequest = {
@@ -138,20 +138,11 @@ const ValidatePolicy: React.FC<ValidatePolicyProps> = ({ awsCredentials: propCre
     }
   }, [demoMode]);
   
-  // Demo mode: Handle ARN validation when user switches to ARN tab
+  // Demo mode: Pre-fill ARN when user switches to ARN tab
   useEffect(() => {
-    if (demoMode && inputType === 'arn' && !inputValue && !response) {
-      import('@/utils/demoData').then(({ mockValidatePolicyResponse }) => {
-        const demoRequest: ValidatePolicyRequest = {
-          role_arn: 'arn:aws:iam::123456789012:role/LambdaExecutionRole',
-          compliance_frameworks: selectedFrameworks
-        };
-        const demoResponse = mockValidatePolicyResponse(demoRequest);
-        setResponse(demoResponse);
-        setInputValue(demoRequest.role_arn || '');
-        setShowInitialForm(false);
-        setValidationStep(0);
-      });
+    if (demoMode && inputType === 'arn' && !inputValue) {
+      // Pre-fill ARN input so user can click validate
+      setInputValue('arn:aws:iam::123456789012:role/LambdaExecutionRole');
     }
   }, [demoMode, inputType]);
   
