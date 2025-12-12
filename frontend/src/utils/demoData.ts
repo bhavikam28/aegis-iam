@@ -187,30 +187,74 @@ export const mockGeneratePolicyResponse = (request: any): any => {
   const complianceStatus: Record<string, any> = {};
   
   if (request.compliance === 'hipaa') {
-    complianceNotes.push("HIPAA compliance: Encryption in transit and at rest should be enforced");
-    complianceNotes.push("Access logging and monitoring must be enabled for audit trails");
+    complianceNotes.push("✅ HIPAA: Encryption in transit and at rest enforced");
+    complianceNotes.push("✅ HIPAA: Access logging and monitoring enabled for audit trails");
+    complianceNotes.push("✅ HIPAA: Principle of minimum necessary access implemented");
     complianceStatus['hipaa'] = {
       name: "HIPAA",
       status: "Compliant",
       gaps: [],
-      details: "Policy includes encryption requirements and least-privilege access controls suitable for HIPAA compliance."
+      details: "Policy includes encryption requirements and least-privilege access controls suitable for HIPAA compliance.",
+      requirements: [
+        {
+          requirement: "Access Controls (164.308(a)(4))",
+          status: "Pass",
+          explanation: "Policy implements least-privilege access with specific resource restrictions.",
+          link: "https://www.hhs.gov/hipaa/for-professionals/security/guidance/administrative-safeguards/index.html"
+        },
+        {
+          requirement: "Audit Controls (164.312(b))",
+          status: "Pass",
+          explanation: "CloudWatch logging enabled for comprehensive audit trails.",
+          link: "https://www.hhs.gov/hipaa/for-professionals/security/guidance/audit-controls/index.html"
+        }
+      ]
     };
-  } else if (request.compliance === 'pci-dss') {
-    complianceNotes.push("PCI DSS compliance: Network segmentation and access controls implemented");
-    complianceNotes.push("Regular access reviews and monitoring required");
+  } else if (request.compliance === 'pci-dss' || request.compliance === 'pci_dss') {
+    complianceNotes.push("✅ PCI DSS: Least-privilege principle enforced with specific resource restrictions");
+    complianceNotes.push("✅ PCI DSS: Network segmentation applied through regional restrictions");
+    complianceNotes.push("✅ PCI DSS: Regular access reviews enabled via CloudTrail integration");
     complianceStatus['pci-dss'] = {
       name: "PCI DSS",
       status: "Compliant",
       gaps: [],
-      details: "Policy implements least-privilege access with resource-level restrictions suitable for PCI DSS requirements."
+      details: "Policy implements least-privilege access with resource-level restrictions suitable for PCI DSS requirements.",
+      requirements: [
+        {
+          requirement: "Requirement 7.1.2 (Least Privilege)",
+          status: "Pass",
+          explanation: "Permissions are scoped to specific resources (S3 bucket paths, log groups) rather than using wildcards.",
+          link: "https://www.pcisecuritystandards.org/document_library/"
+        },
+        {
+          requirement: "Requirement 10 (Logging & Monitoring)",
+          status: "Pass",
+          explanation: "CloudWatch logging enabled to track all API calls and resource access.",
+          link: "https://www.pcisecuritystandards.org/document_library/"
+        }
+      ]
     };
   } else {
-    // General compliance
+    // General compliance - show best practices
     complianceStatus['general'] = {
-      name: "General Security",
+      name: "AWS Security Best Practices",
       status: "Compliant",
       gaps: [],
-      details: "Policy follows AWS security best practices with least-privilege access and resource restrictions."
+      details: "Policy follows AWS IAM security best practices with least-privilege access and resource restrictions.",
+      requirements: [
+        {
+          requirement: "Least Privilege Access",
+          status: "Pass",
+          explanation: "All permissions are scoped to specific resources with minimal necessary actions.",
+          link: "https://docs.aws.amazon.com/IAM/latest/UserGuide/best-practices.html#grant-least-privilege"
+        },
+        {
+          requirement: "Resource-Level Permissions",
+          status: "Pass",
+          explanation: "Resources are explicitly defined with ARNs instead of using wildcards (*).",
+          link: "https://docs.aws.amazon.com/IAM/latest/UserGuide/best-practices.html"
+        }
+      ]
     };
   }
 
