@@ -2103,7 +2103,25 @@ Let me know if you have any questions!
             overall_score = 0
             security_notes = {"permissions": [], "trust": []}
             security_features = {"permissions": [], "trust": []}
-            is_question = True
+            # Only set is_question to True if we detect actual question patterns
+            # Default to False - assume it's a response unless we detect question markers
+            is_question = False
+            question_indicators = [
+                r'\?',  # Contains question mark
+                r'what\s+(is|are|do|does|should|can|could|would)',  # Question words
+                r'how\s+(do|does|should|can|could|would)',  # How questions
+                r'can\s+you\s+(please|provide|tell|clarify|explain)',  # Can you questions
+                r'please\s+(provide|tell|clarify|explain|specify)',  # Please questions
+                r'i\s+(need|require|want)\s+(more|additional|further)',  # Need more info
+                r'(missing|need|require|specify).*?(account|region|bucket|arn|resource)',  # Missing info requests
+            ]
+            # Check if response contains question indicators
+            message_lower = final_message.lower()
+            for pattern in question_indicators:
+                if re.search(pattern, message_lower, re.IGNORECASE):
+                    is_question = True
+                    logging.debug(f"🔍 Detected question indicator: {pattern}")
+                    break
             
             logging.debug(f"📝 Parsing agent response (length: {len(final_message)} chars)")
             
