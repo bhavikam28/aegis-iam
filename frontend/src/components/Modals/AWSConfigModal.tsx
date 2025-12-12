@@ -78,24 +78,25 @@ const AWSConfigModal: React.FC<AWSConfigModalProps> = ({ isOpen, onClose, onSave
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
       <div className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto bg-white rounded-2xl shadow-2xl border-2 border-slate-200">
         {/* Header */}
-        <div className="sticky top-0 z-10 bg-gradient-to-r from-blue-600 to-purple-600 px-6 py-4 rounded-t-2xl flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Key className="w-6 h-6 text-white" />
-            <h2 className="text-2xl font-bold text-white">AWS Credentials Configuration</h2>
+        <div className="sticky top-0 z-10 bg-gradient-to-r from-blue-600 to-purple-600 px-4 sm:px-6 py-4 rounded-t-2xl flex items-center justify-between">
+          <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
+            <Key className="w-5 h-5 sm:w-6 sm:h-6 text-white flex-shrink-0" />
+            <h2 className="text-lg sm:text-xl lg:text-2xl font-bold text-white truncate">AWS Credentials Configuration</h2>
           </div>
           <button
             onClick={handleCancel}
-            className="text-white hover:bg-white/20 rounded-lg p-2 transition-colors"
+            className="text-white hover:bg-white/20 rounded-lg p-2 transition-colors flex-shrink-0 min-w-[44px] min-h-[44px] flex items-center justify-center"
+            aria-label="Close modal"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Content */}
-        <div className="px-6 py-6 space-y-6">
+        <div className="px-4 sm:px-6 py-6 space-y-6">
           {/* Security Notice */}
           <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4 flex items-start gap-3">
             <AlertCircle className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
@@ -251,16 +252,16 @@ const AWSConfigModal: React.FC<AWSConfigModalProps> = ({ isOpen, onClose, onSave
         </div>
 
         {/* Footer */}
-        <div className="sticky bottom-0 bg-slate-50 border-t-2 border-slate-200 px-6 py-4 rounded-b-2xl flex items-center justify-between">
+        <div className="sticky bottom-0 bg-slate-50 border-t-2 border-slate-200 px-4 sm:px-6 py-4 rounded-b-2xl flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-0">
           <button
             onClick={handleCancel}
-            className="px-6 py-2.5 bg-white border-2 border-slate-300 hover:border-slate-400 hover:bg-slate-50 text-slate-700 rounded-xl transition-all font-semibold"
+            className="px-6 py-3 sm:py-2.5 bg-white border-2 border-slate-300 hover:border-slate-400 hover:bg-slate-50 text-slate-700 rounded-xl transition-all font-semibold min-h-[44px] touch-manipulation"
           >
             Cancel
           </button>
           <button
             onClick={handleSave}
-            className="px-6 py-2.5 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-xl transition-all font-semibold shadow-lg hover:shadow-xl"
+            className="px-6 py-3 sm:py-2.5 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-xl transition-all font-semibold shadow-lg hover:shadow-xl min-h-[44px] touch-manipulation"
           >
             Save & Continue
           </button>
