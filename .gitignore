@@ -19,9 +19,11 @@ ENV/
 
 # AWS Credentials (CRITICAL: Never commit these!)
 credentials
-config
+agent/config/
 *.csv
 *credentials.json
+# Allow frontend config files (TypeScript config)
+!frontend/src/config/
 
 # IDE
 .vscode/
