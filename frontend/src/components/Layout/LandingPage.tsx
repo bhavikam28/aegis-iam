@@ -8,7 +8,7 @@ interface LandingPageProps {
   awsCredentials: AWSCredentials | null;
   onCredentialsChange: (credentials: AWSCredentials | null) => void;
   onOpenCredentialsModal: () => void;
-  onEnterApp: () => void;
+  onEnterApp: (isDemo?: boolean) => void;
 }
 
 const LandingPage: React.FC<LandingPageProps> = ({ 
@@ -20,15 +20,27 @@ const LandingPage: React.FC<LandingPageProps> = ({
   const [showDashboard, setShowDashboard] = useState(false);
   const [demoMode, setDemoMode] = useState(false);
   
-  const handleGetStarted = () => {
+  const handleGetStarted = (e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
     setShowDashboard(true);
-    onEnterApp(); // Trigger credential modal if not set
+    // Trigger credential modal after a small delay to ensure Dashboard renders first
+    setTimeout(() => {
+      onEnterApp(false); // This will trigger credential modal if not set
+    }, 100);
   };
 
-  const handleDemoMode = () => {
+  const handleDemoMode = (e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    // Demo mode doesn't need credentials
     setDemoMode(true);
     setShowDashboard(true);
-    onEnterApp(); // Enter app but skip credentials
+    onEnterApp(true); // Tell App we're in demo mode
   };
   const [scrollY, setScrollY] = useState(0);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });

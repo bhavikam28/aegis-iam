@@ -9,13 +9,19 @@ function App() {
   const [awsCredentials, setAwsCredentials] = useState<AWSCredentials | null>(null);
   const [showCredentialsModal, setShowCredentialsModal] = useState(false);
   const [hasEnteredApp, setHasEnteredApp] = useState(false);
+  const [demoMode, setDemoMode] = useState(false);
 
   // Show credentials modal when user first enters the app (after landing page)
+  // BUT NOT if they're in demo mode
   useEffect(() => {
-    if (hasEnteredApp && !awsCredentials) {
-      setShowCredentialsModal(true);
+    if (hasEnteredApp && !awsCredentials && !demoMode) {
+      // Small delay to ensure Dashboard renders first on mobile
+      const timer = setTimeout(() => {
+        setShowCredentialsModal(true);
+      }, 150);
+      return () => clearTimeout(timer);
     }
-  }, [hasEnteredApp, awsCredentials]);
+  }, [hasEnteredApp, awsCredentials, demoMode]);
 
   return (
     <div className="App">
@@ -23,12 +29,15 @@ function App() {
         awsCredentials={awsCredentials}
         onCredentialsChange={setAwsCredentials}
         onOpenCredentialsModal={() => setShowCredentialsModal(true)}
-        onEnterApp={() => setHasEnteredApp(true)}
+        onEnterApp={(isDemo = false) => {
+          setDemoMode(isDemo);
+          setHasEnteredApp(true);
+        }}
       />
       
       {/* App-level AWS Credentials Modal */}
       <AWSConfigModal
-        isOpen={showCredentialsModal}
+        isOpen={showCredentialsModal && !demoMode}
         onClose={() => setShowCredentialsModal(false)}
         onSave={(credentials) => {
           setAwsCredentials(credentials);
