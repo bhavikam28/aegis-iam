@@ -329,10 +329,6 @@ const LandingPage: React.FC<LandingPageProps> = ({
         <section className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24 sm:py-32">
           {/* Section Header */}
           <div className="text-center mb-16">
-            <div className="inline-flex items-center space-x-2 bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-pink-500/10 border border-blue-200/50 rounded-full px-6 py-2 mb-6">
-              <Sparkles className="w-5 h-5 text-blue-600" />
-              <span className="text-blue-700 text-sm font-semibold">Why Choose Aegis IAM</span>
-            </div>
             <h3 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold mb-6 leading-tight">
               <span className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 bg-clip-text text-transparent">
                 Why Use Aegis IAM
@@ -352,9 +348,9 @@ const LandingPage: React.FC<LandingPageProps> = ({
                 <div className="w-24 h-24 bg-gradient-to-br from-emerald-500 to-green-500 rounded-3xl flex items-center justify-center shadow-xl mb-6 mx-auto group-hover:scale-110 transition-transform">
                   <span className="text-5xl">💰</span>
                 </div>
-                <h4 className="text-2xl font-bold text-slate-900 mb-4">Zero Cost for You</h4>
+                <h4 className="text-2xl font-bold text-slate-900 mb-4">No Service Fees</h4>
                 <p className="text-lg text-slate-700 font-medium leading-relaxed">
-                  Use your AWS credentials. All Bedrock/AWS costs go to <span className="font-bold text-emerald-600">your AWS account</span>, not ours.
+                  Aegis IAM is free to use. You only pay for <span className="font-bold text-emerald-600">AWS Bedrock usage</span> on your own AWS account—no hidden fees or subscriptions.
                 </p>
               </div>
             </div>
