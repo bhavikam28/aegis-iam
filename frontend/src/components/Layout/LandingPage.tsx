@@ -785,7 +785,7 @@ const LandingPage: React.FC<LandingPageProps> = ({
                 <h4 className="text-lg font-bold bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">
                   Aegis IAM
                 </h4>
-                <p className="text-xs text-slate-500 font-medium">Enterprise IAM Security</p>
+                <p className="text-xs text-slate-500 font-medium">AI-Powered AWS IAM Security</p>
               </div>
             </div>
             <div className="flex items-center space-x-6">
