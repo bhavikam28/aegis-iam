@@ -270,6 +270,33 @@ const ValidatePolicy: React.FC<ValidatePolicyProps> = ({ awsCredentials: propCre
     console.log('📝 inputValue length:', inputValue.length);
     console.log('📝 inputValue preview:', inputValue.substring(0, 100));
     
+    // Demo mode: Show demo data for both policy and ARN validation
+    if (demoMode) {
+      setLoading(true);
+      setError(null);
+      setShowInitialForm(false);
+      
+      setTimeout(() => {
+        import('@/utils/demoData').then(({ mockValidatePolicyResponse }) => {
+          const demoRequest: ValidatePolicyRequest = {
+            ...(inputType === 'arn' 
+              ? { role_arn: inputValue || 'arn:aws:iam::123456789012:role/LambdaExecutionRole' }
+              : { policy_json: inputValue || JSON.stringify({
+                  Version: "2012-10-17",
+                  Statement: [{ Effect: "Allow", Action: "s3:*", Resource: "*" }]
+                }, null, 2)
+              }),
+            compliance_frameworks: selectedFrameworks
+          };
+          const demoResponse = mockValidatePolicyResponse(demoRequest);
+          setResponse(demoResponse);
+          setLoading(false);
+          setValidationStep(0);
+        });
+      }, 1500);
+      return;
+    }
+    
     // CRITICAL: Check for AWS credentials first
     if (!awsCredentials) {
       setError('Please configure your AWS credentials first');
