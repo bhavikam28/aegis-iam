@@ -9,7 +9,7 @@ import SecurityTips from '@/components/Common/SecurityTips';
 import { getComplianceLink } from '@/utils/complianceLinks';
 import AWSConfigModal from '@/components/Modals/AWSConfigModal';
 import { AWSCredentials, validateCredentials, maskAccessKeyId, getRegionDisplayName } from '@/utils/awsCredentials';
-import { getDemoGeneratePolicyResponse } from '@/utils/demoData';
+import { mockGeneratePolicyResponse } from '@/utils/demoData';
 // Note: Compliance links should come from agent response, not hardcoded
 
 interface GeneratePolicyProps {
@@ -102,7 +102,12 @@ const GeneratePolicy: React.FC<GeneratePolicyProps> = ({ awsCredentials: propCre
       
       // Load demo response after a short delay to simulate loading
       setTimeout(() => {
-        const demoResponse = getDemoGeneratePolicyResponse();
+        const demoResponse = mockGeneratePolicyResponse({
+          description: 'Lambda function to read from S3 bucket my-app-bucket and write logs to CloudWatch',
+          service: 'Lambda',
+          compliance: request.compliance || 'general',
+          restrictive: request.restrictive || false
+        });
         setResponse(demoResponse);
         setShowInitialForm(false);
       }, 500);
@@ -433,7 +438,12 @@ What would you like to do?`,
         setLoadingStep('generating');
         
         setTimeout(() => {
-          const demoResponse = getDemoGeneratePolicyResponse();
+          const demoResponse = mockGeneratePolicyResponse({
+          description: 'Lambda function to read from S3 bucket my-app-bucket and write logs to CloudWatch',
+          service: 'Lambda',
+          compliance: request.compliance || 'general',
+          restrictive: request.restrictive || false
+        });
           setResponse(demoResponse);
           setShowInitialForm(false);
           setLoading(false);

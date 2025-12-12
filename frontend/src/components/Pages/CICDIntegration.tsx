@@ -33,7 +33,11 @@ interface AnalysisResult {
   message?: string;
 }
 
-const CICDIntegration: React.FC<CICDIntegrationProps> = () => {
+interface CICDIntegrationProps {
+  demoMode?: boolean;
+}
+
+const CICDIntegration: React.FC<CICDIntegrationProps> = ({ demoMode = false }) => {
   const [expandedSection, setExpandedSection] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
   const [connecting, setConnecting] = useState(false);
@@ -43,11 +47,28 @@ const CICDIntegration: React.FC<CICDIntegrationProps> = () => {
 
   const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
-  // Fetch recent analysis results
+  // Demo mode: Load demo data
   useEffect(() => {
-    fetchAnalysisResults();
-    fetchStatus();
-  }, []);
+    if (demoMode) {
+      import('@/utils/demoData').then(({ mockCICDAnalysisResponse }) => {
+        setAnalysisResults([mockCICDAnalysisResponse()]);
+        setStatus({
+          success: true,
+          configured: true,
+          app_id_set: true,
+          private_key_set: true,
+          webhook_secret_set: true,
+          app_slug: 'aegis-iam',
+          install_url: 'https://github.com/apps/aegis-iam/installations/new',
+          webhook_url: 'https://aegis-iam-backend.onrender.com/api/github/webhook'
+        });
+      });
+    } else {
+      // Fetch recent analysis results
+      fetchAnalysisResults();
+      fetchStatus();
+    }
+  }, [demoMode]);
 
   const fetchAnalysisResults = async () => {
     setLoadingResults(true);

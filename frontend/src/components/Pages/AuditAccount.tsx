@@ -84,6 +84,17 @@ const AuditAccount: React.FC<AuditAccountProps> = ({ awsCredentials: propCredent
   // Use app-level credentials (passed as props)
   const awsCredentials = propCredentials;
 
+  // Demo mode: Load demo data on mount
+  useEffect(() => {
+    if (demoMode && !auditResults) {
+      import('@/utils/demoData').then(({ mockAuditAccountResponse }) => {
+        const demoResponse = mockAuditAccountResponse();
+        setAuditResults(demoResponse);
+        setError(null);
+      });
+    }
+  }, [demoMode]);
+
   // ============================================
   // PERSISTENCE: Load saved state on mount
   // ============================================

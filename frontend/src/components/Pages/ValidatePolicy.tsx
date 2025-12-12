@@ -111,6 +111,30 @@ const ValidatePolicy: React.FC<ValidatePolicyProps> = ({ awsCredentials: propCre
   const awsCredentials = propCredentials;
   
   const chatEndRef = useRef<HTMLDivElement>(null);
+
+  // Demo mode: Load demo data on mount
+  useEffect(() => {
+    if (demoMode && !response) {
+      import('@/utils/demoData').then(({ mockValidatePolicyResponse }) => {
+        const demoRequest: ValidatePolicyRequest = {
+          policy_json: JSON.stringify({
+            Version: "2012-10-17",
+            Statement: [{
+              Effect: "Allow",
+              Action: "s3:*",
+              Resource: "*"
+            }]
+          }, null, 2),
+          compliance_frameworks: selectedFrameworks
+        };
+        const demoResponse = mockValidatePolicyResponse(demoRequest);
+        setResponse(demoResponse);
+        setInputValue(demoRequest.policy_json || '');
+        setShowInitialForm(false);
+        setValidationStep(0);
+      });
+    }
+  }, [demoMode]);
   
   // ============================================
   // PERSISTENCE: Load saved state on mount
