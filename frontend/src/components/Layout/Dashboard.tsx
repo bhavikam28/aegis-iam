@@ -11,13 +11,15 @@ interface DashboardProps {
   awsCredentials: AWSCredentials | null;
   onCredentialsChange: (credentials: AWSCredentials | null) => void;
   onOpenCredentialsModal: () => void;
+  demoMode?: boolean;
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ 
   onReturnHome, 
   awsCredentials, 
   onCredentialsChange,
-  onOpenCredentialsModal 
+  onOpenCredentialsModal,
+  demoMode = false
 }) => {
   const [activeSection, setActiveSection] = useState('generate');
 

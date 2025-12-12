@@ -6,6 +6,7 @@ import CollapsibleTile from '@/components/Common/CollapsibleTile';
 import SecurityTips from '@/components/Common/SecurityTips';
 import AWSConfigModal from '@/components/Modals/AWSConfigModal';
 import { AWSCredentials, validateCredentials, maskAccessKeyId, getRegionDisplayName } from '@/utils/awsCredentials';
+import { API_URL } from '@/config/api';
 
 // ============================================
 // TYPE DEFINITIONS
@@ -255,7 +256,7 @@ const ValidatePolicy: React.FC<ValidatePolicyProps> = ({ awsCredentials: propCre
     setShowInitialForm(false);
     
     try {
-      const response = await fetch('http://localhost:8000/api/validate/quick', {
+      const response = await fetch(`${API_URL}/api/validate/quick`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

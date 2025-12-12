@@ -38,8 +38,7 @@ export interface JobStatus {
   message: string;
 }
 
-// API URL - uses environment variable on Vercel, localhost for local development
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+import { API_URL } from '../config/api';
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 

@@ -6,6 +6,7 @@ import SecurityTips from '@/components/Common/SecurityTips';
 import { getComplianceLink } from '@/utils/complianceLinks';
 import AWSConfigModal from '@/components/Modals/AWSConfigModal';
 import { AWSCredentials, validateCredentials, maskAccessKeyId, getRegionDisplayName } from '@/utils/awsCredentials';
+import { API_URL } from '@/config/api';
 
 interface AuditSummary {
   total_roles: number;
@@ -146,7 +147,7 @@ const AuditAccount: React.FC<AuditAccountProps> = ({ awsCredentials: propCredent
     setError(null);
 
     try {
-      const response = await fetch('http://localhost:8000/api/audit/account', {
+      const response = await fetch(`${API_URL}/api/audit/account`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -246,7 +247,7 @@ const AuditAccount: React.FC<AuditAccountProps> = ({ awsCredentials: propCredent
     
     try {
       // Send to backend for AI response
-      const response = await fetch('http://localhost:8000/api/chat', {
+      const response = await fetch(`${API_URL}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -2048,7 +2049,7 @@ const AuditAccount: React.FC<AuditAccountProps> = ({ awsCredentials: propCredent
                           setIsRemediating(true);
                           const findingsToRemediate = Array.from(selectedFindings).map(idx => auditResults.findings?.[idx]).filter(Boolean);
                           try {
-                            const response = await fetch('http://localhost:8000/api/audit/remediate', {
+                            const response = await fetch(`${API_URL}/api/audit/remediate`, {
                               method: 'POST',
                               headers: { 'Content-Type': 'application/json' },
                               body: JSON.stringify({
