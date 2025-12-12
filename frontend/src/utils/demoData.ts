@@ -714,13 +714,23 @@ export const mockCICDAnalysisResponse = () => {
     findings: [
       {
         severity: "High" as const,
+        type: "WildcardPermissions",
         title: "Wildcard S3 Permissions Detected",
-        description: "Policy contains wildcard actions: s3:* which grants all possible S3 operations including dangerous ones like DeleteBucket."
+        description: "Policy contains wildcard actions: s3:* which grants all possible S3 operations including dangerous ones like DeleteBucket.",
+        recommendation: "Replace s3:* with specific actions required for your use case (e.g., s3:GetObject, s3:PutObject, s3:ListBucket). This follows the principle of least privilege and reduces the risk of accidental or malicious data deletion.",
+        affected_permissions: ["s3:*"],
+        impact: "High - Risk of accidental or malicious deletion of S3 buckets and objects",
+        policy_snippet: '{"Effect": "Allow", "Action": "s3:*", "Resource": "*"}'
       },
       {
         severity: "Medium" as const,
+        type: "WildcardResources",
         title: "Wildcard Resources Used",
-        description: "Policy uses Resource:'*' allowing actions on all S3 buckets in the account instead of specific buckets."
+        description: "Policy uses Resource:'*' allowing actions on all S3 buckets in the account instead of specific buckets.",
+        recommendation: "Restrict resources to specific bucket ARNs (e.g., arn:aws:s3:::my-bucket/*) or use condition keys to limit access to specific bucket names.",
+        affected_permissions: ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"],
+        impact: "Medium - Actions can be performed on any S3 bucket in the account, increasing attack surface",
+        policy_snippet: '{"Effect": "Allow", "Action": ["s3:GetObject", "s3:PutObject"], "Resource": "*"}'
       }
     ],
     policies_analyzed: 2,

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Shield, Github, CheckCircle, AlertCircle, Info, Zap, Activity, RefreshCw, ExternalLink, FileText, AlertTriangle, Copy, Sparkles } from 'lucide-react';
+import { Shield, Github, CheckCircle, AlertCircle, Info, Zap, Activity, RefreshCw, ExternalLink, FileText, AlertTriangle, Copy, Sparkles, Key, FileCode } from 'lucide-react';
 import CollapsibleTile from '@/components/Common/CollapsibleTile';
 
 interface GitHubStatus {
@@ -48,12 +48,15 @@ const CICDIntegration: React.FC<CICDIntegrationProps> = ({ demoMode = false }) =
   // Demo mode: ALWAYS load demo data when in demo mode (including after refresh)
   useEffect(() => {
     if (demoMode) {
-      // Always restore demo data if it's missing
-      if (analysisResults.length === 0) {
-        import('@/utils/demoData').then(({ mockCICDAnalysisResponse }) => {
+      // Always restore demo data - use a flag to prevent infinite loops
+      const loadDemoData = async () => {
+        if (analysisResults.length === 0) {
+          const { mockCICDAnalysisResponse } = await import('@/utils/demoData');
           setAnalysisResults([mockCICDAnalysisResponse()]);
-        });
-      }
+        }
+      };
+      loadDemoData();
+      
       // Always set demo status
       setStatus({
         success: true,
@@ -70,7 +73,7 @@ const CICDIntegration: React.FC<CICDIntegrationProps> = ({ demoMode = false }) =
       fetchAnalysisResults();
       fetchStatus();
     }
-  }, [demoMode, analysisResults.length]);
+  }, [demoMode]); // Removed analysisResults.length to prevent infinite loops
 
   const fetchAnalysisResults = async () => {
     // In demo mode, restore demo data instead of fetching
@@ -482,18 +485,98 @@ const CICDIntegration: React.FC<CICDIntegrationProps> = ({ demoMode = false }) =
                     )}
 
                     {result.findings.length > 0 ? (
-                      <div className="space-y-3">
-                        <h4 className="font-bold text-slate-900 text-lg">Security Findings</h4>
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between mb-4">
+                          <h4 className="font-bold text-slate-900 text-lg flex items-center gap-2">
+                            <AlertTriangle className="w-5 h-5 text-amber-600" />
+                            Security Findings
+                          </h4>
+                          <div className="text-sm text-slate-600">
+                            <span className="font-semibold">{result.findings.length}</span> issue{result.findings.length !== 1 ? 's' : ''} found
+                          </div>
+                        </div>
                         {result.findings.map((finding, idx) => (
                           <div
                             key={idx}
-                            className={`border-2 rounded-xl p-4 ${getSeverityColor(finding.severity)}`}
+                            className={`border-2 rounded-xl p-5 ${getSeverityColor(finding.severity)} transition-all hover:shadow-md`}
                           >
-                            <div className="flex items-center justify-between mb-2">
-                              <span className="font-bold text-sm uppercase">{finding.severity}</span>
+                            <div className="flex items-start justify-between mb-3">
+                              <div className="flex items-center gap-2">
+                                <span className={`font-bold text-xs uppercase px-2.5 py-1 rounded-lg ${
+                                  finding.severity === 'Critical' ? 'bg-red-100 text-red-700' :
+                                  finding.severity === 'High' ? 'bg-orange-100 text-orange-700' :
+                                  finding.severity === 'Medium' ? 'bg-amber-100 text-amber-700' :
+                                  'bg-yellow-100 text-yellow-700'
+                                }`}>
+                                  {finding.severity}
+                                </span>
+                                {finding.type && (
+                                  <span className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded">
+                                    {finding.type}
+                                  </span>
+                                )}
+                              </div>
                             </div>
-                            <h5 className="font-semibold text-slate-900 mb-1">{finding.title}</h5>
-                            <p className="text-sm text-slate-700">{finding.description}</p>
+                            <h5 className="font-bold text-slate-900 mb-2 text-base">{finding.title}</h5>
+                            <p className="text-sm text-slate-700 mb-3 leading-relaxed">{finding.description}</p>
+                            
+                            {/* Additional details if available */}
+                            {(finding as any).recommendation && (
+                              <div className="mt-3 pt-3 border-t border-slate-200">
+                                <p className="text-xs font-semibold text-slate-600 mb-1.5 flex items-center gap-1">
+                                  <CheckCircle className="w-3.5 h-3.5 text-blue-600" />
+                                  Recommendation
+                                </p>
+                                <p className="text-sm text-slate-700 bg-blue-50 rounded-lg p-3 border border-blue-100">
+                                  {(finding as any).recommendation}
+                                </p>
+                              </div>
+                            )}
+                            
+                            {(finding as any).affected_permissions && (finding as any).affected_permissions.length > 0 && (
+                              <div className="mt-3 pt-3 border-t border-slate-200">
+                                <p className="text-xs font-semibold text-slate-600 mb-1.5 flex items-center gap-1">
+                                  <Key className="w-3.5 h-3.5 text-purple-600" />
+                                  Affected Permissions
+                                </p>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {(finding as any).affected_permissions.slice(0, 5).map((perm: string, permIdx: number) => (
+                                    <span key={permIdx} className="text-xs bg-purple-50 text-purple-700 px-2 py-1 rounded border border-purple-200 font-mono">
+                                      {perm}
+                                    </span>
+                                  ))}
+                                  {(finding as any).affected_permissions.length > 5 && (
+                                    <span className="text-xs text-slate-500 px-2 py-1">
+                                      +{(finding as any).affected_permissions.length - 5} more
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                            
+                            {(finding as any).impact && (
+                              <div className="mt-3 pt-3 border-t border-slate-200">
+                                <p className="text-xs font-semibold text-slate-600 mb-1.5 flex items-center gap-1">
+                                  <AlertCircle className="w-3.5 h-3.5 text-red-600" />
+                                  Impact
+                                </p>
+                                <p className="text-sm text-slate-700 italic">
+                                  {(finding as any).impact}
+                                </p>
+                              </div>
+                            )}
+                            
+                            {(finding as any).policy_snippet && (
+                              <div className="mt-3 pt-3 border-t border-slate-200">
+                                <p className="text-xs font-semibold text-slate-600 mb-1.5 flex items-center gap-1">
+                                  <FileCode className="w-3.5 h-3.5 text-slate-600" />
+                                  Policy Snippet
+                                </p>
+                                <pre className="text-xs bg-slate-900 text-slate-100 p-3 rounded-lg overflow-x-auto border border-slate-700 font-mono">
+                                  {(finding as any).policy_snippet}
+                                </pre>
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>
