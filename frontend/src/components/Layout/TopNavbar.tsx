@@ -66,11 +66,11 @@ const TopNavbar: React.FC<TopNavbarProps> = ({
           : 'bg-white/90 backdrop-blur-xl border-b border-slate-200/40'
       }`}>
         <div className="w-full">
-          <div className="flex items-center justify-between h-20 sm:h-24 px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-20 sm:h-24 px-6 sm:px-8 lg:px-12">
             {/* Premium Logo & Brand - Left */}
             <button
               onClick={onReturnHome}
-              className="flex items-center space-x-3 sm:space-x-4 group flex-shrink-0 hover:opacity-90 transition-opacity"
+              className="flex items-center space-x-4 sm:space-x-5 group flex-shrink-0 hover:opacity-90 transition-opacity"
             >
               {/* Simple Shield Logo */}
               <PremiumLogo size={56} className="w-14 h-14 sm:w-16 sm:h-16 lg:w-20 lg:h-20 group-hover:scale-105 transition-transform duration-300 flex-shrink-0" />
@@ -81,13 +81,13 @@ const TopNavbar: React.FC<TopNavbarProps> = ({
                   Aegis IAM
                 </h1>
                 <p className="text-xs sm:text-sm font-semibold text-slate-600 tracking-wide">
-                  Enterprise IAM Security Platform
+                  AI-Powered AWS IAM Security
                 </p>
               </div>
             </button>
 
             {/* Desktop Navigation - Center */}
-            <div className="hidden lg:flex items-center space-x-1 flex-1 justify-center max-w-2xl mx-auto">
+            <div className="hidden lg:flex items-center space-x-3 flex-1 justify-center max-w-3xl mx-auto">
               {sections.map((section) => {
                 const Icon = section.icon;
                 const isActive = activeSection === section.id;
@@ -97,8 +97,8 @@ const TopNavbar: React.FC<TopNavbarProps> = ({
                     key={section.id}
                     onClick={() => handleSectionChange(section.id)}
                     className={`
-                      relative px-4 py-3 rounded-xl font-bold text-xs whitespace-nowrap
-                      transition-all duration-300 flex items-center space-x-2.5 group
+                      relative px-6 py-4 rounded-xl font-bold text-sm whitespace-nowrap
+                      transition-all duration-300 flex items-center space-x-3 group
                       ${isActive
                         ? 'bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white shadow-2xl shadow-purple-500/40 scale-105'
                         : 'text-slate-700 hover:text-slate-900 hover:bg-gradient-to-r hover:from-blue-50/80 hover:via-purple-50/80 hover:to-pink-50/80'
@@ -116,7 +116,7 @@ const TopNavbar: React.FC<TopNavbarProps> = ({
             </div>
 
             {/* Right Side Actions */}
-            <div className="flex items-center space-x-2 sm:space-x-3 -mr-4 sm:-mr-6 lg:-mr-8">
+            <div className="flex items-center space-x-4 sm:space-x-5">
               {/* AWS Credentials Status Indicator */}
               {onOpenCredentialsModal && (
                 <button

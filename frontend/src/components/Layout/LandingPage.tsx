@@ -103,13 +103,13 @@ const LandingPage: React.FC<LandingPageProps> = ({
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3 sm:space-x-4 group">
-              <PremiumLogo size={56} className="w-12 h-12 sm:w-14 sm:h-14 lg:w-16 lg:h-16 group-hover:scale-105 transition-transform duration-300 flex-shrink-0" />
+              <PremiumLogo size={56} className="w-14 h-14 sm:w-16 sm:h-16 lg:w-20 lg:h-20 group-hover:scale-105 transition-transform duration-300 flex-shrink-0" />
               <div className="flex flex-col items-start">
                 <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent leading-tight tracking-tight">
                   Aegis IAM
                 </h1>
                 <p className="text-xs sm:text-sm font-semibold text-slate-600 tracking-wide">
-                  Enterprise IAM Security Platform
+                  AI-Powered AWS IAM Security
                 </p>
               </div>
             </div>
@@ -335,11 +335,7 @@ const LandingPage: React.FC<LandingPageProps> = ({
             </div>
             <h3 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold mb-6 leading-tight">
               <span className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 bg-clip-text text-transparent">
-                Built for Developers,
-              </span>
-              <br />
-              <span className="bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">
-                Trusted by Security Teams
+                Built for Developers
               </span>
             </h3>
             <p className="text-xl sm:text-2xl text-slate-600 font-medium max-w-3xl mx-auto leading-relaxed">
