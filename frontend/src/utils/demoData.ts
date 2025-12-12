@@ -280,9 +280,58 @@ Security: Regional scoping (us-east-1) and specific log group ARN prevent accide
 
 export const mockValidatePolicyResponse = (request: ValidatePolicyRequest): ValidatePolicyResponse => {
   // If validating via ARN, return response with role_details
-  const isArnValidation = !request.policy_json && request.role_arn;
+  const isArnValidation = !request.policy_json && !!request.role_arn;
   
-  const findings: SecurityFinding[] = [
+  // For ARN validation, create findings that reference attached policies
+  const findings: SecurityFinding[] = isArnValidation ? [
+    {
+      id: "finding-1",
+      severity: "High",
+      type: "OverPrivileged",
+      title: "Full S3 Access on Attached Policy",
+      description: "The role has S3FullAccess managed policy attached, which grants s3:* permissions on all resources. This provides unnecessary access to all S3 operations across all buckets in your account.",
+      recommendation: "Replace S3FullAccess with a custom policy granting only required S3 actions (GetObject, PutObject, ListBucket) and limit to specific bucket ARNs.",
+      affectedStatement: 0,
+      code_snippet: `"Action": "s3:*",
+"Resource": "*"`,
+      policy_name: "S3FullAccess"
+    },
+    {
+      id: "finding-2",
+      severity: "High",
+      type: "OverPrivileged",
+      title: "Full CloudWatch Logs Access",
+      description: "The role has CloudWatchLogsFullAccess managed policy attached, granting logs:* permissions on all resources, allowing access to all log groups and streams in the account.",
+      recommendation: "Create a custom policy scoping CloudWatch Logs permissions to specific log groups needed by this Lambda function.",
+      affectedStatement: 0,
+      code_snippet: `"Action": "logs:*",
+"Resource": "*"`,
+      policy_name: "CloudWatchLogsFullAccess"
+    },
+    {
+      id: "finding-3",
+      severity: "Medium",
+      type: "Security",
+      title: "Trust Policy Missing Source Account Condition",
+      description: "The trust policy allows Lambda service to assume this role without restricting it to a specific AWS account, which could allow cross-account confused deputy attacks.",
+      recommendation: "Add aws:SourceAccount condition to restrict role assumption to your specific AWS account ID.",
+      affectedStatement: 0,
+      code_snippet: `"Principal": {
+  "Service": "lambda.amazonaws.com"
+}`,
+      policy_name: "Trust Policy"
+    },
+    {
+      id: "finding-4",
+      severity: "Low",
+      type: "BestPractice",
+      title: "No Permissions Boundary Set",
+      description: "This role does not have a permissions boundary configured. Permissions boundaries provide an additional safety mechanism to limit maximum permissions.",
+      recommendation: "Consider adding a permissions boundary to this role to set the maximum permissions it can have, even if policies are modified in the future.",
+      affectedStatement: undefined,
+      code_snippet: undefined
+    }
+  ] : [
     {
       id: "finding-1",
       severity: "High",
@@ -318,10 +367,18 @@ export const mockValidatePolicyResponse = (request: ValidatePolicyRequest): Vali
     }
   ];
 
-  const riskScore = 75;
-  const securityScore = 25; // Inverted from risk
+  // Different risk scores for ARN vs policy validation
+  const riskScore = isArnValidation ? 82 : 75;
+  const securityScore = isArnValidation ? 18 : 25; // Inverted from risk
   
-  const recommendations = [
+  const recommendations = isArnValidation ? [
+    "Replace S3FullAccess managed policy with custom policy granting only required S3 actions (GetObject, PutObject) and limit to specific bucket ARNs",
+    "Replace CloudWatchLogsFullAccess managed policy with custom policy scoped to specific log groups (/aws/lambda/my-function/*)",
+    "Add aws:SourceAccount condition to trust policy to prevent cross-account role assumption",
+    "Consider adding a permissions boundary to limit maximum permissions even if policies are modified",
+    "Review attached managed policies and replace with least-privilege custom policies based on actual usage",
+    "Enable CloudTrail logging to monitor role usage and detect anomalies"
+  ] : [
     "Replace s3:* with specific actions: s3:GetObject, s3:PutObject, s3:ListBucket",
     "Replace Resource:'*' with specific ARNs for your S3 buckets and log groups",
     "Add conditional access controls (aws:SourceIp, aws:SecureTransport, aws:MultiFactorAuthPresent)",
@@ -389,13 +446,18 @@ export const mockValidatePolicyResponse = (request: ValidatePolicyRequest): Vali
   const response: any = {
     conversation_id: "demo-validate-" + Date.now(),
     final_answer: isArnValidation 
-      ? `Validation complete for role ${request.role_arn}. Found 3 security findings: 1 High, 1 Medium, 1 Low severity.`
+      ? `Validation complete for role ${request.role_arn}. Found 4 security findings: 2 High, 1 Medium, 1 Low severity. The role has overly permissive managed policies attached.`
       : "Validation complete. Found 3 security findings: 1 High, 1 Medium, 1 Low severity.",
     message_count: 1,
     policy: null,
     findings,
     risk_score: riskScore,
-    security_issues: [
+    security_issues: isArnValidation ? [
+      "Full S3 and CloudWatch Logs access via managed policies violates least-privilege principle",
+      "Trust policy missing source account restriction allows potential cross-account abuse",
+      "No permissions boundary configured to limit maximum role permissions",
+      "Managed policies grant broader access than necessary for Lambda function requirements"
+    ] : [
       "Excessive permissions granted beyond functional requirements",
       "Lack of resource-level restrictions increases attack surface",
       "Missing security conditions and constraints",
