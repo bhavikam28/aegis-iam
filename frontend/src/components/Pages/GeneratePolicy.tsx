@@ -451,6 +451,14 @@ What would you like to do?`,
     setShowInitialForm(false);
     setLoadingStep('analyzing'); // Start with analyzing step
     
+    console.log('🔄 Starting policy generation:', {
+      hasCredentials: !!awsCredentials,
+      credentialsRegion: awsCredentials?.region,
+      descriptionLength: description.length,
+      restrictive,
+      compliance
+    });
+    
     try {
       // Simulate step progression (only 2 steps - validation is optional now)
       setTimeout(() => setLoadingStep('generating'), 1500);
@@ -460,6 +468,14 @@ What would you like to do?`,
         restrictive,
         compliance
       }, awsCredentials);
+      
+      console.log('✅ Policy generation result received:', {
+        hasResult: !!result,
+        hasPolicy: !!(result?.policy),
+        hasTrustPolicy: !!(result?.trust_policy),
+        isQuestion: result?.is_question,
+        conversationId: result?.conversation_id
+      });
       
       // Validate result before setting state
       if (!result) {

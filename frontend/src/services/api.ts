@@ -143,44 +143,76 @@ export const generatePolicy = async (
   // Detect service from description if not explicitly provided
   const detectedService = detectServiceFromDescription(request.description);
   
+  const requestBody = {
+    description: request.description,
+    service: detectedService, // Use detected service instead of hardcoded 'lambda'
+    conversation_id: request.conversation_id || null,
+    is_followup: request.is_followup || false,
+    restrictive: request.restrictive || false,
+    compliance: request.compliance || 'general',
+    aws_credentials: awsCredentials || undefined
+  };
+  
+  console.log('🚀 Sending generate policy request:', {
+    apiUrl: API_URL,
+    endpoint: `${API_URL}/generate`,
+    hasCredentials: !!awsCredentials,
+    credentialsRegion: awsCredentials?.region,
+    descriptionLength: request.description.length,
+    service: detectedService
+  });
+  
   let response: Response;
   try {
     response = await fetch(`${API_URL}/generate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        description: request.description,
-        service: detectedService, // Use detected service instead of hardcoded 'lambda'
-        conversation_id: request.conversation_id || null,
-        is_followup: request.is_followup || false,
-        restrictive: request.restrictive || false,
-        compliance: request.compliance || 'general',
-        aws_credentials: awsCredentials || undefined
-      }),
+      body: JSON.stringify(requestBody),
+    });
+    console.log('✅ Fetch completed:', {
+      status: response.status,
+      statusText: response.statusText,
+      ok: response.ok,
+      headers: Object.fromEntries(response.headers.entries())
     });
   } catch (fetchError) {
-    console.error('Fetch error:', fetchError);
+    console.error('❌ Fetch error:', fetchError);
+    console.error('   API_URL:', API_URL);
+    console.error('   Full URL:', `${API_URL}/generate`);
     throw new Error(`Network error: ${fetchError instanceof Error ? fetchError.message : 'Failed to connect to server'}`);
   }
 
   // Read response text once (can't read response body twice)
   const responseText = await response.text();
+  console.log('📥 Response received:', {
+    status: response.status,
+    responseLength: responseText.length,
+    preview: responseText.substring(0, 200)
+  });
   
   if (!response.ok) {
-    console.error(`Backend error (${response.status}):`, responseText);
+    console.error(`❌ Backend error (${response.status}):`, responseText);
     throw new Error(`Backend error: ${response.status} - ${responseText.substring(0, 200)}`);
   }
 
   // Check if response is empty or null
   if (!responseText || responseText.trim() === '' || responseText.trim() === 'null') {
-    console.error('Backend returned empty or null response body');
-    console.error('Response text:', responseText);
+    console.error('❌ Backend returned empty or null response body');
+    console.error('   Response text:', responseText);
+    console.error('   Response length:', responseText?.length);
     throw new Error('Empty or null response body from server. Please check backend logs.');
   }
   
   let backendResponse: ConversationalResponse | null;
   try {
     backendResponse = JSON.parse(responseText);
+    console.log('✅ JSON parsed successfully:', {
+      hasConversationId: !!backendResponse?.conversation_id,
+      hasPolicy: !!backendResponse?.policy,
+      hasTrustPolicy: !!backendResponse?.trust_policy,
+      isQuestion: backendResponse?.is_question,
+      messageCount: backendResponse?.message_count
+    });
   } catch (jsonError) {
     console.error('JSON parse error:', jsonError);
     console.error('Response text that failed to parse:', responseText);
