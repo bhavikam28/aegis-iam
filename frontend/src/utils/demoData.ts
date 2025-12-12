@@ -93,6 +93,76 @@ Security: Regional scoping (us-east-1) and specific log group ARN prevent accide
 
   const securityScore = request.restrictive ? 95 : 85;
 
+  // Compliance features - detailed breakdown for each framework
+  const complianceFeatures = [];
+  
+  if (request.compliance === 'pci-dss' || request.compliance === 'pci_dss') {
+    complianceFeatures.push(
+      {
+        title: "Least-Privilege Access (Requirement 7.1.2)",
+        subtitle: "Policy uses specific actions instead of wildcards",
+        requirement: "PCI DSS Requirement 7.1.2: Restrict access to cardholder data by business need-to-know",
+        description: "Policy uses specific actions (s3:GetObject, logs:PutLogEvents) instead of wildcards (*), limiting access to only necessary permissions. This ensures that even if credentials are compromised, attackers can only perform the exact operations needed for the intended function, significantly reducing the attack surface and protecting cardholder data.",
+        link: "https://www.pcisecuritystandards.org/document_library/"
+      },
+      {
+        title: "Resource-Level Restrictions",
+        subtitle: "Permissions scoped to specific resources",
+        requirement: "PCI DSS Requirement 7.1.2: Limit access to cardholder data environment",
+        description: "Permissions are scoped to specific resources (S3 bucket 'my-app-uploads', CloudWatch log group '/aws/lambda/my-function') rather than using wildcards. This prevents unauthorized access to other resources in your account, ensuring cardholder data environments are properly isolated and protected from lateral movement attacks.",
+        link: "https://www.pcisecuritystandards.org/document_library/"
+      },
+      {
+        title: "Access Logging Ready (Requirement 10)",
+        subtitle: "CloudWatch Logs permissions enable audit trails",
+        requirement: "PCI DSS Requirement 10: Track and monitor all access to network resources and cardholder data",
+        description: "CloudWatch Logs permissions enable comprehensive access monitoring and audit trails. All access to cardholder data can be logged and reviewed, supporting PCI DSS Requirement 10 which mandates tracking and monitoring all access to network resources and cardholder data for forensic analysis and compliance reporting.",
+        link: "https://www.pcisecuritystandards.org/document_library/"
+      },
+      {
+        title: "Network Segmentation Principles",
+        subtitle: "Access limited to necessary services",
+        requirement: "PCI DSS Requirement 1: Install and maintain network security controls",
+        description: "By restricting permissions to specific resources and services, this policy supports network segmentation principles. Access is limited to only the necessary services (S3 and CloudWatch), reducing the risk of lateral movement if one component is compromised and protecting the cardholder data environment from unauthorized network access.",
+        link: "https://www.pcisecuritystandards.org/document_library/"
+      }
+    );
+  } else if (request.compliance === 'hipaa') {
+    complianceFeatures.push(
+      {
+        title: "Access Controls (164.308(a)(4))",
+        subtitle: "Least-privilege access controls to protect PHI",
+        requirement: "HIPAA 164.308(a)(4): Information access management",
+        description: "Policy implements least-privilege access controls to protect PHI (Protected Health Information). HIPAA requires covered entities to implement procedures to authorize access to ePHI only when such access is appropriate based on the user's role. This policy ensures that only necessary permissions are granted, reducing the risk of unauthorized PHI access and supporting role-based access control (RBAC) principles.",
+        link: "https://www.hhs.gov/hipaa/for-professionals/security/guidance/administrative-safeguards/index.html"
+      },
+      {
+        title: "Audit Logging (164.312(b))",
+        subtitle: "CloudWatch Logs enable audit controls for ePHI",
+        requirement: "HIPAA 164.312(b): Audit controls",
+        description: "CloudWatch Logs permissions enable audit controls for access to ePHI. HIPAA requires implementation of hardware, software, and/or procedural mechanisms that record and examine activity in information systems that contain or use ePHI. This policy ensures all access to PHI is logged and can be audited for security incident response and compliance reporting.",
+        link: "https://www.hhs.gov/hipaa/for-professionals/security/guidance/audit-controls/index.html"
+      }
+    );
+  } else {
+    complianceFeatures.push(
+      {
+        title: "Least Privilege Access",
+        subtitle: "AWS IAM Best Practice",
+        requirement: "AWS Security Best Practices",
+        description: "All permissions are scoped to specific resources with minimal necessary actions. This follows AWS's principle of granting only the permissions required to perform a task, reducing the attack surface and potential impact of compromised credentials.",
+        link: "https://docs.aws.amazon.com/IAM/latest/UserGuide/best-practices.html#grant-least-privilege"
+      },
+      {
+        title: "Resource-Level Permissions",
+        subtitle: "Specific ARNs instead of wildcards",
+        requirement: "AWS Security Best Practices",
+        description: "Resources are explicitly defined with ARNs instead of using wildcards (*). This ensures permissions only apply to intended resources, preventing accidental or malicious access to other resources in your AWS account.",
+        link: "https://docs.aws.amazon.com/IAM/latest/UserGuide/best-practices.html"
+      }
+    );
+  }
+  
   const complianceStatus: Record<string, ComplianceFramework> = {};
   
   if (request.compliance === 'hipaa') {
@@ -189,22 +259,7 @@ Security: Regional scoping (us-east-1) and specific log group ARN prevent accide
       ]
     },
     compliance_status: complianceStatus,
-    compliance_features: [
-      {
-        title: "Least Privilege Access",
-        subtitle: "Requirement 7.1.2",
-        requirement: "PCI DSS",
-        description: "Permissions are scoped to specific resources (S3 buckets, log groups) rather than using wildcards. This prevents unauthorized access to other resources in your account.",
-        link: "https://www.pcisecuritystandards.org/document_library/"
-      },
-      {
-        title: "Access Logging & Monitoring",
-        subtitle: "Requirement 164.312(b)",
-        requirement: "HIPAA",
-        description: "CloudWatch Logs integration enables comprehensive audit trails of all function activities for compliance monitoring.",
-        link: "https://www.hhs.gov/hipaa/for-professionals/security/guidance/audit-controls/index.html"
-      }
-    ],
+    compliance_features: complianceFeatures,
     reasoning: {
       plan: "Analyzed the permission requirements and identified the minimum necessary AWS actions and resources needed for a Lambda function to read from S3 and write logs.",
       actions: [

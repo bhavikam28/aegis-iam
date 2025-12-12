@@ -105,11 +105,12 @@ const GeneratePolicy: React.FC<GeneratePolicyProps> = ({ awsCredentials: propCre
         const demoResponse = mockGeneratePolicyResponse({
           description: 'Lambda function to read from S3 bucket my-app-bucket and write logs to CloudWatch',
           service: 'Lambda',
-          compliance: 'general',
+          compliance: 'pci-dss', // Use PCI DSS to show full compliance features
           restrictive: true
         });
         setResponse(demoResponse);
         setShowInitialForm(false);
+        setCompliance('pci-dss'); // Set the compliance dropdown too
       }, 500);
     }
   }, [demoMode]);
