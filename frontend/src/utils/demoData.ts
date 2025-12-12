@@ -279,6 +279,9 @@ Security: Regional scoping (us-east-1) and specific log group ARN prevent accide
 // ============================================
 
 export const mockValidatePolicyResponse = (request: ValidatePolicyRequest): ValidatePolicyResponse => {
+  // If validating via ARN, return response with role_details
+  const isArnValidation = !request.policy_json && request.role_arn;
+  
   const findings: SecurityFinding[] = [
     {
       id: "finding-1",
@@ -382,9 +385,12 @@ export const mockValidatePolicyResponse = (request: ValidatePolicyRequest): Vali
     }
   };
 
-  return {
+  // Build response - include role_details if validating via ARN
+  const response: any = {
     conversation_id: "demo-validate-" + Date.now(),
-    final_answer: "Validation complete. Found 3 security findings: 1 High, 1 Medium, 1 Low severity.",
+    final_answer: isArnValidation 
+      ? `Validation complete for role ${request.role_arn}. Found 3 security findings: 1 High, 1 Medium, 1 Low severity.`
+      : "Validation complete. Found 3 security findings: 1 High, 1 Medium, 1 Low severity.",
     message_count: 1,
     policy: null,
     findings,
@@ -400,7 +406,55 @@ export const mockValidatePolicyResponse = (request: ValidatePolicyRequest): Vali
     permissions_score: securityScore,
     trust_score: 0,
     overall_score: securityScore
-  } as any;
+  };
+  
+  // Add role_details for ARN validation
+  if (isArnValidation && request.role_arn) {
+    response.role_details = {
+      role_arn: request.role_arn,
+      role_name: request.role_arn.split('/').pop() || 'ExampleRole',
+      attached_policies: [
+        {
+          name: "S3FullAccess",
+          arn: "arn:aws:iam::123456789012:policy/S3FullAccess",
+          document: {
+            Version: "2012-10-17",
+            Statement: [{
+              Effect: "Allow",
+              Action: "s3:*",
+              Resource: "*"
+            }]
+          }
+        },
+        {
+          name: "CloudWatchLogsFullAccess",
+          arn: "arn:aws:iam::aws:policy/CloudWatchLogsFullAccess",
+          document: {
+            Version: "2012-10-17",
+            Statement: [{
+              Effect: "Allow",
+              Action: "logs:*",
+              Resource: "*"
+            }]
+          }
+        }
+      ],
+      inline_policies: [],
+      trust_policy: {
+        Version: "2012-10-17",
+        Statement: [{
+          Effect: "Allow",
+          Principal: {
+            Service: "lambda.amazonaws.com"
+          },
+          Action: "sts:AssumeRole"
+        }]
+      },
+      instance_profiles: []
+    };
+  }
+  
+  return response;
 };
 
 // ============================================

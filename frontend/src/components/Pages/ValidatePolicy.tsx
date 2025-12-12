@@ -112,10 +112,11 @@ const ValidatePolicy: React.FC<ValidatePolicyProps> = ({ awsCredentials: propCre
   
   const chatEndRef = useRef<HTMLDivElement>(null);
 
-  // Demo mode: Load demo data on mount
+  // Demo mode: Load demo data on mount - supports both policy and ARN validation
   useEffect(() => {
     if (demoMode && !response) {
       import('@/utils/demoData').then(({ mockValidatePolicyResponse }) => {
+        // Default to policy validation demo
         const demoRequest: ValidatePolicyRequest = {
           policy_json: JSON.stringify({
             Version: "2012-10-17",
@@ -130,11 +131,29 @@ const ValidatePolicy: React.FC<ValidatePolicyProps> = ({ awsCredentials: propCre
         const demoResponse = mockValidatePolicyResponse(demoRequest);
         setResponse(demoResponse);
         setInputValue(demoRequest.policy_json || '');
+        setInputType('policy'); // Default to policy
         setShowInitialForm(false);
         setValidationStep(0);
       });
     }
   }, [demoMode]);
+  
+  // Demo mode: Handle ARN validation when user switches to ARN tab
+  useEffect(() => {
+    if (demoMode && inputType === 'arn' && !inputValue && !response) {
+      import('@/utils/demoData').then(({ mockValidatePolicyResponse }) => {
+        const demoRequest: ValidatePolicyRequest = {
+          role_arn: 'arn:aws:iam::123456789012:role/LambdaExecutionRole',
+          compliance_frameworks: selectedFrameworks
+        };
+        const demoResponse = mockValidatePolicyResponse(demoRequest);
+        setResponse(demoResponse);
+        setInputValue(demoRequest.role_arn || '');
+        setShowInitialForm(false);
+        setValidationStep(0);
+      });
+    }
+  }, [demoMode, inputType]);
   
   // ============================================
   // PERSISTENCE: Load saved state on mount
