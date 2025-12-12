@@ -2240,7 +2240,7 @@ const AuditAccount: React.FC<AuditAccountProps> = ({ awsCredentials: propCredent
                     // Create comprehensive audit report with proper structure
                     const reportData = {
                       report_type: 'AWS IAM Security Audit Report',
-                      generated_by: 'Aegis IAM - Enterprise IAM Security Platform',
+                      generated_by: 'Aegis IAM - AI-Powered AWS IAM Security',
                       timestamp: new Date().toISOString(),
                       date: new Date().toLocaleDateString('en-US', { 
                         year: 'numeric', 
