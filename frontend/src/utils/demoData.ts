@@ -63,48 +63,33 @@ export const mockGeneratePolicyResponse = (request: GeneratePolicyRequest): Gene
     ]
   };
   
-  const permissionsExplanation = `## What This Policy Does
+  const permissionsExplanation = `1. AllowS3ReadAccess
+Permission: s3:GetObject, s3:GetObjectVersion, s3:ListBucket on my-app-uploads bucket
+Purpose: Grants Lambda function the ability to read files from the S3 bucket 'my-app-uploads'. This includes downloading objects, listing bucket contents, and accessing previous versions of objects if versioning is enabled.
+Why It Matters: S3 access is restricted to a single specific bucket, preventing the Lambda function from accessing other S3 buckets in your AWS account. This follows the principle of least privilege by limiting scope to only what's needed.
+Security: Resource-level restrictions ensure the function cannot accidentally access or modify data in other S3 buckets, reducing the attack surface significantly.
 
-This IAM permissions policy grants a Lambda function secure, least-privilege access to AWS resources. Here's what it allows:
+2. AllowCloudWatchLogs
+Permission: logs:CreateLogGroup, logs:CreateLogStream, logs:PutLogEvents on Lambda function log group
+Purpose: Enables Lambda to write application logs to CloudWatch Logs for monitoring, debugging, and audit purposes. The function can create log groups/streams and write log events.
+Why It Matters: Logging permissions are scoped to this specific Lambda function's log group (/aws/lambda/my-function), preventing logs from being written to arbitrary log groups. This maintains log isolation and security.
+Security: Regional scoping (us-east-1) and specific log group ARN prevent accidental logging to other regions or log groups, ensuring logs stay organized and secure.`;
 
-### 📁 S3 Bucket Access
-- **Read Objects**: The function can download and read files from the S3 bucket named 'my-app-uploads'
-- **List Objects**: Can see what files exist in the bucket
-- **Version Control**: Can access previous versions of objects if versioning is enabled
+  const trustExplanation = `The trust policy defines **who** is allowed to assume (use) this IAM role.
 
-**Why it matters**: S3 access is limited to a single bucket, preventing the function from accessing other S3 data in your account.
+**Trusted Entity**: AWS Lambda Service (lambda.amazonaws.com) - Only Lambda functions can assume this role.
 
-### 📊 CloudWatch Logs Access
-- **Create Log Groups**: Can create log groups for organizing logs
-- **Create Log Streams**: Can create log streams within those groups
-- **Write Log Events**: Can write application logs for debugging and monitoring
+**Source Account Restriction**: The role can only be assumed by Lambda functions running in AWS account 123456789012. This aws:SourceAccount condition is critical for security.
 
-**Why it matters**: Logging is restricted to this specific Lambda function's log group, following the principle of least privilege.
+**Confused Deputy Protection**: The source account condition prevents other AWS accounts from using this role, even if they somehow know the role ARN. This prevents cross-account confused deputy attacks.
 
-### 🔒 Security Highlights
-✓ **Resource-Level Restrictions**: All permissions specify exact ARNs (Amazon Resource Names) instead of wildcards (*)
-✓ **Minimum Necessary Access**: Only grants actions required for the described functionality
-✓ **Regional Scoping**: Logs are scoped to us-east-1 to prevent accidental multi-region operations`;
+**What This Means**:
+• Only Lambda functions in YOUR account (123456789012) can use this role
+• Lambda functions in other AWS accounts cannot assume this role
+• No other AWS services (EC2, ECS, EKS, etc.) can use this role - only Lambda
+• Reduces risk of unauthorized access and confused deputy vulnerability
 
-  const trustExplanation = `## Who Can Use This Role
-
-The trust policy defines **who** is allowed to assume (use) this IAM role.
-
-### 🤝 Trusted Entity
-**AWS Lambda Service** - Only Lambda functions can assume this role
-
-### 🔐 Security Conditions
-- **Source Account Restriction**: The role can only be assumed by Lambda functions running in AWS account **123456789012**
-- **Confused Deputy Protection**: The source account condition prevents other AWS accounts from using this role, even if they know the role ARN
-
-### ✅ What This Means
-- ✅ Only Lambda functions in your account can use this role
-- ✅ Lambda functions in other accounts cannot assume this role
-- ✅ No other AWS services (EC2, ECS, etc.) can use this role
-- ✅ Reduces risk of unauthorized access or confused deputy attacks
-
-### 💡 Best Practice
-This is the standard trust policy pattern for Lambda execution roles, providing secure service-to-service authentication within your AWS account.`;
+**Best Practice**: This is the standard trust policy pattern for Lambda execution roles, providing secure service-to-service authentication within your AWS account without allowing external entities.`;
 
   const securityScore = request.restrictive ? 95 : 85;
 
