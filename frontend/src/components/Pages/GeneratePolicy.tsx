@@ -22,8 +22,6 @@ const GeneratePolicy: React.FC<GeneratePolicyProps> = ({ awsCredentials: propCre
   const [description, setDescription] = useState('');
   const [restrictive, setRestrictive] = useState(true);
   const [compliance, setCompliance] = useState('general');
-  const [awsAccountId, setAwsAccountId] = useState('');
-  const [awsRegion, setAwsRegion] = useState('');
   const [response, setResponse] = useState<GeneratePolicyResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
@@ -81,7 +79,6 @@ const GeneratePolicy: React.FC<GeneratePolicyProps> = ({ awsCredentials: propCre
   const [showRefinementSuggestions, setShowRefinementSuggestions] = useState(false); // Collapsed by default - detailed
   const [showPermissionsSuggestions, setShowPermissionsSuggestions] = useState(false); // Collapsed by default
   const [showTrustSuggestions, setShowTrustSuggestions] = useState(false); // Collapsed by default
-  const [showAdvancedOptions, setShowAdvancedOptions] = useState(false);
   const [showComplianceAdherence, setShowComplianceAdherence] = useState(false); // Collapsed by default
   const [showComplianceStatus, setShowComplianceStatus] = useState(false); // Collapsed by default
   const [showScoreBreakdown, setShowScoreBreakdown] = useState(false); // Collapsed by default
@@ -171,8 +168,6 @@ const GeneratePolicy: React.FC<GeneratePolicyProps> = ({ awsCredentials: propCre
       description: string;
       restrictive: boolean;
       compliance: string;
-      awsAccountId: string;
-      awsRegion: string;
       response: GeneratePolicyResponse | null;
       conversationId: string | null;
       chatHistory: ChatMessage[];
@@ -214,8 +209,6 @@ const GeneratePolicy: React.FC<GeneratePolicyProps> = ({ awsCredentials: propCre
         setDescription(saved.description || '');
         setRestrictive(saved.restrictive ?? true);
         setCompliance(saved.compliance || 'general');
-        setAwsAccountId(saved.awsAccountId || '');
-        setAwsRegion(saved.awsRegion || '');
         setResponse(saved.response);
         setConversationId(saved.conversationId);
         setChatHistory(saved.chatHistory || []);
@@ -256,8 +249,6 @@ const GeneratePolicy: React.FC<GeneratePolicyProps> = ({ awsCredentials: propCre
         description,
         restrictive,
         compliance,
-        awsAccountId,
-        awsRegion,
         response,
         conversationId,
         chatHistory,
@@ -269,7 +260,7 @@ const GeneratePolicy: React.FC<GeneratePolicyProps> = ({ awsCredentials: propCre
       // If form is empty and we're showing initial form, clear any stale data
       clearStorage(STORAGE_KEYS.GENERATE_POLICY);
     }
-  }, [description, restrictive, compliance, awsAccountId, awsRegion, response, conversationId, chatHistory, showInitialForm, isChatbotOpen]);
+  }, [description, restrictive, compliance, response, conversationId, chatHistory, showInitialForm, isChatbotOpen]);
 
   // Only update chatHistory from response if it's a new conversation or explicitly provided
   // Don't overwrite existing chat history for follow-up responses
@@ -379,59 +370,6 @@ What would you like to do?`,
   };
 
   // Validation helper functions
-  const validateAccountId = (accountId: string): { valid: boolean; error?: string } => {
-    if (!accountId.trim()) return { valid: true }; // Optional field
-    
-    const cleaned = accountId.trim().replace(/[\s\-\.]/g, '');
-    if (!/^\d{12}$/.test(cleaned)) {
-      return {
-        valid: false,
-        error: 'AWS Account ID must be exactly 12 numeric digits (e.g., 123456789012)'
-      };
-    }
-    return { valid: true };
-  };
-
-  const validateRegion = (region: string): { valid: boolean; error?: string } => {
-    if (!region.trim()) return { valid: true }; // Optional field
-    
-    const cleaned = region.trim().toLowerCase();
-    
-    // Known valid regions (from aws_constants.py) - All 38 AWS regions as of 2025
-    // Since we're using a dropdown, this is mainly a safety check
-    const knownRegions = [
-      // US Regions (4)
-      'us-east-1', 'us-east-2', 'us-west-1', 'us-west-2',
-      // AWS GovCloud (US) Regions (2)
-      'us-gov-east-1', 'us-gov-west-1',
-      // Europe Regions (8)
-      'eu-west-1', 'eu-west-2', 'eu-west-3', 'eu-central-1', 'eu-north-1', 'eu-south-1', 'eu-south-2', 'eu-central-2',
-      // Asia Pacific Regions (14)
-      'ap-south-1', 'ap-south-2', 'ap-southeast-1', 'ap-southeast-2', 'ap-southeast-3', 'ap-southeast-4', 'ap-southeast-5', 'ap-southeast-6', 'ap-southeast-7',
-      'ap-northeast-1', 'ap-northeast-2', 'ap-northeast-3', 'ap-east-1', 'ap-east-2',
-      // Canada (2)
-      'ca-central-1', 'ca-west-1',
-      // South America (1)
-      'sa-east-1',
-      // Africa (1)
-      'af-south-1',
-      // Middle East (3)
-      'me-south-1', 'me-central-1', 'il-central-1',
-      // Mexico (1)
-      'mx-central-1',
-      // China (2)
-      'cn-north-1', 'cn-northwest-1'
-    ];
-    
-    if (!knownRegions.includes(cleaned)) {
-      return {
-        valid: false,
-        error: `Region '${cleaned}' is not a recognized AWS region. Please select a valid region from the dropdown.`
-      };
-    }
-    
-    return { valid: true };
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -474,23 +412,6 @@ What would you like to do?`,
       return;
     }
 
-    // Validate AWS Account ID if provided
-    if (awsAccountId.trim()) {
-      const accountValidation = validateAccountId(awsAccountId);
-      if (!accountValidation.valid) {
-        setError(accountValidation.error || 'Invalid AWS Account ID');
-        return;
-      }
-    }
-
-    // Validate AWS Region if provided
-    if (awsRegion.trim()) {
-      const regionValidation = validateRegion(awsRegion);
-      if (!regionValidation.valid) {
-        setError(regionValidation.error || 'Invalid AWS Region');
-        return;
-      }
-    }
 
     // CRITICAL: Check if this is a NEW request (different description) or continuation
     const saved = loadFromStorage<{
@@ -533,17 +454,9 @@ What would you like to do?`,
     try {
       // Simulate step progression (only 2 steps - validation is optional now)
       setTimeout(() => setLoadingStep('generating'), 1500);
-      // Build description with optional AWS values if provided
-      let enhancedDescription = description;
-      if (awsAccountId.trim()) {
-        enhancedDescription += `\n\nAWS Account ID: ${awsAccountId.trim().replace(/[\s\-\.]/g, '')}`;
-      }
-      if (awsRegion.trim()) {
-        enhancedDescription += `\n\nAWS Region: ${awsRegion.trim().toLowerCase()}`;
-      }
       
       const result = await generatePolicy({
-        description: enhancedDescription,
+        description,
         restrictive,
         compliance
       }, awsCredentials);
@@ -1094,128 +1007,6 @@ What would you like to do?`,
                     </div>
                   </div>
 
-                  {/* Optional AWS Details Section - Collapsible */}
-                  <div className="mb-8">
-                    <button
-                      type="button"
-                      onClick={() => setShowAdvancedOptions(!showAdvancedOptions)}
-                      className="w-full flex items-center justify-between p-4 bg-gradient-to-br from-white/50 to-slate-50/30 rounded-xl border-2 border-slate-200 hover:border-blue-300 transition-all duration-300 group"
-                    >
-                      <div className="flex items-center space-x-3">
-                        <ChevronDown className={`w-5 h-5 text-slate-600 transition-transform duration-300 ${showAdvancedOptions ? 'rotate-180' : ''}`} />
-                        <span className="text-slate-700 text-sm font-semibold">Advanced Options</span>
-                        <span className="text-slate-400 text-xs font-normal">(optional)</span>
-                      </div>
-                      <Info className="w-4 h-4 text-slate-400 group-hover:text-blue-600 transition-colors" />
-                    </button>
-                    
-                    {showAdvancedOptions && (
-                      <div className="mt-4 bg-gradient-to-br from-white/80 to-slate-50/50 rounded-xl p-6 border-2 border-slate-200/50">
-                        <p className="text-slate-600 text-sm font-medium mb-4">
-                          Provide these for more complete policies. Leave empty to use placeholders (you can refine later via chatbot).
-                        </p>
-                        
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          <div>
-                            <label htmlFor="awsAccountId" className="block text-slate-700 text-sm font-semibold mb-2">
-                              AWS Account ID (Auto-detected)
-                            </label>
-                            <input
-                              id="awsAccountId"
-                              type="text"
-                              value={awsAccountId}
-                              onChange={(e) => setAwsAccountId(e.target.value)}
-                              placeholder="Leave blank - will use your configured account"
-                              maxLength={12}
-                              pattern="[0-9]{12}"
-                              className="w-full px-4 py-3 bg-white/60 backdrop-blur-sm border-2 border-slate-200 rounded-xl text-slate-900 text-base placeholder-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 focus:outline-none transition-all duration-300 font-medium"
-                            />
-                            <div className="mt-2 bg-blue-50 border border-blue-200 rounded-lg p-3">
-                              <div className="flex items-start space-x-2">
-                                <Info className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
-                                <p className="text-xs text-blue-700 font-medium">
-                                  <strong>Auto-detected:</strong> Your actual AWS Account ID from configured credentials will be used. This ensures policies work correctly when deployed.
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                          
-                          <div>
-                            <label htmlFor="awsRegion" className="block text-slate-700 text-sm font-semibold mb-2">
-                              AWS Region
-                            </label>
-                            <select
-                              id="awsRegion"
-                              value={awsRegion}
-                              onChange={(e) => setAwsRegion(e.target.value)}
-                              className="w-full px-4 py-3 bg-white/60 backdrop-blur-sm border-2 border-slate-200 rounded-xl text-slate-900 text-base focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 focus:outline-none transition-all duration-300 font-medium cursor-pointer"
-                            >
-                              <option value="">Select a region (optional)</option>
-                              <optgroup label="US Regions">
-                                <option value="us-east-1">us-east-1 - US East (N. Virginia)</option>
-                                <option value="us-east-2">us-east-2 - US East (Ohio)</option>
-                                <option value="us-west-1">us-west-1 - US West (N. California)</option>
-                                <option value="us-west-2">us-west-2 - US West (Oregon)</option>
-                              </optgroup>
-                              <optgroup label="AWS GovCloud (US) Regions">
-                                <option value="us-gov-east-1">us-gov-east-1 - AWS GovCloud (US-East)</option>
-                                <option value="us-gov-west-1">us-gov-west-1 - AWS GovCloud (US-West)</option>
-                              </optgroup>
-                              <optgroup label="Europe Regions">
-                                <option value="eu-west-1">eu-west-1 - Europe (Ireland)</option>
-                                <option value="eu-west-2">eu-west-2 - Europe (London)</option>
-                                <option value="eu-west-3">eu-west-3 - Europe (Paris)</option>
-                                <option value="eu-central-1">eu-central-1 - Europe (Frankfurt)</option>
-                                <option value="eu-north-1">eu-north-1 - Europe (Stockholm)</option>
-                                <option value="eu-south-1">eu-south-1 - Europe (Milan)</option>
-                                <option value="eu-south-2">eu-south-2 - Europe (Spain)</option>
-                                <option value="eu-central-2">eu-central-2 - Europe (Zurich)</option>
-                              </optgroup>
-                              <optgroup label="Asia Pacific Regions">
-                                <option value="ap-south-1">ap-south-1 - Asia Pacific (Mumbai)</option>
-                                <option value="ap-south-2">ap-south-2 - Asia Pacific (Hyderabad)</option>
-                                <option value="ap-southeast-1">ap-southeast-1 - Asia Pacific (Singapore)</option>
-                                <option value="ap-southeast-2">ap-southeast-2 - Asia Pacific (Sydney)</option>
-                                <option value="ap-southeast-3">ap-southeast-3 - Asia Pacific (Jakarta)</option>
-                                <option value="ap-southeast-4">ap-southeast-4 - Asia Pacific (Melbourne)</option>
-                                <option value="ap-southeast-5">ap-southeast-5 - Asia Pacific (Malaysia)</option>
-                                <option value="ap-southeast-6">ap-southeast-6 - Asia Pacific (New Zealand)</option>
-                                <option value="ap-southeast-7">ap-southeast-7 - Asia Pacific (Thailand)</option>
-                                <option value="ap-northeast-1">ap-northeast-1 - Asia Pacific (Tokyo)</option>
-                                <option value="ap-northeast-2">ap-northeast-2 - Asia Pacific (Seoul)</option>
-                                <option value="ap-northeast-3">ap-northeast-3 - Asia Pacific (Osaka)</option>
-                                <option value="ap-east-1">ap-east-1 - Asia Pacific (Hong Kong)</option>
-                                <option value="ap-east-2">ap-east-2 - Asia Pacific (Taipei)</option>
-                              </optgroup>
-                              <optgroup label="Canada Regions">
-                                <option value="ca-central-1">ca-central-1 - Canada (Central)</option>
-                                <option value="ca-west-1">ca-west-1 - Canada West (Calgary)</option>
-                              </optgroup>
-                              <optgroup label="South America Regions">
-                                <option value="sa-east-1">sa-east-1 - South America (São Paulo)</option>
-                              </optgroup>
-                              <optgroup label="Africa Regions">
-                                <option value="af-south-1">af-south-1 - Africa (Cape Town)</option>
-                              </optgroup>
-                              <optgroup label="Middle East Regions">
-                                <option value="me-south-1">me-south-1 - Middle East (Bahrain)</option>
-                                <option value="me-central-1">me-central-1 - Middle East (UAE)</option>
-                                <option value="il-central-1">il-central-1 - Israel (Tel Aviv)</option>
-                              </optgroup>
-                              <optgroup label="Mexico Regions">
-                                <option value="mx-central-1">mx-central-1 - Mexico (Central)</option>
-                              </optgroup>
-                              <optgroup label="China Regions (Special)">
-                                <option value="cn-north-1">cn-north-1 - China (Beijing)</option>
-                                <option value="cn-northwest-1">cn-northwest-1 - China (Ningxia)</option>
-                              </optgroup>
-                            </select>
-                            <p className="text-xs text-slate-500 mt-1 font-medium">Select from all available AWS regions</p>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
 
                   <button
                     type="submit"

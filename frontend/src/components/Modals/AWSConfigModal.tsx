@@ -9,22 +9,54 @@ interface AWSConfigModalProps {
 }
 
 const AWS_REGIONS = [
-  { value: 'us-east-1', label: 'US East (N. Virginia)' },
-  { value: 'us-east-2', label: 'US East (Ohio)' },
-  { value: 'us-west-1', label: 'US West (N. California)' },
-  { value: 'us-west-2', label: 'US West (Oregon)' },
-  { value: 'eu-west-1', label: 'Europe (Ireland)' },
-  { value: 'eu-west-2', label: 'Europe (London)' },
-  { value: 'eu-west-3', label: 'Europe (Paris)' },
-  { value: 'eu-central-1', label: 'Europe (Frankfurt)' },
-  { value: 'eu-north-1', label: 'Europe (Stockholm)' },
-  { value: 'ap-northeast-1', label: 'Asia Pacific (Tokyo)' },
-  { value: 'ap-northeast-2', label: 'Asia Pacific (Seoul)' },
-  { value: 'ap-southeast-1', label: 'Asia Pacific (Singapore)' },
-  { value: 'ap-southeast-2', label: 'Asia Pacific (Sydney)' },
-  { value: 'ap-south-1', label: 'Asia Pacific (Mumbai)' },
-  { value: 'ca-central-1', label: 'Canada (Central)' },
-  { value: 'sa-east-1', label: 'South America (São Paulo)' },
+  // US Regions
+  { value: 'us-east-1', label: 'us-east-1 - US East (N. Virginia)' },
+  { value: 'us-east-2', label: 'us-east-2 - US East (Ohio)' },
+  { value: 'us-west-1', label: 'us-west-1 - US West (N. California)' },
+  { value: 'us-west-2', label: 'us-west-2 - US West (Oregon)' },
+  // AWS GovCloud (US) Regions
+  { value: 'us-gov-east-1', label: 'us-gov-east-1 - AWS GovCloud (US-East)' },
+  { value: 'us-gov-west-1', label: 'us-gov-west-1 - AWS GovCloud (US-West)' },
+  // Europe Regions
+  { value: 'eu-west-1', label: 'eu-west-1 - Europe (Ireland)' },
+  { value: 'eu-west-2', label: 'eu-west-2 - Europe (London)' },
+  { value: 'eu-west-3', label: 'eu-west-3 - Europe (Paris)' },
+  { value: 'eu-central-1', label: 'eu-central-1 - Europe (Frankfurt)' },
+  { value: 'eu-central-2', label: 'eu-central-2 - Europe (Zurich)' },
+  { value: 'eu-north-1', label: 'eu-north-1 - Europe (Stockholm)' },
+  { value: 'eu-south-1', label: 'eu-south-1 - Europe (Milan)' },
+  { value: 'eu-south-2', label: 'eu-south-2 - Europe (Spain)' },
+  // Asia Pacific Regions
+  { value: 'ap-south-1', label: 'ap-south-1 - Asia Pacific (Mumbai)' },
+  { value: 'ap-south-2', label: 'ap-south-2 - Asia Pacific (Hyderabad)' },
+  { value: 'ap-southeast-1', label: 'ap-southeast-1 - Asia Pacific (Singapore)' },
+  { value: 'ap-southeast-2', label: 'ap-southeast-2 - Asia Pacific (Sydney)' },
+  { value: 'ap-southeast-3', label: 'ap-southeast-3 - Asia Pacific (Jakarta)' },
+  { value: 'ap-southeast-4', label: 'ap-southeast-4 - Asia Pacific (Melbourne)' },
+  { value: 'ap-southeast-5', label: 'ap-southeast-5 - Asia Pacific (Malaysia)' },
+  { value: 'ap-southeast-6', label: 'ap-southeast-6 - Asia Pacific (New Zealand)' },
+  { value: 'ap-southeast-7', label: 'ap-southeast-7 - Asia Pacific (Thailand)' },
+  { value: 'ap-northeast-1', label: 'ap-northeast-1 - Asia Pacific (Tokyo)' },
+  { value: 'ap-northeast-2', label: 'ap-northeast-2 - Asia Pacific (Seoul)' },
+  { value: 'ap-northeast-3', label: 'ap-northeast-3 - Asia Pacific (Osaka)' },
+  { value: 'ap-east-1', label: 'ap-east-1 - Asia Pacific (Hong Kong)' },
+  { value: 'ap-east-2', label: 'ap-east-2 - Asia Pacific (Taipei)' },
+  // Canada Regions
+  { value: 'ca-central-1', label: 'ca-central-1 - Canada (Central)' },
+  { value: 'ca-west-1', label: 'ca-west-1 - Canada West (Calgary)' },
+  // South America Regions
+  { value: 'sa-east-1', label: 'sa-east-1 - South America (São Paulo)' },
+  // Africa Regions
+  { value: 'af-south-1', label: 'af-south-1 - Africa (Cape Town)' },
+  // Middle East Regions
+  { value: 'me-south-1', label: 'me-south-1 - Middle East (Bahrain)' },
+  { value: 'me-central-1', label: 'me-central-1 - Middle East (UAE)' },
+  { value: 'il-central-1', label: 'il-central-1 - Israel (Tel Aviv)' },
+  // Mexico Regions
+  { value: 'mx-central-1', label: 'mx-central-1 - Mexico (Central)' },
+  // China Regions (Special)
+  { value: 'cn-north-1', label: 'cn-north-1 - China (Beijing)' },
+  { value: 'cn-northwest-1', label: 'cn-northwest-1 - China (Ningxia)' },
 ];
 
 const AWSConfigModal: React.FC<AWSConfigModalProps> = ({ isOpen, onClose, onSave, currentCredentials }) => {
@@ -216,11 +248,64 @@ const AWSConfigModal: React.FC<AWSConfigModalProps> = ({ isOpen, onClose, onSave
                 onChange={(e) => setRegion(e.target.value)}
                 className="w-full px-4 py-3 bg-white border-2 border-slate-300 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all font-medium"
               >
-                {AWS_REGIONS.map((r) => (
-                  <option key={r.value} value={r.value}>
-                    {r.label}
-                  </option>
-                ))}
+                <optgroup label="US Regions">
+                  <option value="us-east-1">us-east-1 - US East (N. Virginia)</option>
+                  <option value="us-east-2">us-east-2 - US East (Ohio)</option>
+                  <option value="us-west-1">us-west-1 - US West (N. California)</option>
+                  <option value="us-west-2">us-west-2 - US West (Oregon)</option>
+                </optgroup>
+                <optgroup label="AWS GovCloud (US) Regions">
+                  <option value="us-gov-east-1">us-gov-east-1 - AWS GovCloud (US-East)</option>
+                  <option value="us-gov-west-1">us-gov-west-1 - AWS GovCloud (US-West)</option>
+                </optgroup>
+                <optgroup label="Europe Regions">
+                  <option value="eu-west-1">eu-west-1 - Europe (Ireland)</option>
+                  <option value="eu-west-2">eu-west-2 - Europe (London)</option>
+                  <option value="eu-west-3">eu-west-3 - Europe (Paris)</option>
+                  <option value="eu-central-1">eu-central-1 - Europe (Frankfurt)</option>
+                  <option value="eu-central-2">eu-central-2 - Europe (Zurich)</option>
+                  <option value="eu-north-1">eu-north-1 - Europe (Stockholm)</option>
+                  <option value="eu-south-1">eu-south-1 - Europe (Milan)</option>
+                  <option value="eu-south-2">eu-south-2 - Europe (Spain)</option>
+                </optgroup>
+                <optgroup label="Asia Pacific Regions">
+                  <option value="ap-south-1">ap-south-1 - Asia Pacific (Mumbai)</option>
+                  <option value="ap-south-2">ap-south-2 - Asia Pacific (Hyderabad)</option>
+                  <option value="ap-southeast-1">ap-southeast-1 - Asia Pacific (Singapore)</option>
+                  <option value="ap-southeast-2">ap-southeast-2 - Asia Pacific (Sydney)</option>
+                  <option value="ap-southeast-3">ap-southeast-3 - Asia Pacific (Jakarta)</option>
+                  <option value="ap-southeast-4">ap-southeast-4 - Asia Pacific (Melbourne)</option>
+                  <option value="ap-southeast-5">ap-southeast-5 - Asia Pacific (Malaysia)</option>
+                  <option value="ap-southeast-6">ap-southeast-6 - Asia Pacific (New Zealand)</option>
+                  <option value="ap-southeast-7">ap-southeast-7 - Asia Pacific (Thailand)</option>
+                  <option value="ap-northeast-1">ap-northeast-1 - Asia Pacific (Tokyo)</option>
+                  <option value="ap-northeast-2">ap-northeast-2 - Asia Pacific (Seoul)</option>
+                  <option value="ap-northeast-3">ap-northeast-3 - Asia Pacific (Osaka)</option>
+                  <option value="ap-east-1">ap-east-1 - Asia Pacific (Hong Kong)</option>
+                  <option value="ap-east-2">ap-east-2 - Asia Pacific (Taipei)</option>
+                </optgroup>
+                <optgroup label="Canada Regions">
+                  <option value="ca-central-1">ca-central-1 - Canada (Central)</option>
+                  <option value="ca-west-1">ca-west-1 - Canada West (Calgary)</option>
+                </optgroup>
+                <optgroup label="South America Regions">
+                  <option value="sa-east-1">sa-east-1 - South America (São Paulo)</option>
+                </optgroup>
+                <optgroup label="Africa Regions">
+                  <option value="af-south-1">af-south-1 - Africa (Cape Town)</option>
+                </optgroup>
+                <optgroup label="Middle East Regions">
+                  <option value="me-south-1">me-south-1 - Middle East (Bahrain)</option>
+                  <option value="me-central-1">me-central-1 - Middle East (UAE)</option>
+                  <option value="il-central-1">il-central-1 - Israel (Tel Aviv)</option>
+                </optgroup>
+                <optgroup label="Mexico Regions">
+                  <option value="mx-central-1">mx-central-1 - Mexico (Central)</option>
+                </optgroup>
+                <optgroup label="China Regions (Special)">
+                  <option value="cn-north-1">cn-north-1 - China (Beijing)</option>
+                  <option value="cn-northwest-1">cn-northwest-1 - China (Ningxia)</option>
+                </optgroup>
               </select>
             </div>
           </div>
