@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Shield, Github, CheckCircle, AlertCircle, Info, Zap, Activity, RefreshCw, ExternalLink, FileText, AlertTriangle, Copy } from 'lucide-react';
+import { Shield, Github, CheckCircle, AlertCircle, Info, Zap, Activity, RefreshCw, ExternalLink, FileText, AlertTriangle, Copy, Sparkles } from 'lucide-react';
 import CollapsibleTile from '@/components/Common/CollapsibleTile';
 
 interface GitHubStatus {
