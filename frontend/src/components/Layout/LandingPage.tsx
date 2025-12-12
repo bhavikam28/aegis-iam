@@ -330,7 +330,7 @@ const LandingPage: React.FC<LandingPageProps> = ({
           {/* Section Header */}
           <div className="text-center mb-16">
             <h3 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold mb-6 leading-tight">
-              <span className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 bg-clip-text text-transparent">
+              <span className="bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">
                 Why Use Aegis IAM
               </span>
             </h3>
@@ -364,7 +364,7 @@ const LandingPage: React.FC<LandingPageProps> = ({
                 </div>
                 <h4 className="text-2xl font-bold text-slate-900 mb-4">Privacy First</h4>
                 <p className="text-lg text-slate-700 font-medium leading-relaxed">
-                  <span className="font-bold text-blue-600">Zero storage.</span> Your credentials live only in memory during your session.
+                  <span className="font-bold text-blue-600">No storage.</span> Your credentials live only in memory during your session.
                 </p>
               </div>
             </div>
