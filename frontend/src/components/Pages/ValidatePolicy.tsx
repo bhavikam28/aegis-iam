@@ -112,39 +112,29 @@ const ValidatePolicy: React.FC<ValidatePolicyProps> = ({ awsCredentials: propCre
   
   const chatEndRef = useRef<HTMLDivElement>(null);
 
-  // Demo mode: Load demo data on mount - defaults to policy validation
-  useEffect(() => {
-    if (demoMode && !response && inputType === 'policy') {
-      import('@/utils/demoData').then(({ mockValidatePolicyResponse }) => {
-        // Default to policy validation demo
-        const demoRequest: ValidatePolicyRequest = {
-          policy_json: JSON.stringify({
-            Version: "2012-10-17",
-            Statement: [{
-              Effect: "Allow",
-              Action: "s3:*",
-              Resource: "*"
-            }]
-          }, null, 2),
-          compliance_frameworks: selectedFrameworks
-        };
-        const demoResponse = mockValidatePolicyResponse(demoRequest);
-        setResponse(demoResponse);
-        setInputValue(demoRequest.policy_json || '');
-        setInputType('policy'); // Default to policy
-        setShowInitialForm(false);
-        setValidationStep(0);
-      });
-    }
-  }, [demoMode]);
+  // Demo mode constants - same values used in demo results
+  const DEMO_POLICY_JSON = JSON.stringify({
+    Version: "2012-10-17",
+    Statement: [{
+      Effect: "Allow",
+      Action: "s3:*",
+      Resource: "*"
+    }]
+  }, null, 2);
+  const DEMO_ROLE_ARN = 'arn:aws:iam::123456789012:role/LambdaExecutionRole';
   
-  // Demo mode: Pre-fill ARN when user switches to ARN tab
+  // Demo mode: Pre-fill form inputs (but don't auto-submit - let user click Validate)
   useEffect(() => {
-    if (demoMode && inputType === 'arn' && !inputValue) {
-      // Pre-fill ARN input so user can click validate
-      setInputValue('arn:aws:iam::123456789012:role/LambdaExecutionRole');
+    if (demoMode && !response && showInitialForm) {
+      // Pre-fill with demo values - same values that demo results use
+      if (inputType === 'policy' && !inputValue) {
+        setInputValue(DEMO_POLICY_JSON);
+      } else if (inputType === 'arn' && !inputValue) {
+        setInputValue(DEMO_ROLE_ARN);
+      }
+      // Don't auto-submit - let user see the form and click "Validate"
     }
-  }, [demoMode, inputType]);
+  }, [demoMode, showInitialForm, inputType]);
   
   // ============================================
   // PERSISTENCE: Load saved state on mount

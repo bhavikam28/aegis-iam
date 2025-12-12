@@ -92,28 +92,35 @@ const GeneratePolicy: React.FC<GeneratePolicyProps> = ({ awsCredentials: propCre
   const chatEndRef = useRef<HTMLDivElement>(null);
   const descriptionRef = useRef<HTMLTextAreaElement>(null);
 
-  // Auto-load demo data when demo mode is enabled
+  // Demo mode: Pre-fill form inputs with demo data values
+  const DEMO_DESCRIPTION = 'Lambda function to read from S3 bucket my-app-bucket and write logs to CloudWatch';
+  const DEMO_COMPLIANCE = 'pci-dss';
+  const DEMO_RESTRICTIVE = true;
+  
+  // Demo mode: Pre-fill form inputs (but don't auto-submit - let user click Generate)
   useEffect(() => {
-    if (demoMode && !response && !loading) {
-      // Auto-fill with demo example and show results
-      setDescription('Lambda function to read from S3 bucket my-app-bucket and write logs to CloudWatch');
-      setRestrictive(true);
-      setCompliance('general');
-      
-      // Load demo response after a short delay to simulate loading
-      setTimeout(() => {
-        const demoResponse = mockGeneratePolicyResponse({
-          description: 'Lambda function to read from S3 bucket my-app-bucket and write logs to CloudWatch',
-          service: 'Lambda',
-          compliance: 'pci-dss', // Use PCI DSS to show full compliance features
-          restrictive: true
-        });
-        setResponse(demoResponse);
-        setShowInitialForm(false);
-        setCompliance('pci-dss'); // Set the compliance dropdown too
-      }, 500);
+    if (demoMode && !response && !loading && showInitialForm) {
+      // Pre-fill with demo example values - same values that demo results use
+      setDescription(DEMO_DESCRIPTION);
+      setRestrictive(DEMO_RESTRICTIVE);
+      setCompliance(DEMO_COMPLIANCE);
+      // Don't auto-submit - let user see the form and click "Generate Secure Policy"
     }
-  }, [demoMode]);
+  }, [demoMode, showInitialForm]);
+  
+  // Helper function to reload demo (used by "Generate New Policy" button)
+  const reloadDemo = () => {
+    if (!demoMode) return;
+    // Reset to form with pre-filled inputs (don't auto-submit - let user click Generate)
+    setResponse(null);
+    setShowInitialForm(true);
+    setDescription(DEMO_DESCRIPTION);
+    setRestrictive(DEMO_RESTRICTIVE);
+    setCompliance(DEMO_COMPLIANCE);
+    setLoading(false);
+    setLoadingStep('analyzing');
+    setError(null);
+  };
 
   // Keyboard shortcuts
   useEffect(() => {
