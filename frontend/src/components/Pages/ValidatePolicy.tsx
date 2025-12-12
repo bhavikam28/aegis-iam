@@ -123,16 +123,15 @@ const ValidatePolicy: React.FC<ValidatePolicyProps> = ({ awsCredentials: propCre
   }, null, 2);
   const DEMO_ROLE_ARN = 'arn:aws:iam::123456789012:role/LambdaExecutionRole';
   
-  // Demo mode: Pre-fill form inputs (but don't auto-submit - let user click Validate)
+  // Demo mode: ALWAYS pre-fill form inputs when form is shown (including after "Validate New")
   useEffect(() => {
-    if (demoMode && !response && showInitialForm) {
-      // Pre-fill with demo values - same values that demo results use
-      if (inputType === 'policy' && !inputValue) {
+    if (demoMode && showInitialForm) {
+      // Always pre-fill with demo values when form is shown or input type changes
+      if (inputType === 'policy') {
         setInputValue(DEMO_POLICY_JSON);
-      } else if (inputType === 'arn' && !inputValue) {
+      } else if (inputType === 'arn') {
         setInputValue(DEMO_ROLE_ARN);
       }
-      // Don't auto-submit - let user see the form and click "Validate"
     }
   }, [demoMode, showInitialForm, inputType]);
   

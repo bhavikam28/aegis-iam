@@ -97,14 +97,13 @@ const GeneratePolicy: React.FC<GeneratePolicyProps> = ({ awsCredentials: propCre
   const DEMO_COMPLIANCE = 'pci-dss';
   const DEMO_RESTRICTIVE = true;
   
-  // Demo mode: Pre-fill form inputs (but don't auto-submit - let user click Generate)
+  // Demo mode: ALWAYS pre-fill form inputs when form is shown (including after "Generate New Policy")
   useEffect(() => {
-    if (demoMode && !response && !loading && showInitialForm) {
-      // Pre-fill with demo example values - same values that demo results use
+    if (demoMode && showInitialForm) {
+      // Always pre-fill with demo values when form is shown
       setDescription(DEMO_DESCRIPTION);
       setRestrictive(DEMO_RESTRICTIVE);
       setCompliance(DEMO_COMPLIANCE);
-      // Don't auto-submit - let user see the form and click "Generate Secure Policy"
     }
   }, [demoMode, showInitialForm]);
   
