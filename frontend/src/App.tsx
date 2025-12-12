@@ -29,8 +29,8 @@ function App() {
         awsCredentials={awsCredentials}
         onCredentialsChange={setAwsCredentials}
         onOpenCredentialsModal={() => setShowCredentialsModal(true)}
-        onEnterApp={(isDemo = false) => {
-          setDemoMode(isDemo);
+        onEnterApp={(isDemo?: boolean) => {
+          setDemoMode(isDemo ?? false);
           setHasEnteredApp(true);
         }}
       />
