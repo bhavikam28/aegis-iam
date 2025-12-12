@@ -1,40 +1,57 @@
-import { GeneratePolicyResponse, ValidationResponse } from '../types';
+import { 
+  GeneratePolicyRequest, 
+  GeneratePolicyResponse, 
+  ValidatePolicyRequest, 
+  ValidatePolicyResponse, 
+  AnalyzeHistoryRequest, 
+  AnalyzeHistoryResponse,
+  SecurityFinding,
+  IAMPolicy 
+} from '../types';
 
-// Demo data for Generate Policy feature
-export const getDemoGeneratePolicyResponse = (): GeneratePolicyResponse => {
-  return {
-    conversation_id: 'demo-conversation-123',
-    final_answer: 'Generated IAM policies with security analysis',
-    message_count: 1,
-    policy: {
+// ============================================
+// GENERATE POLICY DEMO DATA
+// ============================================
+
+export const mockGeneratePolicyResponse = (request: GeneratePolicyRequest): GeneratePolicyResponse => {
+  // Use common AWS services that everyone knows: S3, Lambda, EC2
+  const service = request.service.toLowerCase();
+  
+  let policy: IAMPolicy;
+  let trustPolicy: IAMPolicy;
+  let explanation: string;
+  let securityScore: number;
+  let trustExplanation: string;
+  let permissionsExplanation: string;
+
+  if (service === 'lambda' || service.includes('lambda')) {
+    // Common Lambda use case: Read from S3, write logs
+    policy = {
       Version: "2012-10-17",
       Statement: [
         {
-          Sid: "DynamoDBTableAccess",
+          Sid: "AllowS3ReadAccess",
           Effect: "Allow",
           Action: [
-            "dynamodb:GetItem",
-            "dynamodb:PutItem",
-            "dynamodb:UpdateItem",
-            "dynamodb:DeleteItem",
-            "dynamodb:Query",
-            "dynamodb:Scan"
+            "s3:GetObject",
+            "s3:GetObjectVersion"
           ],
-          Resource: "arn:aws:dynamodb:us-east-1:123456789012:table/customer-uploads"
+          Resource: "arn:aws:s3:::my-app-bucket/*"
         },
         {
-          Sid: "CloudWatchLogsAccess",
+          Sid: "AllowCloudWatchLogs",
           Effect: "Allow",
           Action: [
             "logs:CreateLogGroup",
             "logs:CreateLogStream",
             "logs:PutLogEvents"
           ],
-          Resource: "arn:aws:logs:us-east-1:123456789012:log-group:/aws/lambda/*:*"
+          Resource: "arn:aws:logs:*:*:log-group:/aws/lambda/my-function:*"
         }
       ]
-    },
-    trust_policy: {
+    };
+    
+    trustPolicy = {
       Version: "2012-10-17",
       Statement: [
         {
@@ -50,274 +67,461 @@ export const getDemoGeneratePolicyResponse = (): GeneratePolicyResponse => {
           }
         }
       ]
-    },
-    explanation: "This policy grants a Lambda function the necessary permissions to read and write to a DynamoDB table and write logs to CloudWatch. The permissions follow the principle of least privilege by restricting access to specific resources and actions required for the function's operation.",
-    trust_explanation: "The trust policy allows only the Lambda service to assume this role, with an additional condition ensuring it can only be assumed from your AWS account (123456789012), preventing confused deputy attacks.",
-    permissions_score: 88,
-    trust_score: 92,
-    overall_score: 90,
-    security_notes: {
+    };
+    
+    explanation = "This policy grants minimal permissions for a Lambda function to read objects from a specific S3 bucket and write logs to CloudWatch. CloudWatch logging is restricted to the function's log group only.";
+    permissionsExplanation = "This permissions policy allows the Lambda function to: (1) Read files from the S3 bucket 'my-app-bucket', (2) Create and write to CloudWatch Logs for monitoring and debugging. All permissions are scoped to specific resources following the principle of least privilege.";
+    trustExplanation = "The trust policy allows only the Lambda service to assume this role, with an additional condition ensuring it can only be assumed from your AWS account (123456789012), preventing confused deputy attacks. This ensures that only Lambda functions in your account can use this role.";
+    securityScore = request.restrictive ? 95 : 85;
+  } else if (service === 's3' || service.includes('s3')) {
+    // S3 bucket access
+    policy = {
+      Version: "2012-10-17",
+      Statement: [
+        {
+          Sid: "AllowS3BucketOperations",
+          Effect: "Allow",
+          Action: [
+            "s3:GetObject",
+            "s3:PutObject",
+            "s3:DeleteObject",
+            "s3:ListBucket"
+          ],
+          Resource: [
+            "arn:aws:s3:::my-app-bucket",
+            "arn:aws:s3:::my-app-bucket/*"
+          ],
+          Condition: {
+            StringEquals: {
+              "s3:x-amz-server-side-encryption": "AES256"
+            }
+          }
+        }
+      ]
+    };
+    
+    trustPolicy = {
+      Version: "2012-10-17",
+      Statement: [
+        {
+          Effect: "Allow",
+          Principal: {
+            AWS: "arn:aws:iam::123456789012:root"
+          },
+          Action: "sts:AssumeRole",
+          Condition: {
+            StringEquals: {
+              "aws:SourceAccount": "123456789012"
+            }
+          }
+        }
+      ]
+    };
+    
+    explanation = "This policy provides least-privilege access to a specific S3 bucket, allowing object operations while preventing access to other buckets. Encryption is enforced for all operations.";
+    permissionsExplanation = "This permissions policy allows: (1) Reading objects from 'my-app-bucket', (2) Uploading new objects, (3) Deleting objects, (4) Listing bucket contents. All operations require server-side encryption (AES256) to protect data at rest.";
+    trustExplanation = "The trust policy allows only principals from your AWS account (123456789012) to assume this role. The aws:SourceAccount condition prevents cross-account confusion and ensures that only entities in your account can use this role.";
+    securityScore = request.restrictive ? 92 : 80;
+  } else {
+    // Generic EC2/General use case
+    policy = {
+      Version: "2012-10-17",
+      Statement: [
+        {
+          Sid: "AllowEC2InstanceManagement",
+          Effect: "Allow",
+          Action: [
+            "ec2:DescribeInstances",
+            "ec2:StartInstances",
+            "ec2:StopInstances",
+            "ec2:RebootInstances"
+          ],
+          Resource: "*",
+          Condition: {
+            StringEquals: {
+              "aws:RequestedRegion": ["us-east-1", "us-west-2"]
+            }
+          }
+        },
+        {
+          Sid: "AllowS3ReadForConfig",
+          Effect: "Allow",
+          Action: "s3:GetObject",
+          Resource: "arn:aws:s3:::config-bucket/ec2-config/*"
+        }
+      ]
+    };
+    
+    trustPolicy = {
+      Version: "2012-10-17",
+      Statement: [
+        {
+          Effect: "Allow",
+          Principal: {
+            Service: "ec2.amazonaws.com"
+          },
+          Action: "sts:AssumeRole",
+          Condition: {
+            StringEquals: {
+              "aws:SourceAccount": "123456789012"
+            }
+          }
+        }
+      ]
+    };
+    
+    explanation = `This policy grants access to ${request.service} services with regional restrictions to limit the attack surface. EC2 instance management is limited to specific regions, and S3 access is restricted to configuration files only.`;
+    permissionsExplanation = "This permissions policy allows: (1) Managing EC2 instances (describe, start, stop, reboot) in us-east-1 and us-west-2 regions only, (2) Reading configuration files from a specific S3 bucket. Regional restrictions prevent accidental operations in other regions.";
+    trustExplanation = "The trust policy allows only the EC2 service to assume this role, restricted to your AWS account. This is used for EC2 instance profiles, allowing instances to access AWS services on your behalf securely.";
+    securityScore = request.restrictive ? 88 : 75;
+  }
+
+  const securityNotes: string[] = [
+    "Policy follows least-privilege principle with specific resource constraints",
+    "Actions are limited to only what's necessary for the described functionality",
+    request.restrictive ? "Enhanced security mode applied - additional restrictions enforced" : "Standard security mode - consider enabling restrictive mode for production",
+    "Resource ARNs are explicitly specified to prevent accidental access to other resources"
+  ];
+
+  const complianceNotes: string[] = [];
+  const complianceStatus: Record<string, any> = {};
+  
+  if (request.compliance === 'hipaa') {
+    complianceNotes.push("HIPAA compliance: Encryption in transit and at rest should be enforced");
+    complianceNotes.push("Access logging and monitoring must be enabled for audit trails");
+    complianceStatus['hipaa'] = {
+      name: "HIPAA",
+      status: "Compliant",
+      gaps: [],
+      details: "Policy includes encryption requirements and least-privilege access controls suitable for HIPAA compliance."
+    };
+  } else if (request.compliance === 'pci-dss') {
+    complianceNotes.push("PCI DSS compliance: Network segmentation and access controls implemented");
+    complianceNotes.push("Regular access reviews and monitoring required");
+    complianceStatus['pci-dss'] = {
+      name: "PCI DSS",
+      status: "Compliant",
+      gaps: [],
+      details: "Policy implements least-privilege access with resource-level restrictions suitable for PCI DSS requirements."
+    };
+  } else {
+    // General compliance
+    complianceStatus['general'] = {
+      name: "General Security",
+      status: "Compliant",
+      gaps: [],
+      details: "Policy follows AWS security best practices with least-privilege access and resource restrictions."
+    };
+  }
+
+  return {
+    policy,
+    trust_policy: trustPolicy,
+    explanation,
+    permissions_explanation: permissionsExplanation,
+    trust_explanation: trustExplanation,
+    security_notes: securityNotes,
+    compliance_notes: complianceNotes,
+    security_score: securityScore,
+    trust_score: 95,
+    compliance_status: complianceStatus,
+    refinements: {
       permissions: [
-        "✓ Specific resource ARNs used instead of wildcards",
-        "✓ Actions are scoped to only necessary DynamoDB and CloudWatch operations",
-        "✓ No administrative or unnecessary permissions granted"
+        {
+          title: "Add KMS key permissions if encryption is required",
+          description: "If you're using AWS KMS to encrypt your S3 objects or Lambda environment variables, add kms:Decrypt and kms:Encrypt permissions for the specific KMS key.",
+          impact: "Enables encryption at rest for sensitive data",
+          severity: "Medium"
+        },
+        {
+          title: "Consider adding S3 bucket policy conditions",
+          description: "Add conditions to restrict S3 access by IP address or require MFA for sensitive operations to enhance security.",
+          impact: "Adds additional security layers for sensitive data access",
+          severity: "Low"
+        }
       ],
       trust: [
-        "✓ Service principal restricted to lambda.amazonaws.com",
-        "✓ Source account condition prevents cross-account access",
-        "✓ No external entity can assume this role"
+        {
+          title: "Consider adding aws:SourceArn condition",
+          description: "Add aws:SourceArn condition to the trust policy to restrict which specific Lambda function can assume this role, further reducing the attack surface.",
+          impact: "Prevents other Lambda functions from assuming this role even within the same account",
+          severity: "Medium"
+        }
       ]
     },
-    score_breakdown: {
-      permissions: {
-        positive: [
-          "Resource-level permissions (DynamoDB table-specific)",
-          "Action-specific permissions (no wildcards)",
-          "Least-privilege principle applied"
-        ],
-        improvements: [
-          "Consider adding encryption requirements",
-          "Add time-based access conditions if applicable"
-        ]
-      },
-      trust: {
-        positive: [
-          "Service principal properly restricted",
-          "Source account condition applied",
-          "No external access possible"
-        ],
-        improvements: [
-          "Consider adding source ARN condition for specific Lambda functions"
-        ]
-      }
-    },
-    security_features: {
-      permissions: [
-        "Resource-level access control",
-        "Action-specific permissions",
-        "No wildcard resources"
-      ],
-      trust: [
-        "Service principal restriction",
-        "Account-level condition",
-        "Secure trust relationship"
-      ]
-    },
-    refinement_suggestions: {
-      permissions: [
-        "Add KMS key permissions if encryption is required",
-        "Consider adding S3 access if file processing is needed"
-      ],
-      trust: []
-    },
-    compliance_status: {
-      "PCI_DSS": {
-        name: "PCI DSS",
-        status: "Compliant" as const,
-        gaps: []
-      },
-      "HIPAA": {
-        name: "HIPAA",
-        status: "Partial" as const,
-        gaps: ["Consider adding encryption at rest requirements"]
-      },
-      "SOX": {
-        name: "SOX",
-        status: "Compliant" as const,
-        gaps: []
-      },
-      "GDPR": {
-        name: "GDPR",
-        status: "Compliant" as const,
-        gaps: []
-      },
-      "CIS": {
-        name: "CIS",
-        status: "Compliant" as const,
-        gaps: []
-      }
-    },
-    compliance_features: [
-      {
-        title: "Least Privilege Access",
-        subtitle: "PCI DSS Requirement 7.1.2",
-        requirement: "Restrict access to cardholder data",
-        description: "Policy grants only necessary permissions for DynamoDB and CloudWatch operations",
-        link: "https://www.pcisecuritystandards.org"
-      }
-    ],
     reasoning: {
-      plan: "Analyzed the Lambda function requirements and identified minimum necessary permissions for DynamoDB table operations and CloudWatch logging.",
+      plan: "Analyzed the permission requirements and identified the minimum necessary AWS actions and resources needed for the described functionality.",
       actions: [
-        "Identified required DynamoDB actions (GetItem, PutItem, UpdateItem, DeleteItem, Query, Scan)",
-        "Scoped resources to specific DynamoDB table ARN",
-        "Added CloudWatch Logs permissions with resource restrictions",
-        "Created trust policy with service principal and source account condition"
+        "Identified specific AWS service actions required",
+        "Applied resource-level restrictions where possible",
+        "Added conditional access controls for enhanced security",
+        request.restrictive ? "Applied additional security hardening measures" : "Applied standard security measures",
+        "Configured trust policy with source account conditions to prevent confused deputy attacks"
       ],
-      reflection: "The generated policies follow AWS security best practices with resource-level restrictions and least-privilege permissions. The trust policy includes source account conditions to prevent confused deputy attacks."
+      reflection: "The generated policy balances functionality requirements with security best practices. All permissions are scoped to specific resources where possible, and unnecessary broad permissions have been eliminated to reduce the attack surface."
     }
   };
 };
 
-// Demo data for Validate Policy feature
-export const getDemoValidatePolicyResponse = (): ValidationResponse => {
+// ============================================
+// VALIDATE POLICY DEMO DATA
+// ============================================
+
+export const mockValidatePolicyResponse = (request: ValidatePolicyRequest): ValidatePolicyResponse => {
+  const findings: SecurityFinding[] = [
+    {
+      id: "finding-1",
+      severity: "High",
+      type: "OverPrivileged",
+      title: "Overly Broad S3 Permissions",
+      description: "The policy grants s3:* permissions on all resources, which provides unnecessary access to all S3 operations across all buckets.",
+      recommendation: "Restrict S3 actions to specific operations (GetObject, PutObject) and limit to specific bucket resources.",
+      affectedStatement: 0,
+      codeSnippet: `"Action": "s3:*",
+"Resource": "*"`
+    },
+    {
+      id: "finding-2",
+      severity: "Medium",
+      type: "Security",
+      title: "Missing Resource Constraints",
+      description: "Several actions are granted on '*' resources without proper scoping.",
+      recommendation: "Add specific resource ARNs to limit the scope of permissions.",
+      affectedStatement: 1,
+      codeSnippet: `"Action": ["logs:CreateLogGroup", "logs:PutLogEvents"],
+"Resource": "*"`
+    },
+    {
+      id: "finding-3",
+      severity: "Low",
+      type: "BestPractice",
+      title: "Missing Condition Constraints",
+      description: "No conditional access controls are applied to limit when and how permissions can be used.",
+      recommendation: "Add conditions like IP restrictions, time-based access, or MFA requirements.",
+      affectedStatement: 0,
+      codeSnippet: `"Effect": "Allow",
+"Action": "s3:*"`
+    }
+  ];
+
+  const riskScore = request.policy_json?.includes('"*"') ? 75 : 45;
+  
+  const recommendations = [
+    "Apply the principle of least privilege by restricting actions to only what's needed",
+    "Use specific resource ARNs instead of wildcard (*) resources",
+    "Add conditional access controls for enhanced security",
+    "Enable CloudTrail logging to monitor policy usage",
+    "Regularly review and audit policy permissions"
+  ];
+
+  const complianceStatus: Record<string, any> = {
+    "pci-dss": {
+      name: "PCI DSS",
+      status: "Partial",
+      gaps: ["Network access controls", "Encryption requirements"],
+      details: "Policy requires additional restrictions to fully comply with PCI DSS requirements.",
+      link: "https://docs.aws.amazon.com/securityhub/latest/userguide/securityhub-standards-pci-dss.html"
+    },
+    "hipaa": {
+      name: "HIPAA",
+      status: "NonCompliant",
+      gaps: ["Access logging", "Encryption controls", "Audit trails"],
+      details: "Policy lacks required HIPAA compliance controls for access logging and encryption.",
+      link: "https://aws.amazon.com/compliance/hipaa-compliance/"
+    },
+    "gdpr": {
+      name: "GDPR",
+      status: "Partial",
+      gaps: ["Data protection measures", "Access controls"],
+      details: "Some GDPR requirements are met, but additional data protection measures are needed.",
+      link: "https://aws.amazon.com/compliance/gdpr-center/"
+    }
+  };
+
   return {
+    findings,
+    risk_score: riskScore,
+    security_issues: [
+      "Excessive permissions granted beyond functional requirements",
+      "Lack of resource-level restrictions",
+      "Missing security conditions and constraints"
+    ],
+    recommendations,
+    compliance_status: complianceStatus,
+    permissions_explanation: "This policy grants broad access to S3 and CloudWatch Logs services. The permissions allow reading, writing, and deleting objects across all S3 buckets, which exceeds typical operational requirements.",
+    trust_explanation: "The trust policy allows the Lambda service to assume this role. However, it lacks additional conditions that could restrict which specific Lambda functions or accounts can use this role."
+  };
+};
+
+// ============================================
+// AUDIT ACCOUNT DEMO DATA
+// ============================================
+
+export const mockAuditAccountResponse = () => {
+  return {
+    success: true,
+    audit_summary: {
+      total_roles: 47,
+      roles_analyzed: 47,
+      total_findings: 23,
+      critical_issues: 2,
+      high_issues: 8,
+      medium_issues: 10,
+      low_issues: 3,
+      cloudtrail_events_analyzed: 125000,
+      unused_permissions_found: 156
+    },
+    risk_score: 65,
+    security_score: 35,
     findings: [
       {
-        id: "IAM-001",
+        id: "audit-finding-1",
+        severity: "Critical",
+        type: "OverPrivileged",
+        title: "Admin-Level Permissions on Production Role",
+        description: "The 'ProductionAppRole' has administrator-level permissions (AdministratorAccess) but is only used for reading S3 objects based on CloudTrail analysis.",
+        recommendation: "Replace AdministratorAccess with least-privilege permissions based on actual usage patterns.",
+        role: "ProductionAppRole",
+        affected_permissions: ["*"],
+        why_it_matters: "Admin permissions on production roles create a massive attack surface. If compromised, an attacker would have full access to your AWS account.",
+        impact: "High - Full account compromise possible",
+        detailed_remediation: "Analyze CloudTrail logs to identify actual permissions used. Create a new policy with only those permissions and attach it to the role.",
+        compliance_violations: ["PCI DSS 7.1.2", "HIPAA 164.308(a)(4)"],
+        policy_snippet: '{"Effect": "Allow", "Action": "*", "Resource": "*"}'
+      },
+      {
+        id: "audit-finding-2",
         severity: "High",
-        type: "Wildcard Permissions",
-        title: "Wildcard Action on S3 Service",
-        description: "Policy uses s3:* wildcard allowing ANY action on the S3 service for all buckets.",
-        recommendation: "Replace s3:* with specific required actions like s3:GetObject, s3:PutObject based on actual usage patterns.",
-        affectedStatement: 0,
-        code_snippet: '"Action": "s3:*"'
-      },
-      {
-        id: "IAM-002",
-        severity: "Medium",
-        type: "Wildcard Resources",
-        title: "Wildcard Resource for CloudWatch Logs",
-        description: "Policy uses wildcard (*) for CloudWatch Logs resources, allowing access to all log groups and streams.",
-        recommendation: "Scope CloudWatch Logs permissions to specific log groups using resource ARN pattern like arn:aws:logs:region:account:log-group:/aws/lambda/your-function:*",
-        affectedStatement: 1,
-        code_snippet: '"Resource": "*"'
-      },
-      {
-        id: "IAM-003",
-        severity: "Medium",
-        type: "Trust Policy",
-        title: "Trust Policy Missing Source Conditions",
-        description: "The trust policy allows Lambda service to assume this role without additional conditions like aws:SourceAccount or aws:SourceArn.",
-        recommendation: "Add aws:SourceAccount condition to restrict Lambda service to functions in your account, and optionally aws:SourceArn for specific functions.",
-        affectedStatement: 0,
-        code_snippet: '"Effect": "Allow",\n"Principal": { "Service": "lambda.amazonaws.com" }'
+        type: "UnusedPermissions",
+        title: "156 Unused Permissions Detected",
+        description: "Analysis of CloudTrail logs over the past 90 days shows 156 permissions that are granted but never used across 23 IAM roles.",
+        recommendation: "Remove unused permissions to reduce attack surface and follow least-privilege principle.",
+        role: "Multiple roles",
+        affected_permissions: ["ec2:TerminateInstances", "rds:DeleteDBInstance", "s3:DeleteBucket"],
+        why_it_matters: "Unused permissions increase the risk of accidental or malicious misuse without providing any benefit.",
+        impact: "Medium - Potential for unauthorized actions",
+        detailed_remediation: "Review the list of unused permissions. For each role, remove permissions that haven't been used in the last 90 days after confirming they're not needed for future operations."
       }
-    ],
-    risk_score: 67,
-    security_issues: [
-      "Wildcard permissions grant excessive access",
-      "Resource-level restrictions missing",
-      "Trust policy lacks source account conditions"
     ],
     recommendations: [
-      "Replace s3:* with specific required actions",
-      "Add aws:SourceAccount condition to the Lambda trust policy",
-      "Scope CloudWatch Logs permissions to specific log groups",
-      "Implement resource-level restrictions for all actions"
-    ],
-    quick_wins: [
-      "Replace 's3:*' with specific required actions like 's3:GetObject', 's3:PutObject'",
-      "Add aws:SourceAccount condition to the Lambda trust policy",
-      "Scope CloudWatch Logs permissions to specific log groups using a resource ARN pattern"
+      "Review and reduce permissions on 23 roles with unused access",
+      "Implement resource-level restrictions on 15 roles using wildcard resources",
+      "Add conditional access controls to 8 roles with sensitive permissions",
+      "Enable MFA for all roles with admin-level permissions",
+      "Set up CloudTrail monitoring alerts for suspicious activity"
     ],
     compliance_status: {
-      "PCI_DSS": {
-        name: "PCI DSS",
-        status: "Partial" as const,
-        gaps: ["Requirement 7.1.2: Wildcard permissions violate least privilege principle"]
-      },
-      "HIPAA": {
-        name: "HIPAA",
-        status: "Partial" as const,
-        gaps: ["Requirement 164.308(a)(4): Insufficient access controls"]
-      },
-      "SOX": {
-        name: "SOX",
-        status: "Partial" as const,
-        gaps: ["Section 404: Overly permissive access patterns"]
-      },
-      "GDPR": {
-        name: "GDPR",
-        status: "Partial" as const,
-        gaps: ["Article 32: Insufficient technical security measures"]
-      },
-      "CIS": {
-        name: "CIS",
-        status: "Partial" as const,
-        gaps: ["CIS 1.4: Ensure least privilege access"]
-      }
-    }
-  };
-};
-
-// Demo data for Audit Account feature
-export const getDemoAuditResponse = () => {
-  return {
-    summary: {
-      total_roles: 12,
-      roles_analyzed: 12,
-      total_policies: 24,
-      total_findings: 18,
-      critical_findings: 2,
-      high_findings: 5,
-      medium_findings: 8,
-      low_findings: 3,
-      overall_risk_score: 68
-    },
-    top_risks: [
-      {
-        role_name: "AdminRole",
-        role_arn: "arn:aws:iam::123456789012:role/AdminRole",
-        risk_score: 92,
-        findings_count: 8,
-        critical_count: 2
-      },
-      {
-        role_name: "EC2InstanceRole",
-        role_arn: "arn:aws:iam::123456789012:role/EC2InstanceRole",
-        risk_score: 78,
-        findings_count: 5,
-        critical_count: 0
-      }
-    ],
-    findings: [
-      {
-        id: "AUDIT-001",
-        role_name: "AdminRole",
-        role_arn: "arn:aws:iam::123456789012:role/AdminRole",
-        severity: "Critical",
-        title: "Over-privileged Administrative Role",
-        description: "Role has AdministratorAccess managed policy attached, granting full access to all AWS services and resources.",
-        recommendation: "Remove AdministratorAccess and create least-privilege policies with only necessary permissions. Use AWS managed policies for specific services.",
-        affected_resources: ["All AWS services"]
-      },
-      {
-        id: "AUDIT-002",
-        role_name: "EC2InstanceRole",
-        role_arn: "arn:aws:iam::123456789012:role/EC2InstanceRole",
-        severity: "High",
-        title: "Wildcard S3 Permissions",
-        description: "Role has s3:* permissions on all buckets (*) without resource restrictions.",
-        recommendation: "Restrict S3 permissions to specific buckets and actions required by the EC2 instances. Use bucket-level and object-level resource ARNs.",
-        affected_resources: ["All S3 buckets"]
-      }
-    ],
-    compliance_status: {
-      "PCI_DSS": {
+      "pci-dss": {
         status: "Partial",
-        violations: ["Requirement 7.1.2: Over-privileged roles violate least privilege"]
+        gaps: ["Network segmentation", "Access control specificity"],
+        details: "Some PCI DSS requirements are met, but additional network and access controls are needed."
       },
-      "HIPAA": {
-        status: "Partial",
-        violations: ["Requirement 164.308(a)(4): Insufficient access controls"]
+      "hipaa": {
+        status: "NonCompliant",
+        gaps: ["Access logging", "Encryption controls"],
+        details: "HIPAA compliance requires enhanced access logging and encryption controls."
       }
     },
     cloudtrail_analysis: {
-      total_events: 1523,
-      analyzed_period_days: 90,
-      unused_permissions: [
-        "s3:DeleteBucket",
-        "iam:DeleteUser",
-        "ec2:TerminateInstances"
-      ],
-      used_permissions: [
-        "s3:GetObject",
-        "s3:PutObject",
-        "ec2:DescribeInstances",
-        "lambda:InvokeFunction"
-      ]
-    }
+      total_events: 125000,
+      unused_actions: 156,
+      roles_with_unused_permissions: 23
+    },
+    timestamp: new Date().toISOString()
   };
 };
 
+// ============================================
+// ANALYZE HISTORY DEMO DATA
+// ============================================
+
+export const mockAnalyzeHistoryResponse = (request: AnalyzeHistoryRequest): AnalyzeHistoryResponse => {
+  const totalPermissions = 47;
+  const usedPermissions = 8;
+  const usagePercentage = Math.round((usedPermissions / totalPermissions) * 100);
+
+  const optimizedPolicy: IAMPolicy = {
+    Version: "2012-10-17",
+    Statement: [
+      {
+        Sid: "OptimizedS3Access",
+        Effect: "Allow",
+        Action: [
+          "s3:GetObject",
+          "s3:PutObject"
+        ],
+        Resource: "arn:aws:s3:::my-bucket/data/*"
+      },
+      {
+        Sid: "OptimizedCloudWatchLogs",
+        Effect: "Allow",
+        Action: [
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ],
+        Resource: "arn:aws:logs:us-east-1:*:log-group:/aws/lambda/my-function:*"
+      }
+    ]
+  };
+
+  const securityImprovements = [
+    `Eliminated ${totalPermissions - usedPermissions} unused permissions, reducing attack surface by 83%`,
+    "Removed wildcard resource permissions and applied specific resource ARNs",
+    "Restricted actions to only those used in the past 90 days",
+    "Applied principle of least privilege based on actual usage patterns",
+    "Enhanced security posture with 67% risk reduction"
+  ];
+
+  const implementationSteps = [
+    "Create a backup of the current policy before making changes",
+    "Test the optimized policy in a staging environment first",
+    "Deploy during maintenance window with rollback plan ready",
+    "Monitor CloudTrail logs for any access denied errors after deployment",
+    "Gradually reduce monitoring period once confirmed stable",
+    "Schedule regular reviews every 90 days to maintain optimization"
+  ];
+
+  return {
+    optimized_policy: optimizedPolicy,
+    usage_summary: {
+      total_permissions: totalPermissions,
+      used_permissions: usedPermissions,
+      unused_permissions: totalPermissions - usedPermissions,
+      usage_percentage: usagePercentage
+    },
+    security_improvements: securityImprovements,
+    implementation_steps: implementationSteps,
+    risk_reduction: 67
+  };
+};
+
+// ============================================
+// CI/CD DEMO DATA
+// ============================================
+
+export const mockCICDAnalysisResponse = () => {
+  return {
+    id: "demo-analysis-1",
+    repo: "bhavikam28/aegis-iam",
+    pr_number: 42,
+    commit_sha: "abc123def456",
+    timestamp: new Date().toISOString(),
+    risk_score: 55,
+    findings: [
+      {
+        severity: "High" as const,
+        title: "Wildcard Permissions Detected",
+        description: "Policy contains wildcard actions: s3:* which grants all S3 operations."
+      },
+      {
+        severity: "Medium" as const,
+        title: "Missing Resource Constraints",
+        description: "Policy uses wildcard (*) resources without proper scoping."
+      }
+    ],
+    policies_analyzed: 2,
+    files_analyzed: 1,
+    status: "success" as const,
+    message: "Analysis completed successfully. 2 security findings detected."
+  };
+};
