@@ -38,7 +38,7 @@ export interface JobStatus {
   message: string;
 }
 
-import { API_URL } from '../config/api';
+import { API_URL } from '../config/api.js';
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 

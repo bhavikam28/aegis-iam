@@ -6,7 +6,7 @@ import SecurityTips from '@/components/Common/SecurityTips';
 import { getComplianceLink } from '@/utils/complianceLinks';
 import AWSConfigModal from '@/components/Modals/AWSConfigModal';
 import { AWSCredentials, validateCredentials, maskAccessKeyId, getRegionDisplayName } from '@/utils/awsCredentials';
-import { API_URL } from '@/config/api';
+import { API_URL } from '@/config/api.js';
 
 interface AuditSummary {
   total_roles: number;
