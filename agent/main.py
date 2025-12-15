@@ -565,11 +565,21 @@ async def log_requests(request: Request, call_next):
 @app.post("/generate")
 async def generate(request: GenerationRequest):
     """Generate IAM policy with separate scoring for permissions and trust policies"""
+    logging.info("=" * 80)
     logging.info(f"🚀 /generate endpoint called")
+    logging.info(f"   Request type: {'FOLLOW-UP' if request.is_followup else 'INITIAL'}")
     logging.info(f"   Request description length: {len(request.description)}")
-    logging.info(f"   Is followup: {request.is_followup}")
     logging.info(f"   Conversation ID: {request.conversation_id}")
     logging.info(f"   User credentials provided: {request.aws_credentials is not None}")
+    
+    # CRITICAL: Validate credentials are present for ALL requests
+    if not request.aws_credentials:
+        logging.error("❌ CRITICAL ERROR: No credentials provided in request!")
+        logging.error("   This should not happen - frontend must send credentials with every request")
+        raise HTTPException(
+            status_code=400,
+            detail="AWS credentials are required for all requests (initial and follow-up). Please configure your AWS credentials in the modal."
+        )
     
     # Set user credentials in context (thread-safe)
     if request.aws_credentials:

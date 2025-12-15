@@ -103,8 +103,14 @@ def generate_policy_from_bedrock(description: str, service: str, compliance: str
         service: AWS service (e.g., lambda, ec2, s3)
         compliance: Compliance framework (general, pci-dss, hipaa, sox, gdpr, cis)
     """
+    logging.info("=" * 80)
+    logging.info("🔧 generate_policy_from_bedrock called")
+    logging.info(f"   Service: {service}")
+    logging.info(f"   Compliance: {compliance}")
+    logging.info(f"   Description length: {len(description)}")
     
     bedrock = get_bedrock_client()
+    logging.info("✅ Bedrock client obtained in generate_policy_from_bedrock")
     
     # Compliance framework requirements mapping
     compliance_requirements = {
@@ -355,7 +361,11 @@ CRITICAL REMINDERS:
     })
 
     try:
+        logging.info("📡 Calling Bedrock invoke_model in generate_policy_from_bedrock")
+        logging.info(f"   Model ID: {MODEL_ID}")
+        logging.info(f"   Body length: {len(body)} chars")
         response = bedrock.invoke_model(body=body, modelId=MODEL_ID)
+        logging.info("✅ Bedrock invoke_model succeeded in generate_policy_from_bedrock")
         body_bytes = response.get('body').read()
         
         try:
@@ -492,8 +502,13 @@ CRITICAL REMINDERS:
 @tool
 def refine_policy_from_bedrock(user_message: str, conversation_context: str) -> str:
     """Refine policy - same format as generation"""
+    logging.info("=" * 80)
+    logging.info("🔧 refine_policy_from_bedrock called")
+    logging.info(f"   User message length: {len(user_message)}")
+    logging.info(f"   Conversation context length: {len(conversation_context)}")
     
     bedrock = get_bedrock_client()
+    logging.info("✅ Bedrock client obtained in refine_policy_from_bedrock")
     
     prompt = f"""User wants to refine their IAM policy.
 
@@ -514,7 +529,11 @@ If user wants changes: Update the policy and output the SAME format as before wi
     })
 
     try:
+        logging.info("📡 Calling Bedrock invoke_model in refine_policy_from_bedrock")
+        logging.info(f"   Model ID: {MODEL_ID}")
+        logging.info(f"   Body length: {len(body)} chars")
         response = bedrock.invoke_model(body=body, modelId=MODEL_ID)
+        logging.info("✅ Bedrock invoke_model succeeded in refine_policy_from_bedrock")
         body_bytes = response.get('body').read()
         
         try:
@@ -522,8 +541,15 @@ If user wants changes: Update the policy and output the SAME format as before wi
         except json.JSONDecodeError:
             response_body = json.loads(body_bytes.decode('utf-8'))
         
-        return response_body.get('content', [{}])[0].get('text', '')
+        response_text = response_body.get('content', [{}])[0].get('text', '')
+        logging.info(f"✅ Refinement response received: {len(response_text)} chars")
+        return response_text
 
     except Exception as e:
-        logging.exception("❌ Refinement failed")
+        logging.error("=" * 80)
+        logging.error("❌ CRITICAL: Refinement failed in refine_policy_from_bedrock")
+        logging.error(f"   Error type: {type(e).__name__}")
+        logging.error(f"   Error message: {str(e)}")
+        logging.exception(e)
+        logging.error("=" * 80)
         return f"Error: {str(e)}"

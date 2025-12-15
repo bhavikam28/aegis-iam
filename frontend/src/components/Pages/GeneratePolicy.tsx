@@ -521,6 +521,17 @@ What would you like to do?`,
     try {
       console.log('🚀 Sending follow-up message:', currentMessage);
       console.log('🚀 Conversation ID:', conversationId);
+      console.log('🔑 AWS Credentials present:', !!awsCredentials);
+      console.log('🔑 AWS Credentials:', awsCredentials ? {
+        access_key_id: awsCredentials.access_key_id?.substring(0, 8) + '...',
+        region: awsCredentials.region
+      } : 'null');
+      
+      if (!awsCredentials) {
+        console.error('❌ CRITICAL: AWS credentials are missing for follow-up request!');
+        alert('AWS credentials are required. Please configure your AWS credentials first.');
+        return;
+      }
       
       const result = await sendFollowUp(currentMessage, conversationId, undefined, awsCredentials);
       
