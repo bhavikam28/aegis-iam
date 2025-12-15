@@ -577,6 +577,22 @@ class AuditAgent:
                     issue_title = issue_parts[1].strip() if len(issue_parts) > 1 else issue
                     issue_detail = issue_parts[2].strip() if len(issue_parts) > 2 else issue_title
                     
+                    # 🔍 DEBUG: Log finding creation
+                    logging.debug(f"🔍 Creating finding for role: {role_name}")
+                    logging.debug(f"   Issue raw: {issue}")
+                    logging.debug(f"   Issue ID: {issue_id}")
+                    logging.debug(f"   Issue Title: {issue_title}")
+                    logging.debug(f"   Severity: {severity}")
+                    
+                    # Fix: Ensure title is not just severity
+                    if issue_title == severity or issue_title.lower() in ['critical', 'high', 'medium', 'low']:
+                        logging.warning(f"   ⚠️ Title equals severity, using description as title")
+                        # Use issue_detail as title if available, otherwise generate from issue_id
+                        issue_title = issue_detail if issue_detail and issue_detail != issue_title else f"{issue_id.replace('.', ' ').title()} Security Issue"
+                    if not issue_title or len(issue_title.strip()) < 5:
+                        issue_title = f"{issue_id.replace('.', ' ').title()} Security Issue"
+                        logging.warning(f"   ⚠️ Title too short, using generated title: {issue_title}")
+                    
                     # Build comprehensive description
                     why_it_matters = self._get_why_it_matters(issue_id, severity)
                     impact = self._get_impact(issue_id, severity)
@@ -617,6 +633,13 @@ class AuditAgent:
                         'policy_snippet': self._get_policy_snippet(policy, issue_id),
                         'type': 'Policy Violation'
                     }
+                    
+                    # 🔍 DEBUG: Verify finding structure
+                    logging.debug(f"   ✅ Finding created - ID: {finding.get('id')}, Title: {finding.get('title')}, Role: {role_name}")
+                    
+                    # Verify role_name is valid
+                    if not role_name or not isinstance(role_name, str) or len(role_name.strip()) == 0:
+                        logging.error(f"   ❌ Invalid role_name for finding {issue_id}: {role_name}")
                     
                     role_findings.append({
                         'role': role_name,
@@ -906,7 +929,46 @@ class AuditAgent:
         all_findings = []
         for item in role_analysis.get('findings', []):
             finding = item.get('finding', {})
-            finding['role'] = item.get('role')
+            role = item.get('role')
+            
+            # 🔍 DEBUG: Log what we're processing
+            logging.info(f"📋 Processing role finding in report generation:")
+            logging.info(f"   Item keys: {list(item.keys())}")
+            logging.info(f"   Finding keys: {list(finding.keys())}")
+            logging.info(f"   Role from item: {role}")
+            logging.info(f"   Finding ID: {finding.get('id')}")
+            logging.info(f"   Finding Title: {finding.get('title')}")
+            logging.info(f"   Finding Severity: {finding.get('severity')}")
+            
+            # Add role to finding (force it, even if None)
+            finding['role'] = role
+            
+            # 🔧 Fix #4: Defensive role extraction
+            if not role:
+                # Try to extract from role_arn if available
+                if finding.get('role_arn'):
+                    role = finding['role_arn'].split('/')[-1]
+                    finding['role'] = role
+                    logging.info(f"   🔧 Extracted role from ARN: {role}")
+                else:
+                    logging.warning(f"   ⚠️ No role found for finding {finding.get('id')}")
+            else:
+                logging.info(f"   ✅ Added role: {role}")
+            
+            # 🔧 Fix #3: Validate title vs severity
+            if not finding.get('title') or finding.get('title') == finding.get('severity'):
+                logging.error(f"   ❌ Malformed finding: title is missing or equals severity")
+                logging.error(f"   Finding ID: {finding.get('id')}")
+                logging.error(f"   Title: {finding.get('title')}")
+                logging.error(f"   Severity: {finding.get('severity')}")
+                # Try to fix it by using description or generating from ID
+                if finding.get('description'):
+                    finding['title'] = finding['description'][:100]  # Use first 100 chars of description
+                    logging.info(f"   🔧 Fixed title using description: {finding['title']}")
+                elif finding.get('id'):
+                    finding['title'] = finding['id'].replace('.', ' ').replace('_', ' ').title() + " Security Issue"
+                    logging.info(f"   🔧 Fixed title using ID: {finding['title']}")
+            
             all_findings.append(finding)
         
         # Add CloudTrail findings
