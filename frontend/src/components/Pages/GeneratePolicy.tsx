@@ -1827,12 +1827,20 @@ To use the full AI-powered chatbot features, please add your AWS credentials and
                           setShowExplainModal(true);
                           setExplainLoading(true);
                           setSimpleExplanation(null);
+                          // Check for AWS credentials
+                          if (!awsCredentials) {
+                            setError('AWS credentials are required for policy explanation. Please configure your AWS credentials first.');
+                            setShowExplainModal(false);
+                            onOpenCredentialsModal();
+                            return;
+                          }
+                          
                           try {
                             const result = await explainPolicy({
                               policy: response.policy,
                               trust_policy: response.trust_policy,
                               explanation_type: 'simple'
-                            });
+                            }, awsCredentials);
                             if (result.success && result.explanation) {
                               setSimpleExplanation(result.explanation);
                             } else {
@@ -2247,12 +2255,20 @@ To use the full AI-powered chatbot features, please add your AWS credentials and
                             setShowExplainModal(true);
                             setExplainLoading(true);
                             setSimpleExplanation(null);
+                            // Check for AWS credentials
+                            if (!awsCredentials) {
+                              setError('AWS credentials are required for policy explanation. Please configure your AWS credentials first.');
+                              setShowExplainModal(false);
+                              onOpenCredentialsModal();
+                              return;
+                            }
+                            
                             try {
                               const result = await explainPolicy({
                                 policy: response.trust_policy,
                                 trust_policy: response.trust_policy,
                                 explanation_type: 'simple'
-                              });
+                              }, awsCredentials);
                               if (result.success && result.explanation) {
                                 setSimpleExplanation(result.explanation);
                               } else {

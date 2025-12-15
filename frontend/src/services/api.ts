@@ -719,6 +719,11 @@ export interface ExplainPolicyRequest {
   policy: any;
   trust_policy?: any;
   explanation_type?: 'simple' | 'detailed';
+  aws_credentials?: {
+    access_key_id: string;
+    secret_access_key: string;
+    region: string;
+  };
 }
 
 export interface ExplainPolicyResponse {
@@ -727,11 +732,20 @@ export interface ExplainPolicyResponse {
   error?: string;
 }
 
-export const explainPolicy = async (request: ExplainPolicyRequest): Promise<ExplainPolicyResponse> => {
+export const explainPolicy = async (
+  request: ExplainPolicyRequest,
+  awsCredentials?: { access_key_id: string; secret_access_key: string; region: string } | null
+): Promise<ExplainPolicyResponse> => {
+  // Include AWS credentials if provided
+  const requestBody = {
+    ...request,
+    aws_credentials: awsCredentials || request.aws_credentials
+  };
+
   const response = await fetch(`${API_URL}/api/explain/policy`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(request),
+    body: JSON.stringify(requestBody),
   });
 
   if (!response.ok) {

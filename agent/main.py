@@ -5037,6 +5037,7 @@ class ExplainPolicyRequest(BaseModel):
     policy: Dict[str, Any]
     trust_policy: Optional[Dict[str, Any]] = None
     explanation_type: Optional[str] = 'simple'  # 'simple' or 'detailed'
+    aws_credentials: Optional[AWSCredentials] = None  # User-provided credentials
 
 @app.post("/api/explain/policy")
 async def explain_policy(request: ExplainPolicyRequest):
@@ -5085,9 +5086,21 @@ Please provide a clear, simple explanation that answers:
 
 Format your response as a clear, professional explanation suitable for a compliance report or audit documentation."""
 
-        # Generate explanation using Bedrock directly
+        # Generate explanation using Bedrock with user credentials
         import boto3
-        bedrock_runtime = boto3.client(service_name='bedrock-runtime', region_name='us-east-1')
+        
+        # Use user-provided credentials if available, otherwise fall back to default
+        if request.aws_credentials:
+            bedrock_runtime = boto3.client(
+                service_name='bedrock-runtime',
+                region_name=request.aws_credentials.region or 'us-east-1',
+                aws_access_key_id=request.aws_credentials.access_key_id,
+                aws_secret_access_key=request.aws_credentials.secret_access_key
+            )
+            logging.info(f"✅ Using user-provided AWS credentials for Bedrock (region: {request.aws_credentials.region or 'us-east-1'})")
+        else:
+            bedrock_runtime = boto3.client(service_name='bedrock-runtime', region_name='us-east-1')
+            logging.warning("⚠️ No AWS credentials provided, using default boto3 credentials (may fail on Vercel/Render)")
         
         # Call Bedrock API directly - Use correct format for Claude 3.7 Sonnet
         body = json.dumps({
