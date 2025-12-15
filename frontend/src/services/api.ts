@@ -741,3 +741,42 @@ export const explainPolicy = async (request: ExplainPolicyRequest): Promise<Expl
 
   return response.json();
 };
+
+// ============================================
+// AWS CREDENTIALS TESTING
+// ============================================
+
+export async function testAWSCredentials(credentials: {
+  access_key_id: string;
+  secret_access_key: string;
+  region: string;
+}): Promise<{
+  success: boolean;
+  account_id?: string;
+  user_arn?: string;
+  bedrock_available?: boolean;
+  bedrock_error?: string;
+  error?: string;
+  error_code?: string;
+  region?: string;
+}> {
+  try {
+    const response = await fetch(`${API_URL}/api/aws/test-credentials`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(credentials),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Error testing AWS credentials:', error);
+    throw error;
+  }
+}

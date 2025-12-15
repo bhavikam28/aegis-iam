@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import LandingPage from './components/Layout/LandingPage';
 import AWSConfigModal from './components/Modals/AWSConfigModal';
+import AWSSetupWizard from './components/Modals/AWSSetupWizard';
 import { AWSCredentials } from './utils/awsCredentials';
 
 function App() {
@@ -8,6 +9,7 @@ function App() {
   // SECURITY: Stored only in React state (memory), never persisted
   const [awsCredentials, setAwsCredentials] = useState<AWSCredentials | null>(null);
   const [showCredentialsModal, setShowCredentialsModal] = useState(false);
+  const [showSetupWizard, setShowSetupWizard] = useState(false);
   const [hasEnteredApp, setHasEnteredApp] = useState(false);
   const [demoMode, setDemoMode] = useState(false);
   const [error, setError] = useState<Error | null>(null);
@@ -65,13 +67,27 @@ function App() {
       
       {/* App-level AWS Credentials Modal */}
       <AWSConfigModal
-        isOpen={showCredentialsModal && !demoMode}
+        isOpen={showCredentialsModal && !demoMode && !showSetupWizard}
         onClose={() => setShowCredentialsModal(false)}
         onSave={(credentials) => {
           setAwsCredentials(credentials);
           setShowCredentialsModal(false);
         }}
         currentCredentials={awsCredentials}
+        onOpenWizard={() => {
+          setShowCredentialsModal(false);
+          setShowSetupWizard(true);
+        }}
+      />
+
+      {/* AWS Setup Wizard */}
+      <AWSSetupWizard
+        isOpen={showSetupWizard}
+        onClose={() => setShowSetupWizard(false)}
+        onComplete={(credentials) => {
+          setAwsCredentials(credentials);
+          setShowSetupWizard(false);
+        }}
       />
     </div>
   );

@@ -59,7 +59,7 @@ const AWS_REGIONS = [
   { value: 'cn-northwest-1', label: 'cn-northwest-1 - China (Ningxia)' },
 ];
 
-const AWSConfigModal: React.FC<AWSConfigModalProps> = ({ isOpen, onClose, onSave, currentCredentials }) => {
+const AWSConfigModal: React.FC<AWSConfigModalProps> = ({ isOpen, onClose, onSave, currentCredentials, onOpenWizard }) => {
   const [accessKeyId, setAccessKeyId] = useState(currentCredentials?.access_key_id || '');
   const [secretAccessKey, setSecretAccessKey] = useState(currentCredentials?.secret_access_key || '');
   const [region, setRegion] = useState(currentCredentials?.region || 'us-east-1');
@@ -151,12 +151,38 @@ const AWSConfigModal: React.FC<AWSConfigModalProps> = ({ isOpen, onClose, onSave
             <p className="text-xs text-slate-600 mb-3">
               Follow these steps to create an IAM user with programmatic access:
             </p>
-            <ol className="text-xs text-slate-600 space-y-1.5 list-decimal list-inside">
-              <li>Go to AWS Console → IAM → Users → Create User</li>
-              <li>Enable "Programmatic access" (Access Key ID and Secret)</li>
-              <li>Attach policies: <code className="text-xs bg-white border border-slate-300 px-2 py-0.5 rounded text-slate-900 font-mono">IAMFullAccess</code>, <code className="text-xs bg-white border border-slate-300 px-2 py-0.5 rounded text-slate-900 font-mono">AmazonBedrockFullAccess</code></li>
-              <li>Download the credentials CSV file</li>
-            </ol>
+            <div className="space-y-3">
+              <p className="text-xs text-slate-600 font-medium">
+                We recommend using our <strong className="text-slate-900">Setup Wizard</strong> for step-by-step guidance.
+              </p>
+              {onOpenWizard ? (
+                <button
+                  onClick={() => {
+                    onClose();
+                    onOpenWizard();
+                  }}
+                  className="w-full px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-lg text-xs font-semibold transition-all shadow-md hover:shadow-lg"
+                >
+                  Open Setup Wizard (Recommended)
+                </button>
+              ) : (
+                <button
+                  onClick={onClose}
+                  className="w-full px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-lg text-xs font-semibold transition-all shadow-md hover:shadow-lg"
+                >
+                  Learn More About Setup
+                </button>
+              )}
+              <div className="text-xs text-slate-500 pt-2 border-t border-slate-200">
+                <p className="font-semibold text-slate-700 mb-1">Or follow these quick steps:</p>
+                <ol className="list-decimal list-inside space-y-1 text-slate-600">
+                  <li>Go to AWS Console → IAM → Users → Create User</li>
+                  <li>Enable "Programmatic access" (Access Key ID and Secret)</li>
+                  <li>Attach a policy with <code className="text-xs bg-white border border-slate-300 px-1.5 py-0.5 rounded text-slate-900 font-mono">bedrock:InvokeModel</code> and IAM read permissions</li>
+                  <li>Copy your Access Key ID and Secret Access Key</li>
+                </ol>
+              </div>
+            </div>
             <a
               href="https://docs.aws.amazon.com/IAM/latest/UserGuide/id_users_create.html"
               target="_blank"

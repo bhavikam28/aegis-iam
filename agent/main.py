@@ -436,6 +436,109 @@ def api_test():
         "github_webhook_secret_set": bool(os.getenv('GITHUB_WEBHOOK_SECRET'))
     }
 
+@app.post("/api/aws/test-credentials")
+async def test_aws_credentials(request: AWSCredentials):
+    """
+    Test AWS credentials by calling STS GetCallerIdentity and optionally Bedrock
+    Returns: { "success": bool, "account_id": str, "user_arn": str, "bedrock_available": bool, "error": str }
+    """
+    import boto3
+    from botocore.exceptions import ClientError, NoCredentialsError
+    
+    try:
+        # Test STS (identity)
+        sts_client = boto3.client(
+            'sts',
+            aws_access_key_id=request.access_key_id,
+            aws_secret_access_key=request.secret_access_key,
+            region_name=request.region
+        )
+        
+        identity = sts_client.get_caller_identity()
+        account_id = identity.get('Account')
+        user_arn = identity.get('Arn')
+        
+        # Test Bedrock availability
+        # Note: bedrock-runtime doesn't have list_foundation_models, so we use bedrock service
+        bedrock_available = False
+        bedrock_error = None
+        try:
+            # Try bedrock service (for listing models)
+            bedrock_service_client = boto3.client(
+                'bedrock',
+                aws_access_key_id=request.access_key_id,
+                aws_secret_access_key=request.secret_access_key,
+                region_name=request.region
+            )
+            # Lightweight check - just list one model
+            bedrock_service_client.list_foundation_models(maxResults=1)
+            bedrock_available = True
+        except ClientError as e:
+            error_code = e.response.get('Error', {}).get('Code', '')
+            if error_code == 'AccessDeniedException':
+                bedrock_error = "Missing Bedrock permissions. Please attach the policy from the setup wizard."
+            elif error_code == 'ValidationException':
+                # Sometimes bedrock service isn't available, but bedrock-runtime might be
+                # Try bedrock-runtime client creation as a fallback
+                try:
+                    boto3.client(
+                        'bedrock-runtime',
+                        aws_access_key_id=request.access_key_id,
+                        aws_secret_access_key=request.secret_access_key,
+                        region_name=request.region
+                    )
+                    bedrock_available = True
+                    bedrock_error = None
+                except Exception:
+                    bedrock_error = f"Bedrock not available in {request.region}. Please use us-east-1, us-west-2, or eu-west-1."
+            else:
+                bedrock_error = f"Bedrock not available in {request.region} or access denied: {error_code}"
+        except Exception as e:
+            bedrock_error = f"Bedrock check failed: {str(e)}"
+        
+        return {
+            "success": True,
+            "account_id": account_id,
+            "user_arn": user_arn,
+            "bedrock_available": bedrock_available,
+            "bedrock_error": bedrock_error,
+            "region": request.region
+        }
+        
+    except ClientError as e:
+        error_code = e.response.get('Error', {}).get('Code', '')
+        error_message = e.response.get('Error', {}).get('Message', str(e))
+        
+        if error_code == 'InvalidClientTokenId':
+            return {
+                "success": False,
+                "error": "Invalid Access Key ID. Please check your credentials.",
+                "error_code": error_code
+            }
+        elif error_code == 'SignatureDoesNotMatch':
+            return {
+                "success": False,
+                "error": "Invalid Secret Access Key. Please check your credentials.",
+                "error_code": error_code
+            }
+        else:
+            return {
+                "success": False,
+                "error": f"AWS error: {error_message}",
+                "error_code": error_code
+            }
+    except NoCredentialsError:
+        return {
+            "success": False,
+            "error": "Credentials not provided or invalid format."
+        }
+    except Exception as e:
+        logging.error(f"❌ Unexpected error testing credentials: {e}")
+        return {
+            "success": False,
+            "error": f"Unexpected error: {str(e)}"
+        }
+
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
     logging.info(f"📥 Incoming request: {request.method} {request.url}")

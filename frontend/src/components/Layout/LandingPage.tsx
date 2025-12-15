@@ -172,24 +172,30 @@ const LandingPage: React.FC<LandingPageProps> = ({
               Generate secure policies, validate compliance, and autonomously audit your entire infrastructure—all powered by agentic AI.
             </p>
  
-            {/* CTA Buttons */}
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-12 sm:mb-16">
+            {/* CTA Buttons - Demo Mode is Primary */}
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-8">
+              {/* Primary CTA: Demo Mode */}
               <button
-                onClick={handleGetStarted}
+                onClick={handleDemoMode}
                 className="group relative overflow-hidden bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 hover:from-blue-700 hover:via-purple-700 hover:to-pink-700 text-white px-8 sm:px-10 lg:px-12 py-4 sm:py-5 rounded-2xl font-bold text-base sm:text-lg lg:text-xl shadow-xl hover:shadow-2xl transition-all duration-300 flex items-center space-x-3 transform hover:scale-105 touch-manipulation"
                 style={{ minHeight: '44px' }}
               >
+                <Sparkles className="w-5 h-5 sm:w-6 sm:h-6 relative z-10" />
                 <span className="relative z-10">Try It Now</span>
                 <ArrowRight className="w-5 h-5 sm:w-6 sm:h-6 relative z-10 group-hover:translate-x-1 transition-transform" />
                 <div className="absolute inset-0 bg-white/10 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700"></div>
               </button>
-
+              
+              {/* Secondary CTA: Connect AWS */}
               <button
-                onClick={handleDemoMode}
+                onClick={handleGetStarted}
                 className="group px-8 sm:px-10 py-4 sm:py-5 bg-white/90 backdrop-blur-sm border-2 border-slate-200 rounded-2xl text-slate-700 hover:text-slate-900 font-bold text-base sm:text-lg hover:border-blue-300 hover:shadow-lg transition-all inline-flex items-center space-x-2 hover:scale-105"
               >
-                <Play className="w-5 h-5 sm:w-6 sm:h-6" />
-                <span>Demo Mode</span>
+                <Key className="w-5 h-5 sm:w-6 sm:h-6" />
+                <div className="flex flex-col items-start">
+                  <span>Connect Your AWS</span>
+                  <span className="text-xs font-normal text-slate-500">5-min setup • You control costs</span>
+                </div>
               </button>
 
               <a
@@ -752,6 +758,123 @@ const LandingPage: React.FC<LandingPageProps> = ({
               </div>
             ))}
         </div>
+        </section>
+
+        {/* FAQ Section */}
+        <section className="relative max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-20 sm:py-24">
+          <div className="text-center mb-12 sm:mb-16">
+            <h2 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold mb-6">
+              <span className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 bg-clip-text text-transparent">
+                Frequently Asked
+              </span>
+              <br />
+              <span className="bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">
+                Questions
+              </span>
+            </h2>
+          </div>
+
+          <div className="space-y-6">
+            {/* FAQ Item 1 */}
+            <div className="bg-white/90 backdrop-blur-xl border-2 border-slate-200/50 rounded-2xl p-6 sm:p-8 shadow-xl">
+              <h3 className="text-xl font-bold text-slate-900 mb-3 flex items-start gap-3">
+                <span className="text-blue-600 font-extrabold">Q:</span>
+                <span>Do I need an AWS account to use Aegis IAM?</span>
+              </h3>
+              <div className="ml-8 text-slate-700 leading-relaxed">
+                <p className="mb-2">
+                  <strong className="text-slate-900">No!</strong> You can try all features instantly with our demo mode using sample data. 
+                  Connect your AWS account only when you're ready to analyze your real infrastructure.
+                </p>
+                <p className="text-sm text-slate-600">
+                  Demo mode lets you explore Generate Policy, Validate Policy, Audit Account, and CI/CD Integration features with realistic examples.
+                </p>
+              </div>
+            </div>
+
+            {/* FAQ Item 2 */}
+            <div className="bg-white/90 backdrop-blur-xl border-2 border-slate-200/50 rounded-2xl p-6 sm:p-8 shadow-xl">
+              <h3 className="text-xl font-bold text-slate-900 mb-3 flex items-start gap-3">
+                <span className="text-blue-600 font-extrabold">Q:</span>
+                <span>What will this cost me?</span>
+              </h3>
+              <div className="ml-8 text-slate-700 leading-relaxed">
+                <p className="mb-2">
+                  <strong className="text-slate-900">Aegis IAM is free to use.</strong> However, when you connect your AWS account, 
+                  AWS charges apply for the services you use (typically ~$0.01-0.10 per policy generation via Bedrock).
+                </p>
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-3">
+                  <p className="text-sm text-blue-900 font-medium">
+                    💡 <strong>Cost transparency:</strong> You pay only for your own AWS usage. We never charge subscription fees, 
+                    and your AWS costs appear directly on your AWS bill, not ours.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* FAQ Item 3 */}
+            <div className="bg-white/90 backdrop-blur-xl border-2 border-slate-200/50 rounded-2xl p-6 sm:p-8 shadow-xl">
+              <h3 className="text-xl font-bold text-slate-900 mb-3 flex items-start gap-3">
+                <span className="text-blue-600 font-extrabold">Q:</span>
+                <span>Is it safe to enter my AWS credentials?</span>
+              </h3>
+              <div className="ml-8 text-slate-700 leading-relaxed">
+                <p className="mb-3">
+                  <strong className="text-slate-900">Yes, your credentials are secure.</strong> Here's how we protect them:
+                </p>
+                <ul className="space-y-2 text-sm text-slate-600 list-disc list-inside ml-2">
+                  <li><strong className="text-slate-900">Never stored:</strong> Credentials exist only in your browser's memory</li>
+                  <li><strong className="text-slate-900">Never logged:</strong> We don't log or save your access keys</li>
+                  <li><strong className="text-slate-900">Least privilege:</strong> We only request minimal permissions needed (Bedrock, IAM read, CloudTrail)</li>
+                  <li><strong className="text-slate-900">Encrypted in transit:</strong> All communication uses HTTPS</li>
+                  <li><strong className="text-slate-900">Open source:</strong> <a href="https://github.com/bhavikam28/aegis-iam" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Audit our code</a> on GitHub</li>
+                </ul>
+              </div>
+            </div>
+
+            {/* FAQ Item 4 */}
+            <div className="bg-white/90 backdrop-blur-xl border-2 border-slate-200/50 rounded-2xl p-6 sm:p-8 shadow-xl">
+              <h3 className="text-xl font-bold text-slate-900 mb-3 flex items-start gap-3">
+                <span className="text-blue-600 font-extrabold">Q:</span>
+                <span>What AWS permissions do I need?</span>
+              </h3>
+              <div className="ml-8 text-slate-700 leading-relaxed">
+                <p className="mb-3">
+                  We use a <strong className="text-slate-900">least-privilege policy</strong> that only grants:
+                </p>
+                <ul className="space-y-2 text-sm text-slate-600 list-disc list-inside ml-2 mb-3">
+                  <li><code className="bg-slate-100 px-2 py-0.5 rounded text-xs font-mono">bedrock:InvokeModel</code> - To generate policies with AI</li>
+                  <li><code className="bg-slate-100 px-2 py-0.5 rounded text-xs font-mono">iam:GetRole</code>, <code className="bg-slate-100 px-2 py-0.5 rounded text-xs font-mono">iam:ListRoles</code> - To validate existing policies</li>
+                  <li><code className="bg-slate-100 px-2 py-0.5 rounded text-xs font-mono">cloudtrail:LookupEvents</code> - To audit account usage</li>
+                </ul>
+                <p className="text-sm text-slate-600">
+                  Our setup wizard provides the exact policy JSON to use. <strong>You never need admin access!</strong>
+                </p>
+              </div>
+            </div>
+
+            {/* FAQ Item 5 */}
+            <div className="bg-white/90 backdrop-blur-xl border-2 border-slate-200/50 rounded-2xl p-6 sm:p-8 shadow-xl">
+              <h3 className="text-xl font-bold text-slate-900 mb-3 flex items-start gap-3">
+                <span className="text-blue-600 font-extrabold">Q:</span>
+                <span>How long does setup take?</span>
+              </h3>
+              <div className="ml-8 text-slate-700 leading-relaxed">
+                <p className="mb-2">
+                  <strong className="text-slate-900">About 5 minutes.</strong> Our step-by-step setup wizard guides you through:
+                </p>
+                <ol className="space-y-1.5 text-sm text-slate-600 list-decimal list-inside ml-2">
+                  <li>Creating an IAM user in AWS Console</li>
+                  <li>Attaching the least-privilege policy (we provide the exact JSON)</li>
+                  <li>Creating access keys</li>
+                  <li>Testing your connection</li>
+                </ol>
+                <p className="text-sm text-slate-600 mt-3">
+                  Or try demo mode first—no setup required!
+                </p>
+              </div>
+            </div>
+          </div>
         </section>
 
         {/* Final CTA Section */}
