@@ -9,7 +9,7 @@ import SecurityTips from '@/components/Common/SecurityTips';
 import { getComplianceLink } from '@/utils/complianceLinks';
 import AWSConfigModal from '@/components/Modals/AWSConfigModal';
 import { AWSCredentials, validateCredentials, maskAccessKeyId, getRegionDisplayName } from '@/utils/awsCredentials';
-import { mockGeneratePolicyResponse } from '@/utils/demoData';
+import { mockGeneratePolicyResponse, DEMO_SIMPLE_PERMISSIONS_EXPLANATION, DEMO_SIMPLE_TRUST_EXPLANATION } from '@/utils/demoData';
 // Note: Compliance links should come from agent response, not hardcoded
 
 interface GeneratePolicyProps {
@@ -385,7 +385,6 @@ What would you like to do?`,
         setTimeout(() => {
           const demoResponse = mockGeneratePolicyResponse({
             description,
-            service: 'Lambda',
             compliance: compliance || 'pci-dss', // Use selected compliance or default to PCI DSS
             restrictive
           });
@@ -517,6 +516,55 @@ What would you like to do?`,
     
     const currentMessage = followUpMessage;
     setFollowUpMessage('');
+    
+    // Demo mode: Handle chatbot requests without API calls
+    if (demoMode) {
+      setTimeout(() => {
+        let assistantResponse = '';
+        const messageLower = currentMessage.toLowerCase();
+        
+        // Handle compliance validation requests
+        if (messageLower.includes('pci') || messageLower.includes('compliance') || messageLower.includes('validate')) {
+          assistantResponse = `The policy has been validated against PCI-DSS compliance framework. The compliance status is shown in the "Compliance Framework Adherence" section above. The policy implements key requirements including:
+
+- Least-privilege access (Requirement 7.1.2): Uses specific actions instead of wildcards
+- Resource-level restrictions: Permissions scoped to specific resources
+- Access logging ready (Requirement 10): CloudWatch Logs permissions enable audit trails
+
+You can view the detailed compliance breakdown in the Compliance Framework Adherence section.`;
+        } else if (messageLower.includes('explain') || messageLower.includes('what') || messageLower.includes('how')) {
+          assistantResponse = `I can help explain the policy! The permissions policy allows the Lambda function to read from the S3 bucket 'my-app-uploads' and write logs to CloudWatch. The trust policy ensures only Lambda functions in your account can assume this role.
+
+You can also click the "Explain Simply" button above the policies for a detailed, easy-to-understand explanation.`;
+        } else if (messageLower.includes('refine') || messageLower.includes('improve') || messageLower.includes('suggest')) {
+          assistantResponse = `Here are some suggestions to improve your policy:
+
+1. Consider adding KMS key permissions if using encrypted S3 objects
+2. Add s3:PutObject if the Lambda needs to write files back to S3
+3. Consider adding aws:SourceArn condition to restrict to specific Lambda function ARN
+
+You can view all refinement suggestions in the "Permissions Policy Refinements" and "Trust Policy Refinements" sections above.`;
+        } else {
+          assistantResponse = `I understand you're asking about the policy. In demo mode, I can help explain the policy structure and security features. You can also:
+
+- Click "Explain Simply" for detailed explanations
+- Review the compliance status in the Compliance Framework Adherence section
+- Check the refinement suggestions for improvement ideas
+
+To use the full AI-powered chatbot features, please add your AWS credentials and use the live version.`;
+        }
+        
+        const assistantMessage: ChatMessage = {
+          role: 'assistant',
+          content: assistantResponse,
+          timestamp: new Date().toISOString()
+        };
+        setChatHistory(prev => [...prev, assistantMessage]);
+        setLoading(false);
+        setIsRefining(false);
+      }, 500);
+      return;
+    }
     
     try {
       console.log('🚀 Sending follow-up message:', currentMessage);
@@ -679,8 +727,7 @@ What would you like to do?`,
     setIsChatbotOpen(false);
     setIsRefining(false);
     setIsNewSubmission(false);
-    setAwsAccountId('');
-    setAwsRegion('');
+    // Removed: AWS Account ID and Region are now part of credentials modal (Advanced Options removed)
     setCompliance('general');
     setRestrictive(true);
     
@@ -1769,6 +1816,14 @@ What would you like to do?`,
                       {/* Explain in Simple Terms Button */}
                       <button
                         onClick={async () => {
+                          // DEMO MODE: show detailed, human-friendly explanation without calling backend
+                          if (demoMode) {
+                            setSimpleExplanation(DEMO_SIMPLE_PERMISSIONS_EXPLANATION);
+                            setShowExplainModal(true);
+                            setExplainLoading(false);
+                            return;
+                          }
+
                           setShowExplainModal(true);
                           setExplainLoading(true);
                           setSimpleExplanation(null);
@@ -2181,6 +2236,14 @@ What would you like to do?`,
                         {/* Explain Trust Policy Button */}
                         <button
                           onClick={async () => {
+                            // DEMO MODE: show detailed trust policy explanation without calling backend
+                            if (demoMode) {
+                              setSimpleExplanation(DEMO_SIMPLE_TRUST_EXPLANATION);
+                              setShowExplainModal(true);
+                              setExplainLoading(false);
+                              return;
+                            }
+
                             setShowExplainModal(true);
                             setExplainLoading(true);
                             setSimpleExplanation(null);
@@ -2450,7 +2513,13 @@ What would you like to do?`,
                                 const rawTitle = lines[0];
                                 const details = lines.slice(1);
 
-                                if (rawTitle && rawTitle.toLowerCase().includes('trusted entity')) {
+                                const normalizedRawTitle = (rawTitle || '').toLowerCase();
+
+                                // Skip sections that are just generic headings we already represent in UI
+                                if (
+                                  normalizedRawTitle.includes('trusted entity') ||
+                                  normalizedRawTitle.includes('trust policy explanation')
+                                ) {
                                   return null;
                                 }
 
@@ -2478,14 +2547,19 @@ What would you like to do?`,
                                         <DetailIcon className="w-5 h-5 text-white" />
                                       </div>
                                       <div className="flex-1">
-                                        <h5 className="text-slate-900 font-semibold text-sm mb-2 leading-snug">{detailTitle}</h5>
-                                    {details.map((detail, dIdx) => (
-                                      detail.trim() && (
-                                            <p key={dIdx} className="text-sm text-slate-700 leading-relaxed mb-1 font-normal">
-                                          {stripMarkdown(detail.trim())}
-                                        </p>
-                                      )
-                                    ))}
+                                        <h5 className="text-slate-900 font-medium text-sm mb-2 leading-snug">
+                                          {detailTitle}
+                                        </h5>
+                                        {details.map((detail, dIdx) => (
+                                          detail.trim() && (
+                                            <p
+                                              key={dIdx}
+                                              className="text-sm text-slate-700 leading-relaxed mb-1 font-normal"
+                                            >
+                                              {stripMarkdown(detail.trim())}
+                                            </p>
+                                          )
+                                        ))}
                                       </div>
                                     </div>
                                   </div>

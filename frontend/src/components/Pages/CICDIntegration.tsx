@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Shield, Github, CheckCircle, AlertCircle, Info, Zap, Activity, RefreshCw, ExternalLink, FileText, AlertTriangle, Copy, Sparkles, Key, FileCode } from 'lucide-react';
 import CollapsibleTile from '@/components/Common/CollapsibleTile';
+import { API_URL } from '@/config/api';
 
 interface GitHubStatus {
   success: boolean;
@@ -43,7 +44,8 @@ const CICDIntegration: React.FC<CICDIntegrationProps> = ({ demoMode = false }) =
   const [analysisResults, setAnalysisResults] = useState<AnalysisResult[]>([]);
   const [loadingResults, setLoadingResults] = useState(false);
 
-  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+  // Use centralized API URL configuration
+  const apiUrl = API_URL;
 
   // Demo mode: ALWAYS load demo data when in demo mode (including after refresh)
   useEffect(() => {

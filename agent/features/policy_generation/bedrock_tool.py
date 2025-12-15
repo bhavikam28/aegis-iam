@@ -137,7 +137,8 @@ CRITICAL RULES:
 7. Add CloudWatch Logs permissions for Lambda/ECS services
 8. Use {{ACCOUNT_ID}}, {{REGION}} placeholders when values not provided
 9. Be concise but complete - focus on essential information
-10. **CRITICAL**: Adhere to compliance framework requirements when specified"""
+10. **CRITICAL**: Adhere to compliance framework requirements when specified
+11. **NEVER say "I already generated" or "I notice you've sent the same request" - ALWAYS generate fresh policies with complete JSON, even if the request seems similar. Each request gets a new response with policies."""
 
     # User prompt - Dynamic based on actual request
     user_prompt = f"""🚨🚨🚨 CRITICAL: YOU MUST RETURN BOTH POLICIES 🚨🚨🚨

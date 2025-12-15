@@ -204,6 +204,15 @@ const AuditAccount: React.FC<AuditAccountProps> = ({ awsCredentials: propCredent
           compliance_status: data.compliance_status || {},
           success: true
         };
+        // Log findings to check for role field
+        console.log('📋 Audit findings received:', sanitizedData.findings?.length || 0, 'findings');
+        if (sanitizedData.findings && sanitizedData.findings.length > 0) {
+          const findingsWithoutRole = sanitizedData.findings.filter((f: Finding) => !f.role);
+          if (findingsWithoutRole.length > 0) {
+            console.warn('⚠️ Findings without role field:', findingsWithoutRole.map((f: Finding) => ({ id: f.id, title: f.title })));
+          }
+        }
+        
         setAuditResults(sanitizedData);
         setError(null);
       } else {
@@ -222,17 +231,55 @@ const AuditAccount: React.FC<AuditAccountProps> = ({ awsCredentials: propCredent
   const handleRemediate = async (mode: 'all' | 'critical') => {
     if (!auditResults) return;
 
+    // Check for AWS credentials
+    if (!awsCredentials) {
+      setError('AWS credentials are required for remediation. Please configure your AWS credentials first.');
+      onOpenCredentialsModal();
+      return;
+    }
+
     setIsRemediating(true);
     setError(null);
     setRemediationResults(null);
 
     try {
-      const response = await fetch('http://localhost:8000/api/audit/remediate', {
+      // Filter findings based on mode - only send findings that match the mode
+      let findingsToRemediate = auditResults.findings || [];
+      if (mode === 'critical') {
+        findingsToRemediate = findingsToRemediate.filter((f: any) => f.severity === 'Critical');
+      } else if (selectedFindings.size > 0) {
+        // If specific findings are selected, only remediate those
+        findingsToRemediate = Array.from(selectedFindings).map((idx: number) => findingsToRemediate[idx]).filter(Boolean);
+      }
+
+      // Filter out findings without role (account-wide findings cannot be auto-remediated)
+      findingsToRemediate = findingsToRemediate.filter((f: any) => f.role);
+      
+      if (findingsToRemediate.length === 0) {
+        setError(`No ${mode === 'critical' ? 'critical' : 'selected'} findings with role information to remediate. Account-wide findings cannot be auto-remediated.`);
+        setIsRemediating(false);
+        return;
+      }
+
+      // Log findings being sent for debugging
+      console.log('🔧 Sending findings for remediation:', findingsToRemediate.map((f: any) => ({
+        id: f.id,
+        title: f.title,
+        role: f.role,
+        severity: f.severity
+      })));
+
+      const response = await fetch(`${API_URL}/api/audit/remediate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          findings: auditResults.findings,
-          mode: mode
+          findings: findingsToRemediate,
+          mode: mode,
+          aws_credentials: {
+            access_key_id: awsCredentials.access_key_id,
+            secret_access_key: awsCredentials.secret_access_key,
+            region: awsCredentials.region
+          }
         })
       });
 
@@ -2083,6 +2130,13 @@ const AuditAccount: React.FC<AuditAccountProps> = ({ awsCredentials: propCredent
                             alert('Please confirm by checking the box');
                             return;
                           }
+                          // Check for AWS credentials
+                          if (!awsCredentials) {
+                            setError('AWS credentials are required for remediation. Please configure your AWS credentials first.');
+                            onOpenCredentialsModal();
+                            return;
+                          }
+                          
                           setRemediationStep('processing');
                           setIsRemediating(true);
                           const findingsToRemediate = Array.from(selectedFindings).map(idx => auditResults.findings?.[idx]).filter(Boolean);
@@ -2092,7 +2146,12 @@ const AuditAccount: React.FC<AuditAccountProps> = ({ awsCredentials: propCredent
                               headers: { 'Content-Type': 'application/json' },
                               body: JSON.stringify({
                                 findings: findingsToRemediate,
-                                mode: 'selected'
+                                mode: 'selected',
+                                aws_credentials: {
+                                  access_key_id: awsCredentials.access_key_id,
+                                  secret_access_key: awsCredentials.secret_access_key,
+                                  region: awsCredentials.region
+                                }
                               })
                             });
                             const data = await response.json();

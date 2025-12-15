@@ -2,17 +2,30 @@ import React, { useState, useEffect } from 'react';
 import LandingPage from './components/Layout/LandingPage';
 import AWSConfigModal from './components/Modals/AWSConfigModal';
 import AWSSetupWizard from './components/Modals/AWSSetupWizard';
-import { AWSCredentials } from './utils/awsCredentials';
+import { AWSCredentials, loadCredentialsFromSession, saveCredentialsToSession, clearCredentialsFromSession } from './utils/awsCredentials';
 
 function App() {
   // App-level credential state (shared across all pages)
-  // SECURITY: Stored only in React state (memory), never persisted
-  const [awsCredentials, setAwsCredentials] = useState<AWSCredentials | null>(null);
+  // Load credentials from sessionStorage on mount (persists across page refreshes)
+  const [awsCredentials, setAwsCredentials] = useState<AWSCredentials | null>(() => {
+    // Load from sessionStorage on initial mount
+    return loadCredentialsFromSession();
+  });
   const [showCredentialsModal, setShowCredentialsModal] = useState(false);
   const [showSetupWizard, setShowSetupWizard] = useState(false);
   const [hasEnteredApp, setHasEnteredApp] = useState(false);
   const [demoMode, setDemoMode] = useState(false);
   const [error, setError] = useState<Error | null>(null);
+
+  // Save credentials to sessionStorage whenever they change
+  useEffect(() => {
+    if (awsCredentials) {
+      saveCredentialsToSession(awsCredentials);
+    } else {
+      // Clear from sessionStorage if credentials are cleared
+      clearCredentialsFromSession();
+    }
+  }, [awsCredentials]);
 
   // Error boundary for production
   useEffect(() => {

@@ -2,9 +2,9 @@
  * AWS Credentials Management Utility
  * 
  * SECURITY PRINCIPLES:
- * - Credentials stored ONLY in React state (memory)
- * - Never persisted to localStorage or sessionStorage
- * - Cleared on page refresh
+ * - Credentials stored in React state (memory) AND sessionStorage (for convenience)
+ * - sessionStorage automatically clears when browser tab is closed
+ * - Credentials persist across page refreshes within the same session
  * - Passed directly to backend API calls
  * - Backend uses credentials ONLY for the current request
  */
@@ -97,12 +97,46 @@ export const getRegionDisplayName = (region: string): string => {
 };
 
 /**
- * SECURITY NOTE:
- * This utility intentionally does NOT provide functions to:
- * - Store credentials in localStorage
- * - Store credentials in sessionStorage
- * - Persist credentials anywhere
- * 
- * Credentials should only be stored in React component state
- * and passed to API calls as needed.
+ * SessionStorage helpers for credentials persistence
+ * Uses sessionStorage (cleared when tab closes) - NOT localStorage (persists forever)
  */
+const CREDENTIALS_STORAGE_KEY = 'aegis_aws_credentials';
+
+export const saveCredentialsToSession = (credentials: AWSCredentials): void => {
+  try {
+    sessionStorage.setItem(CREDENTIALS_STORAGE_KEY, JSON.stringify(credentials));
+  } catch (error) {
+    console.error('Failed to save credentials to sessionStorage:', error);
+    // Silently fail - credentials still work in memory
+  }
+};
+
+export const loadCredentialsFromSession = (): AWSCredentials | null => {
+  try {
+    const stored = sessionStorage.getItem(CREDENTIALS_STORAGE_KEY);
+    if (!stored) return null;
+    
+    const credentials = JSON.parse(stored) as AWSCredentials;
+    
+    // Validate loaded credentials before returning
+    if (validateCredentials(credentials)) {
+      return credentials;
+    } else {
+      // Invalid credentials - clear them
+      clearCredentialsFromSession();
+      return null;
+    }
+  } catch (error) {
+    console.error('Failed to load credentials from sessionStorage:', error);
+    clearCredentialsFromSession();
+    return null;
+  }
+};
+
+export const clearCredentialsFromSession = (): void => {
+  try {
+    sessionStorage.removeItem(CREDENTIALS_STORAGE_KEY);
+  } catch (error) {
+    console.error('Failed to clear credentials from sessionStorage:', error);
+  }
+};

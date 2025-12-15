@@ -1169,14 +1169,28 @@ class AuditAgent:
         try:
             finding_type = finding.get('type', '')
             severity = finding.get('severity', '')
-            role_name = finding.get('role', '') or finding.get('role_name', '') or finding.get('role_arn', '').split('/')[-1] if finding.get('role_arn') else ''
+            
+            # Try multiple ways to get role name
+            role_name = (
+                finding.get('role') or 
+                finding.get('role_name') or 
+                (finding.get('role_arn', '').split('/')[-1] if finding.get('role_arn') else '') or
+                finding.get('policy_name', '').split('/')[-1] if finding.get('policy_name') else ''
+            )
+            
+            # Log finding structure for debugging
+            logging.info(f"🔍 Finding structure: keys={list(finding.keys())}, role_name={role_name}")
             
             # Skip if no role name available
             if not role_name:
-                logging.warning(f"⚠️ Cannot apply fix: No role name found in finding: {finding.get('title')}")
+                # Provide detailed error message with available fields
+                available_fields = ', '.join(finding.keys())
+                error_msg = f"Cannot apply fix: No role name found in finding. Available fields: {available_fields}"
+                logging.warning(f"⚠️ {error_msg}")
+                logging.warning(f"   Finding ID: {finding.get('id', 'N/A')}, Title: {finding.get('title', 'N/A')}")
                 return {
                     'success': False,
-                    'message': f"Cannot apply fix: No role name found in finding",
+                    'message': f"Cannot apply fix: Finding is missing role information. This finding may be related to account-wide or CloudTrail analysis and cannot be auto-remediated.",
                     'actions': []
                 }
             

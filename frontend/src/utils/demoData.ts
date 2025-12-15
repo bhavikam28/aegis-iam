@@ -1,14 +1,81 @@
 import { 
   GeneratePolicyRequest, 
   GeneratePolicyResponse, 
-  ValidatePolicyRequest, 
-  ValidatePolicyResponse, 
+  ValidationRequest, 
+  ValidationResponse, 
   AnalyzeHistoryRequest, 
   AnalyzeHistoryResponse,
   SecurityFinding,
   IAMPolicy,
   ComplianceFramework
 } from '../types';
+
+// Detailed \"Explain Simply\" demo content (separate from per-statement breakdown)
+export const DEMO_SIMPLE_PERMISSIONS_EXPLANATION = `Access Policy Explanation
+
+What This Policy Allows
+
+This policy grants read-only access to two types of data that your Lambda function needs in order to run safely:
+
+1. Access to Secure Data in S3
+   - The function can list objects in the S3 bucket \"my-app-uploads\".
+   - It can download objects and specific object versions from that bucket.
+   - It cannot write, delete, or modify any objects.
+
+2. Access to CloudWatch Logs
+   - The function can create a log group and log stream for itself.
+   - It can write log events so you can see execution details, errors, and performance.
+   - It cannot access or modify logs for other applications.
+
+Who Can Use This Access
+
+Only the Lambda function that is using this role can use these permissions. Human users or other AWS services cannot directly use this policy unless they are explicitly attached to this same role.
+
+Security Implications
+
+This policy follows good security practices by:
+- Providing read-only access (no ability to modify or delete data)
+- Limiting access to a single S3 bucket instead of all buckets in your account
+- Restricting CloudWatch permissions to this Lambda's own log group
+
+However, any Lambda function using this role will be able to read all objects in the \"my-app-uploads\" bucket, which might be more than it really needs. For extra safety, you could limit access to a specific prefix such as \"my-app-uploads/config/*\".
+
+Resources Accessible
+
+In business terms, this policy grants access to:
+- All objects stored in the S3 bucket \"my-app-uploads\"
+- CloudWatch Logs under the log group \"/aws/lambda/my-function\" in the us-east-1 region.
+
+This type of access is typically needed for applications that read configuration files or input data from S3 and write detailed execution logs for monitoring and troubleshooting.`;
+
+export const DEMO_SIMPLE_TRUST_EXPLANATION = `Trust Policy Explanation
+
+What This Policy Does
+
+This policy is a trust relationship that specifies who can use a particular IAM role. It does not grant any permissions by itself – it only establishes who is allowed to \"step into\" this role.
+
+In this demo, it allows AWS Lambda to temporarily assume the role and use the permissions defined in the access policy.
+
+Who Can Use It
+
+Only the Lambda service (lambda.amazonaws.com) in your AWS account (123456789012) can assume this role. Human IAM users or other AWS services (like EC2, ECS, EKS) cannot use this role through this trust policy.
+
+Security Implications
+
+This is a standard trust policy for Lambda and follows security best practices by:
+- Limiting role access to only the Lambda service (not human users)
+- Restricting which account's Lambda functions can assume the role using aws:SourceAccount
+- Preventing other services or accounts from impersonating these Lambda functions
+
+From a security perspective, the main risk is that any Lambda function in your account which is allowed to use this role will get the S3 and CloudWatch permissions defined in the access policy. To stay safe, attach this role only to the specific Lambda functions that truly need those permissions.
+
+Resource Access
+
+The trust policy itself does not grant access to data. It only establishes who can use the role. The actual resources this role can access are defined in the separate permissions policy attached to it (for example, the S3 bucket \"my-app-uploads\" and the CloudWatch Logs group).
+
+In simple terms:
+- The trust policy decides who can use the role.
+- The permissions policy decides what they can do once they have it.`;
 
 // ============================================
 // GENERATE POLICY DEMO DATA
@@ -45,7 +112,8 @@ export const mockGeneratePolicyResponse = (request: GeneratePolicyRequest): Gene
     ]
   };
   
-  const trustPolicy: IAMPolicy = {
+  // Trust policy has Principal field, which is not in IAMPolicy type - use any
+  const trustPolicy: any = {
     Version: "2012-10-17",
     Statement: [
       {
@@ -75,21 +143,41 @@ Purpose: Enables Lambda to write application logs to CloudWatch Logs for monitor
 Why It Matters: Logging permissions are scoped to this specific Lambda function's log group (/aws/lambda/my-function), preventing logs from being written to arbitrary log groups. This maintains log isolation and security.
 Security: Regional scoping (us-east-1) and specific log group ARN prevent accidental logging to other regions or log groups, ensuring logs stay organized and secure.`;
 
-  const trustExplanation = `The trust policy defines **who** is allowed to assume (use) this IAM role.
+  const trustExplanation = `This policy is a trust relationship that defines who is allowed to assume this role. In this demo, it allows AWS Lambda to temporarily act with the permissions defined in the access policy above.
 
-**Trusted Entity**: AWS Lambda Service (lambda.amazonaws.com) - Only Lambda functions can assume this role.
+Think of it like giving a specific team a key to a secure room: the key (this role) only works for that team (Lambda in your account).
 
-**Source Account Restriction**: The role can only be assumed by Lambda functions running in AWS account 123456789012. This aws:SourceAccount condition is critical for security.
+Who Can Use It
 
-**Confused Deputy Protection**: The source account condition prevents other AWS accounts from using this role, even if they somehow know the role ARN. This prevents cross-account confused deputy attacks.
+Only the Lambda service (lambda.amazonaws.com) can assume this role. A source account condition restricts this further to your AWS account (123456789012). Human IAM users or other AWS services (like EC2, ECS, EKS) cannot assume this role through this trust policy.
 
-**What This Means**:
-• Only Lambda functions in YOUR account (123456789012) can use this role
-• Lambda functions in other AWS accounts cannot assume this role
-• No other AWS services (EC2, ECS, EKS, etc.) can use this role - only Lambda
-• Reduces risk of unauthorized access and confused deputy vulnerability
+This means:
+- Lambda functions in your account can use this role.
+- Lambda functions in other AWS accounts cannot use it, even if they know the role ARN.
 
-**Best Practice**: This is the standard trust policy pattern for Lambda execution roles, providing secure service-to-service authentication within your AWS account without allowing external entities.`;
+Security Implications
+
+This is a standard, secure setup for Lambda execution roles:
+
+- Restricts access to only the Lambda service.
+- Prevents cross-account abuse with the aws:SourceAccount condition.
+- Follows least privilege at the identity layer by tightly controlling who can assume the role.
+
+From a security perspective, the main risk is:
+- Any Lambda function in your account that is allowed to assume this role will get the S3 and CloudWatch permissions defined in the permissions policy.
+
+To keep this safe, you should:
+- Attach the role only to the specific Lambda functions that truly need this access.
+
+Resources That Can Be Accessed
+
+The trust policy itself does not list resources. Instead, it simply says: "Lambda from account 123456789012 is allowed to assume this role."
+
+The actual resources this Lambda can touch are controlled by the permissions policy attached to the role (the S3 bucket and CloudWatch Logs described above).
+
+In simple terms:
+- The trust policy decides who can use the role.
+- The permissions policy decides what they can do once they have it.`;
 
   const securityScore = request.restrictive ? 95 : 85;
 
@@ -278,7 +366,7 @@ Security: Regional scoping (us-east-1) and specific log group ARN prevent accide
 // VALIDATE POLICY DEMO DATA
 // ============================================
 
-export const mockValidatePolicyResponse = (request: ValidatePolicyRequest): ValidatePolicyResponse => {
+export const mockValidatePolicyResponse = (request: ValidationRequest): ValidationResponse => {
   // If validating via ARN, return response with role_details
   const isArnValidation = !request.policy_json && !!request.role_arn;
   
@@ -293,8 +381,7 @@ export const mockValidatePolicyResponse = (request: ValidatePolicyRequest): Vali
       recommendation: "Replace S3FullAccess with a custom policy granting only required S3 actions (GetObject, PutObject, ListBucket) and limit to specific bucket ARNs.",
       affectedStatement: 0,
       code_snippet: `"Action": "s3:*",
-"Resource": "*"`,
-      policy_name: "S3FullAccess"
+"Resource": "*"`
     },
     {
       id: "finding-2",
@@ -305,8 +392,7 @@ export const mockValidatePolicyResponse = (request: ValidatePolicyRequest): Vali
       recommendation: "Create a custom policy scoping CloudWatch Logs permissions to specific log groups needed by this Lambda function.",
       affectedStatement: 0,
       code_snippet: `"Action": "logs:*",
-"Resource": "*"`,
-      policy_name: "CloudWatchLogsFullAccess"
+"Resource": "*"`
     },
     {
       id: "finding-3",
@@ -318,8 +404,7 @@ export const mockValidatePolicyResponse = (request: ValidatePolicyRequest): Vali
       affectedStatement: 0,
       code_snippet: `"Principal": {
   "Service": "lambda.amazonaws.com"
-}`,
-      policy_name: "Trust Policy"
+}`
     },
     {
       id: "finding-4",

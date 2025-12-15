@@ -30,17 +30,26 @@ import re
 import logging
 import asyncio
 import os
+import sys
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
 load_dotenv()
 
+# Force unbuffered output for Windows console
+import sys
+if sys.platform == 'win32':
+    # On Windows, force unbuffered output
+    sys.stdout = sys.__stdout__
+    sys.stderr = sys.__stderr__
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.StreamHandler()  # Ensure logs go to stdout/stderr
-    ]
+        logging.StreamHandler(sys.stdout)  # Explicitly use stdout
+    ],
+    force=True  # Override any existing configuration
 )
 
 # ============================================
@@ -558,23 +567,41 @@ async def test_aws_credentials(request: AWSCredentials):
 
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
-    # Force print to stdout (works even if logging is buffered)
-    print(f"\n📥📥📥 INCOMING REQUEST: {request.method} {request.url.path} 📥📥📥")
-    logging.info(f"📥 Incoming request: {request.method} {request.url}")
+    """
+    Log basic request/response info.
+    NOTE: Avoid emojis here because Windows consoles may not support them, causing encoding errors.
+    """
+    # FORCE IMMEDIATE OUTPUT - Multiple methods for Windows
+    request_line = f"[REQUEST] {request.method} {request.url.path}\n"
+    # Write directly to stdout with flush
+    sys.stdout.write(request_line)
+    sys.stdout.flush()
+    # Also use print with flush=True (works better on Windows)
+    print(f"[REQUEST] {request.method} {request.url.path}", flush=True)
+    # Also use logging (which goes to stderr by default, less likely to be buffered)
+    logging.info(f"Incoming request: {request.method} {request.url.path}")
+    
     try:
         response = await call_next(request)
-        print(f"📤 Outgoing response: status={response.status_code}")  # Force print to stdout
-        logging.info(f"📤 Outgoing response: status={response.status_code}, type={type(response)}")
+        status_line = f"[RESPONSE] status={response.status_code} path={request.url.path}\n"
+        sys.stdout.write(status_line)
+        sys.stdout.flush()
+        print(f"[RESPONSE] status={response.status_code} path={request.url.path}", flush=True)
+        logging.info(f"Outgoing response: status={response.status_code}, type={type(response)}")
         # Log response body size if it's a JSONResponse
-        if hasattr(response, 'body'):
+        if hasattr(response, "body"):
             try:
                 body_size = len(response.body) if response.body else 0
                 logging.info(f"   Response body size: {body_size} bytes")
-            except:
+            except Exception:
                 pass
         return response
     except Exception as e:
-        logging.error(f"❌ Request failed: {str(e)}")
+        error_msg = f"Request failed: {str(e)}"
+        sys.stdout.write(error_msg + "\n")
+        sys.stdout.flush()
+        print(error_msg, flush=True)
+        logging.error(error_msg)
         logging.exception(e)
         raise
 
@@ -585,35 +612,44 @@ async def log_requests(request: Request, call_next):
 @app.post("/generate")
 async def generate(request: GenerationRequest):
     """Generate IAM policy with separate scoring for permissions and trust policies"""
-    # FORCE PRINT TO STDOUT - bypasses all buffering
-    import sys
-    sys.stdout.write("\n" + "="*80 + "\n")
-    sys.stdout.write("🚀🚀🚀 /generate ENDPOINT CALLED 🚀🚀🚀\n")
-    sys.stdout.write(f"   Request type: {'FOLLOW-UP' if request.is_followup else 'INITIAL'}\n")
-    sys.stdout.write(f"   Conversation ID: {request.conversation_id}\n")
-    sys.stdout.write(f"   User credentials provided: {request.aws_credentials is not None}\n")
-    sys.stdout.flush()  # Force flush immediately
-    
+    # BASIC STDOUT LOGGING (ASCII ONLY to avoid encoding issues on Windows)
+    # Use multiple methods to ensure output appears on Windows
+    print("\n" + "=" * 80, flush=True)
+    print("GENERATE endpoint called", flush=True)
+    print(f"  Request type: {'FOLLOW-UP' if request.is_followup else 'INITIAL'}", flush=True)
+    print(f"  Conversation ID: {request.conversation_id}", flush=True)
+    print(f"  User credentials provided: {request.aws_credentials is not None}", flush=True)
+    sys.stdout.write("\n" + "=" * 80 + "\n")
+    sys.stdout.write("GENERATE endpoint called\n")
+    sys.stdout.write(f"  Request type: {'FOLLOW-UP' if request.is_followup else 'INITIAL'}\n")
+    sys.stdout.write(f"  Conversation ID: {request.conversation_id}\n")
+    sys.stdout.write(f"  User credentials provided: {request.aws_credentials is not None}\n")
+    sys.stdout.flush()
+    # Also use logging (goes to stderr, less likely to be buffered)
     logging.info("=" * 80)
-    logging.info(f"🚀 /generate endpoint called")
+    logging.info("GENERATE endpoint called")
+    logging.info(f"  Request type: {'FOLLOW-UP' if request.is_followup else 'INITIAL'}")
+    logging.info(f"  Conversation ID: {request.conversation_id}")
+    logging.info(f"  User credentials provided: {request.aws_credentials is not None}")
+
+    logging.info("=" * 80)
+    logging.info("/generate endpoint called")
     logging.info(f"   Request type: {'FOLLOW-UP' if request.is_followup else 'INITIAL'}")
     logging.info(f"   Request description length: {len(request.description)}")
     logging.info(f"   Conversation ID: {request.conversation_id}")
     logging.info(f"   User credentials provided: {request.aws_credentials is not None}")
-    
+
     # CRITICAL: Validate credentials are present for ALL requests
     if not request.aws_credentials:
-        print("❌❌❌ CRITICAL ERROR: No credentials provided in request!")
-        logging.error("❌ CRITICAL ERROR: No credentials provided in request!")
+        logging.error("CRITICAL ERROR: No credentials provided in request!")
         logging.error("   This should not happen - frontend must send credentials with every request")
         raise HTTPException(
             status_code=400,
             detail="AWS credentials are required for all requests (initial and follow-up). Please configure your AWS credentials in the modal."
         )
-    
+
     # Set user credentials in context (thread-safe)
     if request.aws_credentials:
-        print(f"✅ Setting credentials for region: {request.aws_credentials.region}")
         creds_dict = {
             'access_key_id': request.aws_credentials.access_key_id,
             'secret_access_key': request.aws_credentials.secret_access_key,
@@ -1173,6 +1209,13 @@ async def _generate_internal(request: GenerationRequest):
     
     try:
         conversation_id = request.conversation_id or str(uuid.uuid4())
+        # FORCE PRINT TO STDOUT - Windows console needs explicit output with flush
+        print(f"\n[GENERATE] conversation_id={conversation_id}", flush=True)
+        print(f"[GENERATE] is_followup={request.is_followup}", flush=True)
+        print(f"[GENERATE] description_len={len(request.description) if request.description else 0}", flush=True)
+        print(f"[GENERATE] description={request.description[:100] if request.description else 'None'}...", flush=True)
+        sys.stdout.write(f"\n[GENERATE] conversation_id={conversation_id}\n")
+        sys.stdout.flush()
         logging.info(
             "generate request received: conversation_id=%s service=%s followup=%s description_len=%s",
             conversation_id,
@@ -1182,6 +1225,13 @@ async def _generate_internal(request: GenerationRequest):
         )
 
         previous_response = conversation_cache.get(conversation_id)
+        if previous_response:
+            print(f"[GENERATE] WARNING: Found cached response for conversation_id={conversation_id}")
+            print(f"[GENERATE] Cached has policy: {bool(previous_response.get('policy'))}")
+            sys.stdout.flush()
+        else:
+            print(f"[GENERATE] No cached response found (new conversation)")
+            sys.stdout.flush()
         
         # For follow-up requests, preserve the original service from cache instead of re-detecting
         if request.is_followup and previous_response:
@@ -1199,6 +1249,12 @@ async def _generate_internal(request: GenerationRequest):
         
         if conversation_id not in conversations:
             conversations[conversation_id] = []
+            print(f"[GENERATE] Created NEW conversation history (was empty)", flush=True)
+            logging.info("[GENERATE] Created NEW conversation history (was empty)")
+        else:
+            existing_msgs = len(conversations[conversation_id])
+            print(f"[GENERATE] WARNING: Conversation history already exists with {existing_msgs} messages", flush=True)
+            logging.warning(f"[GENERATE] Conversation history already exists with {existing_msgs} messages")
         
         # Store user message
         user_message = {
@@ -1207,6 +1263,9 @@ async def _generate_internal(request: GenerationRequest):
             "timestamp": str(uuid.uuid4())
         }
         conversations[conversation_id].append(user_message)
+        total_msgs = len(conversations[conversation_id])
+        print(f"[GENERATE] Added user message. Total messages in conversation: {total_msgs}", flush=True)
+        logging.info(f"[GENERATE] Added user message. Total messages in conversation: {total_msgs}")
         
         
         # REMOVED: "More Details" page - Always generate policies with placeholders if details are missing
@@ -1216,7 +1275,16 @@ async def _generate_internal(request: GenerationRequest):
         
         # Build prompt - if followup, use conversation context
         # Let the AI agent intelligently interpret user intent (no hardcoded phrase matching!)
-        prompt = request.description
+        # CRITICAL: For NEW requests (not follow-up), ALWAYS force fresh policy generation
+        is_new_request = not request.is_followup or len(conversations[conversation_id]) <= 1
+        if is_new_request:
+            # Force fresh generation - prepend instruction to ignore duplicates
+            prompt = f"""**IMPORTANT: This is a NEW request. ALWAYS generate fresh IAM policies. DO NOT say "I already generated" or "I notice you've sent the same request" - just generate the policies in JSON format.**
+
+{request.description}"""
+            logging.debug("📝 NEW request - forcing fresh policy generation")
+        else:
+            prompt = request.description
         logging.debug("prompt preview: %s", prompt[:100] if prompt else "")
         logging.debug("conversation length=%s is_followup=%s", len(conversations[conversation_id]), request.is_followup)
         
@@ -2259,8 +2327,9 @@ Let me know if you have any questions!
             overall_score = 0
             security_notes = {"permissions": [], "trust": []}
             security_features = {"permissions": [], "trust": []}
-            # Only set is_question to True if we detect actual question patterns
+            # Only set is_question to True if we detect actual question patterns AND no policy found
             # Default to False - assume it's a response unless we detect question markers
+            # CRITICAL: Don't mark as question if policies are found - policies take priority
             is_question = False
             question_indicators = [
                 r'\?',  # Contains question mark
@@ -2271,11 +2340,12 @@ Let me know if you have any questions!
                 r'i\s+(need|require|want)\s+(more|additional|further)',  # Need more info
                 r'(missing|need|require|specify).*?(account|region|bucket|arn|resource)',  # Missing info requests
             ]
-            # Check if response contains question indicators
+            # Check if response contains question indicators (but don't set yet - check policies first)
             message_lower = final_message.lower()
+            has_question_pattern = False
             for pattern in question_indicators:
                 if re.search(pattern, message_lower, re.IGNORECASE):
-                    is_question = True
+                    has_question_pattern = True
                     logging.debug(f"🔍 Detected question indicator: {pattern}")
                     break
             
@@ -2364,6 +2434,17 @@ Let me know if you have any questions!
                                     logging.warning("❌ Failed to parse third JSON block")
                     except json.JSONDecodeError:
                         logging.warning("❌ Failed to parse second JSON block")
+            
+            # CRITICAL: Only mark as question if we have question pattern AND no policies found
+            # If policies are found, it's a valid response (even if agent mentions duplicates)
+            if has_question_pattern and not policy and not trust_policy:
+                is_question = True
+                logging.info("⚠️ Marking as question: Has question pattern and no policies found")
+                print(f"[QUESTION DETECTION] Marked as question: pattern={has_question_pattern}, hasPolicy={bool(policy)}, hasTrustPolicy={bool(trust_policy)}", flush=True)
+            elif policy or trust_policy:
+                is_question = False  # Always false if we have policies
+                logging.info("✅ NOT a question: Policies found (even if agent mentioned duplicates)")
+                print(f"[QUESTION DETECTION] NOT a question: hasPolicy={bool(policy)}, hasTrustPolicy={bool(trust_policy)}", flush=True)
             
             # Initialize score variables
             permissions_score = 0
@@ -3632,38 +3713,129 @@ async def remediate_findings(request: Request):
         findings = data.get('findings', [])
         mode = data.get('mode', 'all')  # 'all', 'critical', or specific finding IDs
         
-        # Initialize auditor
-        auditor = AuditAgent()
+        # Extract AWS credentials from request
+        aws_creds_data = data.get('aws_credentials')
+        if not aws_creds_data:
+            return {
+                "success": False,
+                "error": "AWS credentials are required for remediation. Please configure your AWS credentials first."
+            }
+        
+        # Convert to credentials dict for AuditAgent
+        aws_credentials = {
+            'access_key_id': aws_creds_data.get('access_key_id'),
+            'secret_access_key': aws_creds_data.get('secret_access_key'),
+            'region': aws_creds_data.get('region', 'us-east-1')
+        }
+        
+        # Initialize auditor with credentials
+        auditor = AuditAgent(aws_region=aws_credentials['region'], aws_credentials=aws_credentials)
+        
+        logging.info(f"🔧 Starting remediation for {len(findings)} findings (mode: {mode})")
         
         # Apply fixes
         results = []
         for finding in findings:
             severity = finding.get('severity', '')
+            finding_id = finding.get('id') or finding.get('finding_id', 'Unknown')
             
-            # Filter based on mode
+            # Filter based on mode (already filtered on frontend, but double-check)
             if mode == 'critical' and severity != 'Critical':
+                logging.debug(f"⏭️ Skipping non-critical finding: {finding.get('title')}")
+                continue
+            
+            # Log full finding structure for debugging
+            logging.info(f"🔧 Processing finding: ID={finding_id}, Title={finding.get('title')}, Severity={severity}")
+            logging.info(f"   Full finding keys: {list(finding.keys())}")
+            logging.info(f"   Finding data: {json.dumps({k: v for k, v in finding.items() if k not in ['policy_snippet', 'detailed_remediation']}, indent=2)}")
+            
+            # Check if finding has a role - some findings (like CloudTrail account-wide) don't have roles
+            has_role = bool(
+                finding.get('role') or 
+                finding.get('role_name') or 
+                finding.get('role_arn')
+            )
+            
+            if not has_role:
+                logging.warning(f"   ⚠️ Finding {finding_id} does not have a role field")
+                logging.warning(f"   Available fields: {', '.join(finding.keys())}")
+                
+                # Try to extract role from other fields
+                # Check if there's a policy_snippet or description that might contain role info
+                description = finding.get('description', '')
+                policy_snippet = finding.get('policy_snippet', '')
+                
+                # Look for role ARN patterns in description or policy snippet
+                import re
+                arn_pattern = r'arn:aws:iam::\d+:role/([^/\s"]+)'
+                role_match = None
+                if description:
+                    role_match = re.search(arn_pattern, description)
+                if not role_match and policy_snippet:
+                    role_match = re.search(arn_pattern, str(policy_snippet))
+                
+                if role_match:
+                    extracted_role = role_match.group(1)
+                    logging.info(f"   ✅ Extracted role from finding content: {extracted_role}")
+                    finding['role'] = extracted_role
+                    has_role = True
+                else:
+                    logging.warning(f"   ❌ Could not extract role from finding content")
+            
+            # Skip findings without roles (account-wide findings cannot be auto-remediated)
+            if not has_role:
+                logging.warning(f"   ⏭️ Skipping finding {finding_id} - no role information available")
+                results.append({
+                    'finding_id': finding_id,
+                    'title': finding.get('title', 'Unknown'),
+                    'severity': severity,
+                    'success': False,
+                    'message': f"Cannot auto-remediate: Finding is missing role information. This may be an account-wide finding that requires manual remediation.",
+                    'actions_taken': []
+                })
                 continue
             
             # Apply the fix
-            fix_result = auditor.apply_fix(finding)
-            results.append({
-                'finding_id': finding.get('id'),
-                'title': finding.get('title'),
-                'success': fix_result.get('success', False),
-                'message': fix_result.get('message', ''),
-                'actions_taken': fix_result.get('actions', [])
-            })
+            try:
+                fix_result = auditor.apply_fix(finding)
+                results.append({
+                    'finding_id': finding.get('id'),
+                    'title': finding.get('title'),
+                    'severity': severity,
+                    'success': fix_result.get('success', False),
+                    'message': fix_result.get('message', ''),
+                    'actions_taken': fix_result.get('actions', [])
+                })
+                if fix_result.get('success'):
+                    logging.info(f"✅ Successfully remediated: {finding.get('title')}")
+                else:
+                    logging.warning(f"⚠️ Remediation failed for: {finding.get('title')} - {fix_result.get('message')}")
+            except Exception as fix_error:
+                logging.error(f"❌ Exception during fix for {finding.get('title')}: {fix_error}")
+                results.append({
+                    'finding_id': finding.get('id'),
+                    'title': finding.get('title'),
+                    'severity': severity,
+                    'success': False,
+                    'message': f"Exception: {str(fix_error)}",
+                    'actions_taken': []
+                })
+        
+        remediated_count = len([r for r in results if r['success']])
+        failed_count = len([r for r in results if not r['success']])
+        
+        logging.info(f"📊 Remediation complete: {remediated_count} succeeded, {failed_count} failed out of {len(results)}")
         
         return {
             'success': True,
             'total_findings': len(findings),
-            'remediated': len([r for r in results if r['success']]),
-            'failed': len([r for r in results if not r['success']]),
+            'remediated': remediated_count,
+            'failed': failed_count,
             'results': results
         }
         
     except Exception as e:
-        logging.error(f"Remediation failed: {e}")
+        logging.error(f"❌ Remediation failed: {e}", exc_info=True)
         return {"success": False, "error": str(e)}
 
 
