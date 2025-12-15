@@ -35,7 +35,13 @@ from dotenv import load_dotenv
 # Load environment variables from .env file
 load_dotenv()
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler()  # Ensure logs go to stdout/stderr
+    ]
+)
 
 # ============================================
 # REQUEST MODELS WITH SECURE CREDENTIALS
@@ -428,6 +434,7 @@ def test_response():
 @app.get("/api/test")
 def api_test():
     """Test /api/ routing and GitHub config"""
+    print("🔍 TEST ENDPOINT CALLED - Backend is receiving requests!")
     return {
         "success": True,
         "message": "API routing works",
@@ -435,6 +442,16 @@ def api_test():
         "github_private_key_set": bool(os.getenv('GITHUB_PRIVATE_KEY')),
         "github_webhook_secret_set": bool(os.getenv('GITHUB_WEBHOOK_SECRET'))
     }
+
+@app.get("/test-logs")
+def test_logs():
+    """Test endpoint to verify logs are working"""
+    print("\n" + "="*50)
+    print("🧪 TEST LOGS ENDPOINT CALLED")
+    print("="*50 + "\n")
+    import sys
+    sys.stdout.flush()
+    return {"message": "Check your terminal - you should see test logs above!"}
 
 @app.post("/api/aws/test-credentials")
 async def test_aws_credentials(request: AWSCredentials):
@@ -541,9 +558,12 @@ async def test_aws_credentials(request: AWSCredentials):
 
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
+    # Force print to stdout (works even if logging is buffered)
+    print(f"\n📥📥📥 INCOMING REQUEST: {request.method} {request.url.path} 📥📥📥")
     logging.info(f"📥 Incoming request: {request.method} {request.url}")
     try:
         response = await call_next(request)
+        print(f"📤 Outgoing response: status={response.status_code}")  # Force print to stdout
         logging.info(f"📤 Outgoing response: status={response.status_code}, type={type(response)}")
         # Log response body size if it's a JSONResponse
         if hasattr(response, 'body'):
@@ -565,6 +585,15 @@ async def log_requests(request: Request, call_next):
 @app.post("/generate")
 async def generate(request: GenerationRequest):
     """Generate IAM policy with separate scoring for permissions and trust policies"""
+    # FORCE PRINT TO STDOUT - bypasses all buffering
+    import sys
+    sys.stdout.write("\n" + "="*80 + "\n")
+    sys.stdout.write("🚀🚀🚀 /generate ENDPOINT CALLED 🚀🚀🚀\n")
+    sys.stdout.write(f"   Request type: {'FOLLOW-UP' if request.is_followup else 'INITIAL'}\n")
+    sys.stdout.write(f"   Conversation ID: {request.conversation_id}\n")
+    sys.stdout.write(f"   User credentials provided: {request.aws_credentials is not None}\n")
+    sys.stdout.flush()  # Force flush immediately
+    
     logging.info("=" * 80)
     logging.info(f"🚀 /generate endpoint called")
     logging.info(f"   Request type: {'FOLLOW-UP' if request.is_followup else 'INITIAL'}")
@@ -574,6 +603,7 @@ async def generate(request: GenerationRequest):
     
     # CRITICAL: Validate credentials are present for ALL requests
     if not request.aws_credentials:
+        print("❌❌❌ CRITICAL ERROR: No credentials provided in request!")
         logging.error("❌ CRITICAL ERROR: No credentials provided in request!")
         logging.error("   This should not happen - frontend must send credentials with every request")
         raise HTTPException(
@@ -583,6 +613,7 @@ async def generate(request: GenerationRequest):
     
     # Set user credentials in context (thread-safe)
     if request.aws_credentials:
+        print(f"✅ Setting credentials for region: {request.aws_credentials.region}")
         creds_dict = {
             'access_key_id': request.aws_credentials.access_key_id,
             'secret_access_key': request.aws_credentials.secret_access_key,
