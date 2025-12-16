@@ -2,10 +2,25 @@
 
 ### AI-Powered IAM Security Platform for AWS
 
+---
+
+## ⚠️ **DISCLAIMER**
+
+**This software is provided for demonstration and reference purposes only. Use at your own risk.**
+
+- **NO WARRANTY:** This software is provided "AS IS" without any warranty. The authors are **NOT responsible** for any damages, losses, security breaches, or other consequences resulting from use of this software.
+- **NOT FOR PRODUCTION:** Do not use in production without proper security review, testing, and compliance validation.
+- **YOUR RESPONSIBILITY:** You are solely responsible for reviewing all generated policies, managing AWS credentials securely, and monitoring AWS costs.
+- **AWS CHARGES:** You are responsible for all AWS charges. This application uses your AWS credentials and makes API calls to your account.
+- **NOT AFFILIATED:** This project is not affiliated with, endorsed by, or sponsored by AWS or Anthropic.
+
+**By using this software, you acknowledge and agree to these terms.**
+
+---
+
 <div align="center">
 
 [![Live Demo](https://img.shields.io/badge/Live%20Demo-aegis--iam.vercel.app-blue?style=for-the-badge&logo=vercel)](https://aegis-iam.vercel.app)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg?style=for-the-badge&logo=opensourceinitiative)](LICENSE)
 [![Powered by Claude](https://img.shields.io/badge/Powered%20by-Claude%203.7-purple?style=for-the-badge&logo=anthropic)](https://www.anthropic.com/claude)
 [![AWS](https://img.shields.io/badge/AWS-Bedrock-orange?style=for-the-badge&logo=amazonaws)](https://aws.amazon.com/bedrock/)
 
@@ -498,7 +513,7 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## 📝 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+All rights reserved. This project is provided for demonstration and reference purposes only.
 
 ---
 
