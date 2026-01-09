@@ -10,8 +10,8 @@
  */
 
 export interface AWSCredentials {
-  access_key_id: string;
-  secret_access_key: string;
+  access_key_id?: string;  // Optional for CLI-based auth
+  secret_access_key?: string;  // Optional for CLI-based auth
   region: string;
 }
 

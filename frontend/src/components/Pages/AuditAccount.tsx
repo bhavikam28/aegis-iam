@@ -4,7 +4,6 @@ import { saveToStorage, loadFromStorage, STORAGE_KEYS } from '@/utils/persistenc
 import CollapsibleTile from '@/components/Common/CollapsibleTile';
 import SecurityTips from '@/components/Common/SecurityTips';
 import { getComplianceLink } from '@/utils/complianceLinks';
-import AWSConfigModal from '@/components/Modals/AWSConfigModal';
 import { AWSCredentials, validateCredentials, maskAccessKeyId, getRegionDisplayName } from '@/utils/awsCredentials';
 import { API_URL } from '@/config/api';
 

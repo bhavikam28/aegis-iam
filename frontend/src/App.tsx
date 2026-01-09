@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import LandingPage from './components/Layout/LandingPage';
-import AWSConfigModal from './components/Modals/AWSConfigModal';
 import AWSSetupWizard from './components/Modals/AWSSetupWizard';
 import { AWSCredentials, loadCredentialsFromSession, saveCredentialsToSession, clearCredentialsFromSession } from './utils/awsCredentials';
 
@@ -11,7 +10,6 @@ function App() {
     // Load from sessionStorage on initial mount
     return loadCredentialsFromSession();
   });
-  const [showCredentialsModal, setShowCredentialsModal] = useState(false);
   const [showSetupWizard, setShowSetupWizard] = useState(false);
   const [hasEnteredApp, setHasEnteredApp] = useState(false);
   const [demoMode, setDemoMode] = useState(false);
@@ -37,13 +35,13 @@ function App() {
     return () => window.removeEventListener('error', handleError);
   }, []);
 
-  // Show credentials modal when user first enters the app (after landing page)
+  // Show setup wizard when user first enters the app (after landing page)
   // BUT NOT if they're in demo mode
   useEffect(() => {
     if (hasEnteredApp && !awsCredentials && !demoMode) {
       // Small delay to ensure Dashboard renders first on mobile
       const timer = setTimeout(() => {
-        setShowCredentialsModal(true);
+        setShowSetupWizard(true); // Go directly to CLI-based wizard
       }, 150);
       return () => clearTimeout(timer);
     }
@@ -71,25 +69,10 @@ function App() {
       <LandingPage 
         awsCredentials={awsCredentials}
         onCredentialsChange={setAwsCredentials}
-        onOpenCredentialsModal={() => setShowCredentialsModal(true)}
+        onOpenCredentialsModal={() => setShowSetupWizard(true)}
         onEnterApp={(isDemo?: boolean) => {
           setDemoMode(isDemo ?? false);
           setHasEnteredApp(true);
-        }}
-      />
-      
-      {/* App-level AWS Credentials Modal */}
-      <AWSConfigModal
-        isOpen={showCredentialsModal && !demoMode && !showSetupWizard}
-        onClose={() => setShowCredentialsModal(false)}
-        onSave={(credentials) => {
-          setAwsCredentials(credentials);
-          setShowCredentialsModal(false);
-        }}
-        currentCredentials={awsCredentials}
-        onOpenWizard={() => {
-          setShowCredentialsModal(false);
-          setShowSetupWizard(true);
         }}
       />
 

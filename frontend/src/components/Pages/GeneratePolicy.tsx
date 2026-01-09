@@ -7,7 +7,6 @@ import { saveToStorage, loadFromStorage, clearStorage, STORAGE_KEYS } from '@/ut
 import CollapsibleTile from '@/components/Common/CollapsibleTile';
 import SecurityTips from '@/components/Common/SecurityTips';
 import { getComplianceLink } from '@/utils/complianceLinks';
-import AWSConfigModal from '@/components/Modals/AWSConfigModal';
 import { AWSCredentials, validateCredentials, maskAccessKeyId, getRegionDisplayName } from '@/utils/awsCredentials';
 import { mockGeneratePolicyResponse, DEMO_SIMPLE_PERMISSIONS_EXPLANATION, DEMO_SIMPLE_TRUST_EXPLANATION } from '@/utils/demoData';
 // Note: Compliance links should come from agent response, not hardcoded

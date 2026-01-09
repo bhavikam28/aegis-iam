@@ -33,6 +33,12 @@ import os
 import sys
 from dotenv import load_dotenv
 
+# Optional import for instance profile detection
+try:
+    import requests
+except ImportError:
+    requests = None
+
 # Load environment variables from .env file
 load_dotenv()
 
@@ -58,21 +64,29 @@ logging.basicConfig(
 
 class AWSCredentials(BaseModel):
     """
-    User-provided AWS credentials
+    User-provided AWS credentials (OPTIONAL for CLI-based auth)
     
     SECURITY: These credentials are:
     - Never stored in database
     - Never logged
     - Used only for the current request
     - Passed directly to AWS SDK
+    
+    If credentials are not provided, boto3 will use default credential chain:
+    1. Environment variables (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY)
+    2. AWS credentials file (~/.aws/credentials)
+    3. IAM instance profile (if running on EC2)
+    4. IAM roles for tasks (if running on ECS)
     """
-    access_key_id: str
-    secret_access_key: str
+    access_key_id: Optional[str] = None
+    secret_access_key: Optional[str] = None
     region: str = "us-east-1"
     
     @field_validator('access_key_id')
     @classmethod
     def validate_access_key(cls, v):
+        if v is None:
+            return v  # Allow None for CLI-based auth
         if not SecureCredentials.validate_access_key_id(v):
             raise ValueError("Invalid AWS Access Key ID format")
         return v
@@ -80,6 +94,8 @@ class AWSCredentials(BaseModel):
     @field_validator('secret_access_key')
     @classmethod
     def validate_secret_key(cls, v):
+        if v is None:
+            return v  # Allow None for CLI-based auth
         if not SecureCredentials.validate_secret_access_key(v):
             raise ValueError("Invalid AWS Secret Access Key format")
         return v
@@ -462,65 +478,174 @@ def test_logs():
     sys.stdout.flush()
     return {"message": "Check your terminal - you should see test logs above!"}
 
-@app.post("/api/aws/test-credentials")
-async def test_aws_credentials(request: AWSCredentials):
+@app.get("/api/aws/check-cli-credentials")
+async def check_cli_credentials(region: str = "us-east-1"):
     """
-    Test AWS credentials by calling STS GetCallerIdentity and optionally Bedrock
-    Returns: { "success": bool, "account_id": str, "user_arn": str, "bedrock_available": bool, "error": str }
+    Check if AWS CLI credentials are available using default credential chain
+    
+    This endpoint tests if the backend can access AWS credentials configured via:
+    - AWS CLI (`aws configure`)
+    - Environment variables
+    - IAM instance profiles (EC2)
+    - IAM roles for tasks (ECS)
+    
+    Returns: { "available": bool, "account_id": str, "user_arn": str, "bedrock_available": bool, "error": str, "method": str }
     """
     import boto3
     from botocore.exceptions import ClientError, NoCredentialsError
     
     try:
-        # Test STS (identity)
-        sts_client = boto3.client(
-            'sts',
-            aws_access_key_id=request.access_key_id,
-            aws_secret_access_key=request.secret_access_key,
-            region_name=request.region
-        )
+        # Use default credential chain (no credentials passed)
+        sts_client = boto3.client('sts', region_name=region)
         
         identity = sts_client.get_caller_identity()
         account_id = identity.get('Account')
         user_arn = identity.get('Arn')
         
-        # Test Bedrock availability
-        # Note: bedrock-runtime doesn't have list_foundation_models, so we use bedrock service
+        # Detect credential source
+        credential_method = "aws_cli_or_env"  # Default assumption
+        
+        # Check if using instance profile (EC2 metadata)
+        if requests:
+            try:
+                metadata_response = requests.get(
+                    'http://169.254.169.254/latest/meta-data/iam/security-credentials/',
+                    timeout=0.5
+                )
+                if metadata_response.status_code == 200:
+                    credential_method = "iam_instance_profile"
+            except:
+                pass  # Not running on EC2
+        
+        # Test Bedrock availability - just check if bedrock-runtime client can be created
+        # (We don't need to call APIs, just verify the service is available)
         bedrock_available = False
         bedrock_error = None
         try:
-            # Try bedrock service (for listing models)
-            bedrock_service_client = boto3.client(
-                'bedrock',
+            # Try to create bedrock-runtime client (this validates credentials and region)
+            bedrock_runtime_client = boto3.client('bedrock-runtime', region_name=region)
+            # If client creation succeeds, Bedrock is available
+            bedrock_available = True
+            credential_method = credential_method if credential_method != "default" else "aws_cli_or_env"
+        except ClientError as e:
+            error_code = e.response.get('Error', {}).get('Code', '')
+            if error_code == 'AccessDeniedException':
+                bedrock_error = "Missing Bedrock permissions. Please attach the policy from the setup wizard."
+            elif error_code in ['InvalidSignature', 'SignatureDoesNotMatch']:
+                bedrock_error = "Invalid AWS credentials. Please check your AWS CLI configuration."
+            else:
+                bedrock_error = f"Bedrock may not be available in {region} or permissions issue: {error_code}"
+        except Exception as e:
+            # If it's a ValidationException about unknown region or other issues
+            error_str = str(e)
+            if 'not available' in error_str.lower() or 'invalid region' in error_str.lower():
+                bedrock_error = f"Bedrock not available in {region}. Try us-east-1, us-west-2, or eu-west-1."
+            else:
+                bedrock_error = f"Could not verify Bedrock access: {str(e)}"
+        
+        return {
+            "success": True,
+            "available": True,
+            "account_id": account_id,
+            "user_arn": user_arn,
+            "bedrock_available": bedrock_available,
+            "bedrock_error": bedrock_error,
+            "method": credential_method,
+            "region": region
+        }
+    
+    except NoCredentialsError:
+        return {
+            "success": False,
+            "available": False,
+            "error": "No AWS credentials found. Please configure AWS CLI using 'aws configure' or provide credentials manually.",
+            "method": None
+        }
+    except ClientError as e:
+        error_code = e.response.get('Error', {}).get('Code', '')
+        error_message = e.response.get('Error', {}).get('Message', str(e))
+        return {
+            "success": False,
+            "available": False,
+            "error": f"AWS credentials found but invalid: {error_code} - {error_message}",
+            "method": None
+        }
+    except Exception as e:
+        logging.error(f"Error checking CLI credentials: {e}")
+        return {
+            "success": False,
+            "available": False,
+            "error": f"Failed to check credentials: {str(e)}",
+            "method": None
+        }
+
+@app.post("/api/aws/test-credentials")
+async def test_aws_credentials(request: AWSCredentials):
+    """
+    Test AWS credentials by calling STS GetCallerIdentity and optionally Bedrock
+    
+    Supports two modes:
+    1. CLI-based: If credentials are None, uses default credential chain
+    2. Manual: If credentials provided, uses explicit credentials
+    
+    Returns: { "success": bool, "account_id": str, "user_arn": str, "bedrock_available": bool, "error": str, "method": str }
+    """
+    import boto3
+    from botocore.exceptions import ClientError, NoCredentialsError
+    
+    # Determine if using CLI-based auth or manual credentials
+    use_cli_auth = request.access_key_id is None or request.secret_access_key is None
+    
+    try:
+        # Create STS client
+        if use_cli_auth:
+            # Use default credential chain (AWS CLI, env vars, instance profile, etc.)
+            sts_client = boto3.client('sts', region_name=request.region)
+            credential_method = "aws_cli_or_default_chain"
+        else:
+            # Use explicit credentials
+            sts_client = boto3.client(
+                'sts',
                 aws_access_key_id=request.access_key_id,
                 aws_secret_access_key=request.secret_access_key,
                 region_name=request.region
             )
-            # Lightweight check - just list one model
-            bedrock_service_client.list_foundation_models(maxResults=1)
+            credential_method = "manual_credentials"
+        
+        identity = sts_client.get_caller_identity()
+        account_id = identity.get('Account')
+        user_arn = identity.get('Arn')
+        
+        # Test Bedrock availability - just check if bedrock-runtime client can be created
+        bedrock_available = False
+        bedrock_error = None
+        try:
+            if use_cli_auth:
+                bedrock_runtime_client = boto3.client('bedrock-runtime', region_name=request.region)
+            else:
+                bedrock_runtime_client = boto3.client(
+                    'bedrock-runtime',
+                    aws_access_key_id=request.access_key_id,
+                    aws_secret_access_key=request.secret_access_key,
+                    region_name=request.region
+                )
+            # If client creation succeeds, Bedrock is available
             bedrock_available = True
         except ClientError as e:
             error_code = e.response.get('Error', {}).get('Code', '')
             if error_code == 'AccessDeniedException':
                 bedrock_error = "Missing Bedrock permissions. Please attach the policy from the setup wizard."
-            elif error_code == 'ValidationException':
-                # Sometimes bedrock service isn't available, but bedrock-runtime might be
-                # Try bedrock-runtime client creation as a fallback
-                try:
-                    boto3.client(
-                        'bedrock-runtime',
-                        aws_access_key_id=request.access_key_id,
-                        aws_secret_access_key=request.secret_access_key,
-                        region_name=request.region
-                    )
-                    bedrock_available = True
-                    bedrock_error = None
-                except Exception:
-                    bedrock_error = f"Bedrock not available in {request.region}. Please use us-east-1, us-west-2, or eu-west-1."
+            elif error_code in ['InvalidSignature', 'SignatureDoesNotMatch']:
+                bedrock_error = "Invalid AWS credentials. Please check your AWS CLI configuration."
             else:
-                bedrock_error = f"Bedrock not available in {request.region} or access denied: {error_code}"
+                bedrock_error = f"Bedrock may not be available in {request.region} or permissions issue: {error_code}"
         except Exception as e:
-            bedrock_error = f"Bedrock check failed: {str(e)}"
+            # If it's a ValidationException about unknown region or other issues
+            error_str = str(e)
+            if 'not available' in error_str.lower() or 'invalid region' in error_str.lower():
+                bedrock_error = f"Bedrock not available in {request.region}. Try us-east-1, us-west-2, or eu-west-1."
+            else:
+                bedrock_error = f"Could not verify Bedrock access: {str(e)}"
         
         return {
             "success": True,
@@ -528,7 +653,8 @@ async def test_aws_credentials(request: AWSCredentials):
             "user_arn": user_arn,
             "bedrock_available": bedrock_available,
             "bedrock_error": bedrock_error,
-            "region": request.region
+            "region": request.region,
+            "method": credential_method
         }
         
     except ClientError as e:
@@ -538,25 +664,29 @@ async def test_aws_credentials(request: AWSCredentials):
         if error_code == 'InvalidClientTokenId':
             return {
                 "success": False,
-                "error": "Invalid Access Key ID. Please check your credentials.",
-                "error_code": error_code
+                "error": "Invalid Access Key ID. Please check your credentials." if not use_cli_auth else "AWS credentials found but invalid. Please run 'aws configure' to set up your credentials.",
+                "error_code": error_code,
+                "method": credential_method if use_cli_auth else None
             }
         elif error_code == 'SignatureDoesNotMatch':
             return {
                 "success": False,
-                "error": "Invalid Secret Access Key. Please check your credentials.",
-                "error_code": error_code
+                "error": "Invalid Secret Access Key. Please check your credentials." if not use_cli_auth else "AWS credentials found but invalid. Please run 'aws configure' to set up your credentials.",
+                "error_code": error_code,
+                "method": credential_method if use_cli_auth else None
             }
         else:
             return {
                 "success": False,
                 "error": f"AWS error: {error_message}",
-                "error_code": error_code
+                "error_code": error_code,
+                "method": credential_method if use_cli_auth else None
             }
     except NoCredentialsError:
         return {
             "success": False,
-            "error": "Credentials not provided or invalid format."
+            "error": "No AWS credentials found. Please configure AWS CLI using 'aws configure' or provide credentials manually.",
+            "method": None
         }
     except Exception as e:
         logging.error(f"❌ Unexpected error testing credentials: {e}")

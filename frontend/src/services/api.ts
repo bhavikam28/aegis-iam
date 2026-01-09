@@ -760,9 +760,39 @@ export const explainPolicy = async (
 // AWS CREDENTIALS TESTING
 // ============================================
 
+export async function checkCLICredentials(region: string = 'us-east-1'): Promise<{
+  success: boolean;
+  available?: boolean;
+  account_id?: string;
+  user_arn?: string;
+  bedrock_available?: boolean;
+  bedrock_error?: string;
+  error?: string;
+  method?: string;
+}> {
+  try {
+    const response = await fetch(`${API_URL}/api/aws/check-cli-credentials?region=${region}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Error checking CLI credentials:', error);
+    throw error;
+  }
+}
+
 export async function testAWSCredentials(credentials: {
-  access_key_id: string;
-  secret_access_key: string;
+  access_key_id?: string;
+  secret_access_key?: string;
   region: string;
 }): Promise<{
   success: boolean;
@@ -773,6 +803,7 @@ export async function testAWSCredentials(credentials: {
   error?: string;
   error_code?: string;
   region?: string;
+  method?: string;
 }> {
   try {
     const response = await fetch(`${API_URL}/api/aws/test-credentials`, {

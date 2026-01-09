@@ -48,10 +48,39 @@ test_*.py
 *_test.py
 verify_*.py
 post_*.py
+test/
 
 # Internal docs (keep only README.md)
 *_GUIDE.md
 *_SETUP.md
 *_STEPS.txt
 *_IMPLEMENTATION.md
+*_EXPLANATION.md
+*_SETTINGS.md
+
+# Node modules
+node_modules/
+
+# Frontend build
+frontend/dist/
+frontend/.vite/
+
+# Python cache
+*.pyc
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*.sublime-project
+*.sublime-workspace
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
 
