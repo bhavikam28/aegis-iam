@@ -785,11 +785,11 @@ const LandingPage: React.FC<LandingPageProps> = ({
               </h3>
               <div className="ml-8 text-slate-700 leading-relaxed">
                 <p className="mb-2">
-                  <strong className="text-slate-900">No!</strong> You can try all features instantly with our demo mode using sample data. 
-                  Connect your AWS account only when you're ready to analyze your real infrastructure.
+                  <strong className="text-slate-900">No!</strong> Try our demo mode to see what Aegis IAM looks like. 
+                  Demo mode shows a sample scenario so you can explore the interface—<strong>100% free, no AWS account needed, no charges.</strong>
                 </p>
                 <p className="text-sm text-slate-600">
-                  Demo mode lets you explore Generate Policy, Validate Policy, Audit Account, and CI/CD Integration features with realistic examples.
+                  Demo mode is a static showcase displaying sample results. For full functionality with your own data, run Aegis IAM locally with your AWS credentials.
                 </p>
               </div>
             </div>
@@ -802,13 +802,16 @@ const LandingPage: React.FC<LandingPageProps> = ({
               </h3>
               <div className="ml-8 text-slate-700 leading-relaxed">
                 <p className="mb-2">
-                  <strong className="text-slate-900">Aegis IAM is free to use.</strong> However, when you connect your AWS account, 
-                  AWS charges apply for the services you use (typically ~$0.01-0.10 per policy generation via Bedrock).
+                  <strong className="text-slate-900">Demo mode is completely free—no charges ever!</strong> It uses static sample data and makes no AWS API calls.
+                </p>
+                <p className="mb-2">
+                  When you run locally with your AWS account, <strong>AWS charges apply</strong> for Bedrock usage 
+                  (typically ~$0.01-0.10 per policy generation). These charges appear on <strong>your AWS bill</strong>, not ours.
                 </p>
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-3">
                   <p className="text-sm text-blue-900 font-medium">
-                    💡 <strong>Cost transparency:</strong> You pay only for your own AWS usage. We never charge subscription fees, 
-                    and your AWS costs appear directly on your AWS bill, not ours.
+                    ✅ <strong>Demo mode:</strong> 100% free, no AWS account needed, no charges<br/>
+                    💰 <strong>Local usage:</strong> You pay only for your own AWS Bedrock usage (~$0.01-0.10 per operation)
                   </p>
                 </div>
               </div>

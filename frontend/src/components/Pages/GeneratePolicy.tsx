@@ -946,17 +946,19 @@ To use the full AI-powered chatbot features, please add your AWS credentials and
     <div className="min-h-screen relative overflow-hidden">
       {/* Demo Mode Banner */}
       {demoMode && (
-        <div className="relative z-30 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white py-3 px-4 shadow-lg">
-          <div className="max-w-7xl mx-auto flex items-center justify-center space-x-3">
-            <Sparkles className="w-5 h-5" />
-            <span className="font-bold text-sm sm:text-base">
-              Demo Mode: This is sample data. Add your AWS credentials to use the real service.
-            </span>
+        <div className="relative z-30 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white py-3 px-4 shadow-lg">
+          <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-center gap-3">
+            <div className="flex items-center gap-3">
+              <Sparkles className="w-5 h-5" />
+              <span className="font-bold text-sm sm:text-base text-center">
+                Demo Mode: Static showcase with sample data. No API calls, no costs.
+              </span>
+            </div>
             <button
-              onClick={onOpenCredentialsModal}
-              className="bg-white/20 hover:bg-white/30 px-4 py-1.5 rounded-lg font-semibold text-sm transition-colors"
+              onClick={() => window.open('https://github.com/bhavikam28/aegis-iam#-run-locally-recommended-for-full-functionality', '_blank')}
+              className="bg-white/20 hover:bg-white/30 px-4 py-1.5 rounded-lg font-semibold text-sm transition-colors whitespace-nowrap"
             >
-              Add Credentials
+              Run Locally (Full Access)
             </button>
           </div>
         </div>
@@ -1035,11 +1037,25 @@ To use the full AI-powered chatbot features, please add your AWS credentials and
                     </label>
                     <textarea
                       value={description}
-                      onChange={(e) => setDescription(e.target.value)}
+                      onChange={(e) => {
+                        if (!demoMode) {
+                          setDescription(e.target.value);
+                        }
+                      }}
                       placeholder="Example: Lambda function to read from S3 bucket customer-uploads-prod and write to DynamoDB table transaction-logs..."
-                      className="w-full h-40 px-6 py-5 bg-white/60 backdrop-blur-sm border-2 border-slate-200 rounded-2xl text-slate-900 text-base placeholder-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 focus:outline-none resize-none transition-all duration-300 ease-out font-medium"
+                      className={`w-full h-40 px-6 py-5 bg-white/60 backdrop-blur-sm border-2 border-slate-200 rounded-2xl text-slate-900 text-base placeholder-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 focus:outline-none resize-none transition-all duration-300 ease-out font-medium ${
+                        demoMode ? 'bg-slate-50 cursor-not-allowed opacity-75' : ''
+                      }`}
                       required
+                      disabled={demoMode}
+                      title={demoMode ? 'Demo mode: Shows a single sample scenario. Run locally for full functionality.' : ''}
                     />
+                    {demoMode && (
+                      <p className="text-xs text-slate-500 mt-2 flex items-center gap-2">
+                        <span>📌</span>
+                        <span>Demo shows one sample scenario. Run locally to generate policies for any requirement.</span>
+                      </p>
+                    )}
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-6">
@@ -1053,8 +1069,15 @@ To use the full AI-powered chatbot features, please add your AWS credentials and
                             id="restrictive"
                             type="checkbox"
                             checked={restrictive}
-                            onChange={(e) => setRestrictive(e.target.checked)}
-                            className="w-5 h-5 rounded-md border-2 border-slate-300 bg-white text-blue-600 focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 cursor-pointer transition-all hover:border-blue-400 checked:bg-blue-600 checked:border-blue-600"
+                            onChange={(e) => {
+                              if (!demoMode) {
+                                setRestrictive(e.target.checked);
+                              }
+                            }}
+                            disabled={demoMode}
+                            className={`w-5 h-5 rounded-md border-2 border-slate-300 bg-white text-blue-600 focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 transition-all hover:border-blue-400 checked:bg-blue-600 checked:border-blue-600 ${
+                              demoMode ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
+                            }`}
                           />
                           <label htmlFor="restrictive" className="text-slate-900 text-base font-bold cursor-pointer">
                             Maximum Security
@@ -1068,8 +1091,15 @@ To use the full AI-powered chatbot features, please add your AWS credentials and
                       <label className="block text-slate-900 text-base font-bold mb-3">Compliance Framework</label>
                       <select
                         value={compliance}
-                        onChange={(e) => setCompliance(e.target.value)}
-                        className="w-full px-4 py-3 bg-white/60 backdrop-blur-sm border-2 border-slate-200 rounded-xl text-slate-900 text-base focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 focus:outline-none cursor-pointer transition-all duration-300 font-medium shadow-sm"
+                        onChange={(e) => {
+                          if (!demoMode) {
+                            setCompliance(e.target.value);
+                          }
+                        }}
+                        disabled={demoMode}
+                        className={`w-full px-4 py-3 bg-white/60 backdrop-blur-sm border-2 border-slate-200 rounded-xl text-slate-900 text-base focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 focus:outline-none transition-all duration-300 font-medium shadow-sm ${
+                          demoMode ? 'bg-slate-50 cursor-not-allowed opacity-75' : 'cursor-pointer'
+                        }`}
                       >
                         {complianceFrameworks.map(framework => (
                           <option key={framework.value} value={framework.value}>
