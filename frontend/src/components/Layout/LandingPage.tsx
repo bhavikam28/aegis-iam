@@ -129,13 +129,6 @@ const LandingPage: React.FC<LandingPageProps> = ({
                 </p>
               </div>
             </div>
-            <button
-              onClick={handleGetStarted}
-              className="group relative overflow-hidden bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 hover:from-blue-700 hover:via-purple-700 hover:to-pink-700 text-white px-6 py-3 rounded-xl font-bold text-sm sm:text-base shadow-lg hover:shadow-xl transition-all duration-300 flex items-center space-x-2 transform hover:scale-105"
-            >
-              <span className="relative z-10">Get Started</span>
-              <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 relative z-10 group-hover:translate-x-1 transition-transform" />
-            </button>
           </div>
           </div>
         </div>
