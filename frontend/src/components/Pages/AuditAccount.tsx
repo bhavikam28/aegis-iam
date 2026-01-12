@@ -2657,6 +2657,12 @@ const AuditAccount: React.FC<AuditAccountProps> = ({ awsCredentials: propCredent
             <Lock className="w-4 h-4 inline mr-1" />
             Requires AWS credentials • Scans entire account in 30-60 seconds
           </p>
+          {demoMode && (
+            <p className="text-xs text-slate-500 mt-3 flex items-center justify-center gap-2 animate-fadeIn" style={{ animationDelay: '0.7s' }}>
+              <span>📌</span>
+              <span>Demo shows one sample scenario. Run locally to audit your AWS account.</span>
+            </p>
+          )}
         </div>
         )}
 

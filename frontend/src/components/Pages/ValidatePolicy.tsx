@@ -894,10 +894,24 @@ const ValidatePolicy: React.FC<ValidatePolicyProps> = ({ awsCredentials: propCre
                     <label className="block text-slate-900 text-lg font-bold mb-4">IAM Policy JSON</label>
                     <textarea
                       value={inputValue}
-                      onChange={(e) => setInputValue(e.target.value)}
+                      onChange={(e) => {
+                        if (!demoMode) {
+                          setInputValue(e.target.value);
+                        }
+                      }}
                       placeholder='{\n  "Version": "2012-10-17",\n  "Statement": [{\n    "Effect": "Allow",\n    "Action": "s3:GetObject",\n    "Resource": "arn:aws:s3:::my-bucket/*"\n  }]\n}'
-                      className="w-full h-64 px-6 py-5 bg-white/60 backdrop-blur-sm border-2 border-slate-200 rounded-2xl text-slate-900 placeholder-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 focus:outline-none resize-none font-mono text-sm leading-relaxed transition-all duration-300"
+                      className={`w-full h-64 px-6 py-5 bg-white/60 backdrop-blur-sm border-2 border-slate-200 rounded-2xl text-slate-900 placeholder-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 focus:outline-none resize-none font-mono text-sm leading-relaxed transition-all duration-300 ${
+                        demoMode ? 'bg-slate-50 cursor-not-allowed opacity-75' : ''
+                      }`}
+                      disabled={demoMode}
+                      title={demoMode ? 'Demo mode: Shows a single sample scenario. Run locally for full functionality.' : ''}
                     />
+                    {demoMode && (
+                      <p className="text-xs text-slate-500 mt-2 flex items-center gap-2">
+                        <span>📌</span>
+                        <span>Demo shows one sample scenario. Run locally to validate any policy.</span>
+                      </p>
+                    )}
                   </div>
                 ) : (
                   <div className="mb-8">
@@ -905,10 +919,24 @@ const ValidatePolicy: React.FC<ValidatePolicyProps> = ({ awsCredentials: propCre
                     <input
                       type="text"
                       value={inputValue}
-                      onChange={(e) => setInputValue(e.target.value)}
+                      onChange={(e) => {
+                        if (!demoMode) {
+                          setInputValue(e.target.value);
+                        }
+                      }}
                       placeholder="arn:aws:iam::123456789012:role/MyRole"
-                      className="w-full px-6 py-5 bg-white/60 backdrop-blur-sm border-2 border-slate-200 rounded-2xl text-slate-900 placeholder-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 focus:outline-none font-mono text-base transition-all duration-300 shadow-sm"
+                      className={`w-full px-6 py-5 bg-white/60 backdrop-blur-sm border-2 border-slate-200 rounded-2xl text-slate-900 placeholder-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 focus:outline-none font-mono text-base transition-all duration-300 shadow-sm ${
+                        demoMode ? 'bg-slate-50 cursor-not-allowed opacity-75' : ''
+                      }`}
+                      disabled={demoMode}
+                      title={demoMode ? 'Demo mode: Shows a single sample scenario. Run locally for full functionality.' : ''}
                     />
+                    {demoMode && (
+                      <p className="text-xs text-slate-500 mt-2 flex items-center gap-2">
+                        <span>📌</span>
+                        <span>Demo shows one sample scenario. Run locally to validate any role ARN.</span>
+                      </p>
+                    )}
                   </div>
                 )}
 

@@ -176,19 +176,29 @@ const LandingPage: React.FC<LandingPageProps> = ({
  
             {/* CTA Buttons - Demo Mode is Primary */}
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-8">
-              {/* Primary CTA: Demo Mode */}
+              {/* Primary CTA: Get Started (Real Product) */}
+              <button
+                onClick={handleGetStarted}
+                className="group relative overflow-hidden bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 hover:from-blue-700 hover:via-purple-700 hover:to-pink-700 text-white px-8 sm:px-10 lg:px-12 py-4 sm:py-5 rounded-2xl font-bold text-base sm:text-lg lg:text-xl shadow-xl hover:shadow-2xl transition-all duration-300 flex items-center space-x-3 transform hover:scale-105 touch-manipulation"
+                style={{ minHeight: '44px' }}
+              >
+                <span className="relative z-10">Get Started</span>
+                <ArrowRight className="w-5 h-5 sm:w-6 sm:h-6 relative z-10 group-hover:translate-x-1 transition-transform" />
+                <div className="absolute inset-0 bg-white/10 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700"></div>
+              </button>
+              
+              {/* Secondary CTA: Explore Demo */}
               <button
                 onClick={handleDemoMode}
                 className="group relative overflow-hidden bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 hover:from-blue-700 hover:via-purple-700 hover:to-pink-700 text-white px-8 sm:px-10 lg:px-12 py-4 sm:py-5 rounded-2xl font-bold text-base sm:text-lg lg:text-xl shadow-xl hover:shadow-2xl transition-all duration-300 flex items-center space-x-3 transform hover:scale-105 touch-manipulation"
                 style={{ minHeight: '44px' }}
               >
-                <Sparkles className="w-5 h-5 sm:w-6 sm:h-6 relative z-10" />
                 <span className="relative z-10">Explore Demo</span>
                 <ArrowRight className="w-5 h-5 sm:w-6 sm:h-6 relative z-10 group-hover:translate-x-1 transition-transform" />
                 <div className="absolute inset-0 bg-white/10 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700"></div>
               </button>
               
-              {/* Secondary CTA: Run Locally */}
+              {/* Tertiary CTA: Run Locally */}
               <button
                 onClick={() => setShowLocalSetup(true)}
                 className="group px-8 sm:px-10 py-4 sm:py-5 bg-white/90 backdrop-blur-sm border-2 border-slate-200 rounded-2xl text-slate-700 hover:text-slate-900 font-bold text-base sm:text-lg hover:border-blue-300 hover:shadow-lg transition-all inline-flex items-center space-x-2 hover:scale-105"
