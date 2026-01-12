@@ -167,8 +167,8 @@ const LandingPage: React.FC<LandingPageProps> = ({
               Generate secure policies, validate compliance, and autonomously audit your entire infrastructure—all powered by agentic AI.
             </p>
  
-            {/* CTA Buttons - Demo Mode is Primary */}
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-8">
+            {/* Primary CTA Buttons */}
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-6">
               {/* Primary CTA: Get Started (Real Product) */}
               <button
                 onClick={handleGetStarted}
@@ -190,27 +190,29 @@ const LandingPage: React.FC<LandingPageProps> = ({
                 <ArrowRight className="w-5 h-5 sm:w-6 sm:h-6 relative z-10 group-hover:translate-x-1 transition-transform" />
                 <div className="absolute inset-0 bg-white/10 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700"></div>
               </button>
-              
-              {/* Tertiary CTA: Run Locally */}
+            </div>
+
+            {/* Secondary Links - Smaller, Below Primary CTAs */}
+            <div className="flex flex-wrap items-center justify-center gap-4 mb-8 text-sm">
               <button
                 onClick={() => setShowLocalSetup(true)}
-                className="group px-8 sm:px-10 py-4 sm:py-5 bg-white/90 backdrop-blur-sm border-2 border-slate-200 rounded-2xl text-slate-700 hover:text-slate-900 font-bold text-base sm:text-lg hover:border-blue-300 hover:shadow-lg transition-all inline-flex items-center space-x-2 hover:scale-105"
+                className="group inline-flex items-center space-x-2 text-slate-600 hover:text-slate-900 font-medium transition-colors"
               >
-                <Download className="w-5 h-5 sm:w-6 sm:h-6" />
-                <div className="flex flex-col items-start">
-                  <span>Run Locally (Full Access)</span>
-                  <span className="text-xs font-normal text-slate-500">Secure • Your credentials stay local</span>
-                </div>
+                <Download className="w-4 h-4" />
+                <span>Run Locally</span>
+                <span className="text-xs text-slate-500">• Secure</span>
               </button>
-
+              
+              <span className="text-slate-300">•</span>
+              
               <a
                 href="https://github.com/bhavikam28/aegis-iam"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="group px-8 sm:px-10 py-4 sm:py-5 bg-white/80 backdrop-blur-sm border-2 border-slate-200 rounded-2xl text-slate-700 hover:text-slate-900 font-bold text-base sm:text-lg hover:border-blue-300 hover:shadow-lg transition-all inline-flex items-center space-x-2 hover:scale-105"
+                className="group inline-flex items-center space-x-2 text-slate-600 hover:text-slate-900 font-medium transition-colors"
               >
                 <span>View on GitHub</span>
-                <ChevronRight className="w-5 h-5 sm:w-6 sm:h-6 group-hover:translate-x-1 transition-transform" />
+                <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
               </a>
             </div>
         </div>
