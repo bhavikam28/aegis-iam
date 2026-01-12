@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import LandingPage from './components/Layout/LandingPage';
 import AWSSetupWizard from './components/Modals/AWSSetupWizard';
-import LocalOnlyBanner from './components/Common/LocalOnlyBanner';
 import { AWSCredentials, loadCredentialsFromSession, saveCredentialsToSession, clearCredentialsFromSession } from './utils/awsCredentials';
 
 function App() {
