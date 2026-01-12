@@ -16,18 +16,20 @@ const LocalOnlyBanner: React.FC = () => {
   }
 
   return (
-    <div className="relative z-50 bg-gradient-to-r from-amber-500 via-orange-500 to-red-500 text-white shadow-lg">
+    <div className="relative z-50 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white shadow-lg">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
         <div className="flex items-center justify-between flex-wrap gap-3">
-          {/* Left side - Warning message */}
+          {/* Left side - Info message */}
           <div className="flex items-center gap-3 flex-1 min-w-0">
-            <AlertCircle className="w-5 h-5 flex-shrink-0" />
+            <div className="w-10 h-10 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center flex-shrink-0">
+              <AlertCircle className="w-5 h-5" />
+            </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold">
-                Demo Mode
+              <p className="text-sm font-bold">
+                Demo Mode - Sample Data Only
               </p>
               <p className="text-xs opacity-90">
-                For full functionality and maximum security, run Aegis IAM locally. Your AWS credentials stay on your machine.
+                For full functionality with your AWS account, run locally. Your credentials stay on your machine.
               </p>
             </div>
           </div>
@@ -38,10 +40,10 @@ const LocalOnlyBanner: React.FC = () => {
               href="https://github.com/bhavikam28/aegis-iam#-run-locally-recommended-for-full-functionality"
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 px-4 py-2 bg-white text-orange-600 rounded-lg text-sm font-semibold hover:bg-orange-50 transition-colors shadow-md"
+              className="inline-flex items-center gap-2 px-4 py-2 bg-white text-blue-600 rounded-lg text-sm font-semibold hover:bg-blue-50 transition-colors shadow-md"
             >
               <Download className="w-4 h-4" />
-              <span className="hidden sm:inline">Setup Guide</span>
+              <span className="hidden sm:inline">Local Setup</span>
               <span className="sm:hidden">Setup</span>
             </a>
             <a

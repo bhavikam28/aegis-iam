@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Shield, Zap, Lock, ChevronRight, CheckCircle, Search, BarChart3, Code, Sparkles, ArrowRight, Star, TrendingUp, Users, Globe, Brain, Cpu, Activity, Target, Award, Rocket, Layers, FileCheck, Play, XCircle, AlertTriangle, Database, Eye, Settings, Cloud, Server, Key, Fingerprint, Network, ShieldCheck, Bot, GitBranch } from 'lucide-react';
+import { Shield, Zap, Lock, ChevronRight, CheckCircle, Search, BarChart3, Code, Sparkles, ArrowRight, Star, TrendingUp, Users, Globe, Brain, Cpu, Activity, Target, Award, Rocket, Layers, FileCheck, Play, XCircle, AlertTriangle, Database, Eye, Settings, Cloud, Server, Key, Fingerprint, Network, ShieldCheck, Bot, GitBranch, Download } from 'lucide-react';
 import Dashboard from './Dashboard';
 import PremiumLogo from '../UI/PremiumLogo';
 import { AWSCredentials } from '../../utils/awsCredentials';
@@ -181,20 +181,20 @@ const LandingPage: React.FC<LandingPageProps> = ({
                 style={{ minHeight: '44px' }}
               >
                 <Sparkles className="w-5 h-5 sm:w-6 sm:h-6 relative z-10" />
-                <span className="relative z-10">Try It Now</span>
+                <span className="relative z-10">Explore Demo</span>
                 <ArrowRight className="w-5 h-5 sm:w-6 sm:h-6 relative z-10 group-hover:translate-x-1 transition-transform" />
                 <div className="absolute inset-0 bg-white/10 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700"></div>
               </button>
               
-              {/* Secondary CTA: Connect AWS */}
+              {/* Secondary CTA: Run Locally */}
               <button
-                onClick={handleGetStarted}
+                onClick={() => window.open('https://github.com/bhavikam28/aegis-iam#-run-locally-recommended-for-full-functionality', '_blank')}
                 className="group px-8 sm:px-10 py-4 sm:py-5 bg-white/90 backdrop-blur-sm border-2 border-slate-200 rounded-2xl text-slate-700 hover:text-slate-900 font-bold text-base sm:text-lg hover:border-blue-300 hover:shadow-lg transition-all inline-flex items-center space-x-2 hover:scale-105"
               >
-                <Key className="w-5 h-5 sm:w-6 sm:h-6" />
+                <Download className="w-5 h-5 sm:w-6 sm:h-6" />
                 <div className="flex flex-col items-start">
-                  <span>Connect Your AWS</span>
-                  <span className="text-xs font-normal text-slate-500">5-min setup • You control costs</span>
+                  <span>Run Locally (Full Access)</span>
+                  <span className="text-xs font-normal text-slate-500">Secure • Your credentials stay local</span>
                 </div>
               </button>
 
@@ -903,7 +903,7 @@ const LandingPage: React.FC<LandingPageProps> = ({
                 onClick={handleGetStarted}
                 className="group relative overflow-hidden bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 hover:from-blue-700 hover:via-purple-700 hover:to-pink-700 text-white px-10 py-5 rounded-2xl font-bold text-lg sm:text-xl shadow-xl hover:shadow-2xl transition-all inline-flex items-center space-x-3 transform hover:scale-105"
               >
-                <span className="relative z-10">Try It Now</span>
+                <span className="relative z-10">Explore Demo</span>
                 <ArrowRight className="w-6 h-6 relative z-10 group-hover:translate-x-1 transition-transform" />
                 <div className="absolute inset-0 bg-white/10 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700"></div>
               </button>
