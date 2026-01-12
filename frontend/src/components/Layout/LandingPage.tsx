@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Shield, Zap, Lock, ChevronRight, CheckCircle, Search, BarChart3, Code, Sparkles, ArrowRight, Star, TrendingUp, Users, Globe, Brain, Cpu, Activity, Target, Award, Rocket, Layers, FileCheck, Play, XCircle, AlertTriangle, Database, Eye, Settings, Cloud, Server, Key, Fingerprint, Network, ShieldCheck, Bot, GitBranch, Download } from 'lucide-react';
 import Dashboard from './Dashboard';
 import PremiumLogo from '../UI/PremiumLogo';
+import LocalSetupModal from '../Modals/LocalSetupModal';
 import { AWSCredentials } from '../../utils/awsCredentials';
 
 interface LandingPageProps {
@@ -19,6 +20,7 @@ const LandingPage: React.FC<LandingPageProps> = ({
 }) => {
   const [showDashboard, setShowDashboard] = useState(false);
   const [demoMode, setDemoMode] = useState(false);
+  const [showLocalSetup, setShowLocalSetup] = useState(false);
   
   const handleGetStarted = (e?: React.MouseEvent) => {
     if (e) {
@@ -188,7 +190,7 @@ const LandingPage: React.FC<LandingPageProps> = ({
               
               {/* Secondary CTA: Run Locally */}
               <button
-                onClick={() => window.open('https://github.com/bhavikam28/aegis-iam#-run-locally-recommended-for-full-functionality', '_blank')}
+                onClick={() => setShowLocalSetup(true)}
                 className="group px-8 sm:px-10 py-4 sm:py-5 bg-white/90 backdrop-blur-sm border-2 border-slate-200 rounded-2xl text-slate-700 hover:text-slate-900 font-bold text-base sm:text-lg hover:border-blue-300 hover:shadow-lg transition-all inline-flex items-center space-x-2 hover:scale-105"
               >
                 <Download className="w-5 h-5 sm:w-6 sm:h-6" />
@@ -384,7 +386,7 @@ const LandingPage: React.FC<LandingPageProps> = ({
                 </div>
                 <h4 className="text-2xl font-bold text-slate-900 mb-4">Privacy First</h4>
                 <p className="text-lg text-slate-700 font-medium leading-relaxed">
-                  <span className="font-bold text-blue-600">No storage.</span> Your credentials live only in memory during your session.
+                  <span className="font-bold text-blue-600">Maximum security.</span> When running locally, your AWS CLI credentials stay on your machine—never transmitted to remote servers.
                 </p>
               </div>
             </div>
@@ -816,17 +818,17 @@ const LandingPage: React.FC<LandingPageProps> = ({
             <div className="bg-white/90 backdrop-blur-xl border-2 border-slate-200/50 rounded-2xl p-6 sm:p-8 shadow-xl">
               <h3 className="text-xl font-bold text-slate-900 mb-3 flex items-start gap-3">
                 <span className="text-blue-600 font-extrabold">Q:</span>
-                <span>Is it safe to enter my AWS credentials?</span>
+                <span>Is it safe to use my AWS credentials?</span>
               </h3>
               <div className="ml-8 text-slate-700 leading-relaxed">
                 <p className="mb-3">
-                  <strong className="text-slate-900">Yes, your credentials are secure.</strong> Here's how we protect them:
+                  <strong className="text-slate-900">Yes! Maximum security when running locally.</strong> Here's how we protect you:
                 </p>
                 <ul className="space-y-2 text-sm text-slate-600 list-disc list-inside ml-2">
-                  <li><strong className="text-slate-900">Never stored:</strong> Credentials exist only in your browser's memory</li>
-                  <li><strong className="text-slate-900">Never logged:</strong> We don't log or save your access keys</li>
-                  <li><strong className="text-slate-900">Least privilege:</strong> We only request minimal permissions needed (Bedrock, IAM read, CloudTrail)</li>
-                  <li><strong className="text-slate-900">Encrypted in transit:</strong> All communication uses HTTPS</li>
+                  <li><strong className="text-slate-900">AWS CLI authentication:</strong> Configure once with <code className="bg-slate-100 px-1 py-0.5 rounded text-xs font-mono">aws configure</code> on your machine</li>
+                  <li><strong className="text-slate-900">Credentials stay local:</strong> Your AWS credentials never leave your computer</li>
+                  <li><strong className="text-slate-900">Never transmitted:</strong> No credentials sent to remote servers</li>
+                  <li><strong className="text-slate-900">Least privilege:</strong> We only request minimal permissions (Bedrock, IAM read, CloudTrail)</li>
                   <li><strong className="text-slate-900">Open source:</strong> <a href="https://github.com/bhavikam28/aegis-iam" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Audit our code</a> on GitHub</li>
                 </ul>
               </div>
@@ -861,16 +863,17 @@ const LandingPage: React.FC<LandingPageProps> = ({
               </h3>
               <div className="ml-8 text-slate-700 leading-relaxed">
                 <p className="mb-2">
-                  <strong className="text-slate-900">About 5 minutes.</strong> Our step-by-step setup wizard guides you through:
+                  <strong className="text-slate-900">About 5 minutes.</strong> Quick local setup:
                 </p>
                 <ol className="space-y-1.5 text-sm text-slate-600 list-decimal list-inside ml-2">
-                  <li>Creating an IAM user in AWS Console</li>
-                  <li>Attaching the least-privilege policy (we provide the exact JSON)</li>
-                  <li>Creating access keys</li>
-                  <li>Testing your connection</li>
+                  <li>Clone the repository from GitHub</li>
+                  <li>Configure AWS CLI: <code className="bg-slate-100 px-1 py-0.5 rounded text-xs font-mono">aws configure</code></li>
+                  <li>Attach the IAM policy (we provide the exact JSON)</li>
+                  <li>Start backend and frontend locally</li>
+                  <li>Your credentials stay on your machine!</li>
                 </ol>
                 <p className="text-sm text-slate-600 mt-3">
-                  Or try demo mode first—no setup required!
+                  <strong>Or try demo mode first</strong>—no setup required! Just click "Explore Demo" above.
                 </p>
               </div>
             </div>
@@ -942,6 +945,12 @@ const LandingPage: React.FC<LandingPageProps> = ({
           </div>
         </div>
       </footer>
+
+      {/* Local Setup Modal */}
+      <LocalSetupModal
+        isOpen={showLocalSetup}
+        onClose={() => setShowLocalSetup(false)}
+      />
     </div>
   );
 };
