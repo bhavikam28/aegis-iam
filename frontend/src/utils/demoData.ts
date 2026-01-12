@@ -143,41 +143,13 @@ Purpose: Enables Lambda to write application logs to CloudWatch Logs for monitor
 Why It Matters: Logging permissions are scoped to this specific Lambda function's log group (/aws/lambda/my-function), preventing logs from being written to arbitrary log groups. This maintains log isolation and security.
 Security: Regional scoping (us-east-1) and specific log group ARN prevent accidental logging to other regions or log groups, ensuring logs stay organized and secure.`;
 
-  const trustExplanation = `This policy is a trust relationship that defines who is allowed to assume this role. In this demo, it allows AWS Lambda to temporarily act with the permissions defined in the access policy above.
+  const trustExplanation = `## Trust Policy Explanation
 
-Think of it like giving a specific team a key to a secure room: the key (this role) only works for that team (Lambda in your account).
+**Trusted Entity:** lambda.amazonaws.com
 
-Who Can Use It
+**What It Means:** Only the AWS Lambda service can assume this role to execute functions. This prevents other AWS services or accounts from using these permissions.
 
-Only the Lambda service (lambda.amazonaws.com) can assume this role. A source account condition restricts this further to your AWS account (123456789012). Human IAM users or other AWS services (like EC2, ECS, EKS) cannot assume this role through this trust policy.
-
-This means:
-- Lambda functions in your account can use this role.
-- Lambda functions in other AWS accounts cannot use it, even if they know the role ARN.
-
-Security Implications
-
-This is a standard, secure setup for Lambda execution roles:
-
-- Restricts access to only the Lambda service.
-- Prevents cross-account abuse with the aws:SourceAccount condition.
-- Follows least privilege at the identity layer by tightly controlling who can assume the role.
-
-From a security perspective, the main risk is:
-- Any Lambda function in your account that is allowed to assume this role will get the S3 and CloudWatch permissions defined in the permissions policy.
-
-To keep this safe, you should:
-- Attach the role only to the specific Lambda functions that truly need this access.
-
-Resources That Can Be Accessed
-
-The trust policy itself does not list resources. Instead, it simply says: "Lambda from account 123456789012 is allowed to assume this role."
-
-The actual resources this Lambda can touch are controlled by the permissions policy attached to the role (the S3 bucket and CloudWatch Logs described above).
-
-In simple terms:
-- The trust policy decides who can use the role.
-- The permissions policy decides what they can do once they have it.`;
+**Security:** Prevents other services or accounts from using these permissions. The role can only be assumed by Lambda functions in your AWS account.`;
 
   const securityScore = request.restrictive ? 95 : 85;
 
