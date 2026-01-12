@@ -67,9 +67,6 @@ function App() {
 
   return (
     <div className="App">
-      {/* Show banner on production (Vercel) to guide users to local installation */}
-      <LocalOnlyBanner />
-      
       <LandingPage 
         awsCredentials={awsCredentials}
         onCredentialsChange={setAwsCredentials}

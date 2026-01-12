@@ -402,17 +402,19 @@ const AuditAccount: React.FC<AuditAccountProps> = ({ awsCredentials: propCredent
     <div className="min-h-screen relative overflow-hidden">
       {/* Demo Mode Banner */}
       {demoMode && (
-        <div className="relative z-30 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white py-3 px-4 shadow-lg">
-          <div className="max-w-7xl mx-auto flex items-center justify-center space-x-3">
-            <Sparkles className="w-5 h-5" />
-            <span className="font-bold text-sm sm:text-base">
-              Demo Mode: This is sample data. Add your AWS credentials to use the real service.
-            </span>
+        <div className="relative z-30 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white py-3 px-4 shadow-lg">
+          <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-center gap-3">
+            <div className="flex items-center gap-3">
+              <Sparkles className="w-5 h-5" />
+              <span className="font-bold text-sm sm:text-base text-center">
+                Demo Mode: Static showcase with sample data. No API calls, no costs.
+              </span>
+            </div>
             <button
-              onClick={onOpenCredentialsModal}
-              className="bg-white/20 hover:bg-white/30 px-4 py-1.5 rounded-lg font-semibold text-sm transition-colors"
+              onClick={() => window.open('https://github.com/bhavikam28/aegis-iam#-run-locally-recommended-for-full-functionality', '_blank')}
+              className="bg-white/20 hover:bg-white/30 px-4 py-1.5 rounded-lg font-semibold text-sm transition-colors whitespace-nowrap"
             >
-              Add Credentials
+              Run Locally (Full Access)
             </button>
           </div>
         </div>
