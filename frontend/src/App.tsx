@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import LandingPage from './components/Layout/LandingPage';
 import AWSSetupWizard from './components/Modals/AWSSetupWizard';
+import LocalOnlyBanner from './components/Common/LocalOnlyBanner';
 import { AWSCredentials, loadCredentialsFromSession, saveCredentialsToSession, clearCredentialsFromSession } from './utils/awsCredentials';
 
 function App() {
@@ -66,6 +67,9 @@ function App() {
 
   return (
     <div className="App">
+      {/* Show banner on production (Vercel) to guide users to local installation */}
+      <LocalOnlyBanner />
+      
       <LandingPage 
         awsCredentials={awsCredentials}
         onCredentialsChange={setAwsCredentials}

@@ -21,38 +21,56 @@ This software is provided "AS IS" without any warranty. The authors are not resp
 
 ## 🚀 Quick Start
 
-### Option 1: Use the Live Demo (Recommended)
+### 🏠 Run Locally (Recommended for Full Functionality)
 
-1. Visit **[https://aegis-iam.vercel.app](https://aegis-iam.vercel.app)**
-2. Configure AWS CLI credentials (see [AWS Setup](#aws-credentials-setup) below)
-3. Start generating, validating, or auditing IAM policies
+**For complete access to all features with maximum security, run Aegis IAM on your local machine. Your AWS credentials never leave your computer.**
 
-### Option 2: Run Locally
+📖 **[Complete Local Setup Guide →](LOCAL_SETUP.md)**
 
-**Prerequisites:**
-- Node.js 18+ and npm
-- Python 3.11+
-- AWS Account with Bedrock access
-- AWS CLI configured (for authentication)
+**Quick setup (5 minutes):**
 
-**Backend Setup:**
-```bash
-cd agent
-python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
-pip install -r requirements.txt
-uvicorn main:app --reload --port 8000
-```
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/bhavikam28/aegis-iam.git
+   cd aegis-iam
+   ```
 
-**Frontend Setup:**
-```bash
-cd frontend
-npm install
-echo "VITE_API_URL=http://localhost:8000" > .env
-npm run dev
-```
+2. **Configure AWS CLI:**
+   ```bash
+   aws configure
+   # Enter your AWS Access Key ID, Secret Key, and region
+   ```
 
-Access the application at [http://localhost:5173](http://localhost:5173)
+3. **Start backend:**
+   ```bash
+   cd agent
+   python -m venv venv
+   source venv/bin/activate  # Windows: venv\Scripts\activate
+   pip install -r requirements.txt
+   uvicorn main:app --reload --port 8000
+   ```
+
+4. **Start frontend (new terminal):**
+   ```bash
+   cd frontend
+   npm install
+   echo "VITE_API_URL=http://localhost:8000" > .env
+   npm run dev
+   ```
+
+5. **Access:** [http://localhost:5173](http://localhost:5173)
+
+✅ **All features available**  
+✅ **AWS credentials stay on your machine**  
+✅ **Maximum security**  
+
+---
+
+### 🌐 Online Demo (Showcase Only)
+
+Visit **[https://aegis-iam.vercel.app](https://aegis-iam.vercel.app)** to explore the interface and see sample outputs.
+
+⚠️ **Note:** The hosted version is for demonstration purposes. For full functionality, please run locally.
 
 ---
 
@@ -113,9 +131,9 @@ Access the application at [http://localhost:5173](http://localhost:5173)
 
 ## 🔐 AWS Credentials Setup
 
-### Recommended: AWS CLI Authentication
+### For Local Installation (Secure Method)
 
-Aegis IAM uses **AWS CLI-based authentication** for security. This follows AWS best practices and avoids storing credentials in the application.
+Aegis IAM uses **AWS CLI-based authentication** when running locally. This is the most secure method - your credentials stay on your machine.
 
 **Setup Steps:**
 
@@ -131,20 +149,18 @@ Aegis IAM uses **AWS CLI-based authentication** for security. This follows AWS b
    pip install awscli
    ```
 
-2. **Configure AWS CLI**:
+2. **Configure AWS CLI** (one-time setup):
    ```bash
    aws configure
    ```
    
    Enter your:
-   - AWS Access Key ID
+   - AWS Access Key ID (from IAM Console)
    - AWS Secret Access Key
    - Default region (e.g., `us-east-1`)
    - Default output format (e.g., `json`)
 
-3. **Required IAM Permissions**:
-   
-   Attach the following policy to your IAM user:
+3. **Required IAM Permissions** - Attach this policy to your IAM user:
    ```json
    {
      "Version": "2012-10-17",
@@ -167,17 +183,27 @@ Aegis IAM uses **AWS CLI-based authentication** for security. This follows AWS b
    }
    ```
 
-4. **Verify Setup**:
-   - Open Aegis IAM
-   - Click "Add AWS" or "Configure AWS"
-   - The wizard will automatically detect your CLI credentials
-   - Test the connection
+4. **Enable Amazon Bedrock**:
+   - Go to [AWS Bedrock Console](https://console.aws.amazon.com/bedrock/)
+   - Select Model access
+   - Enable **Claude 3.7 Sonnet**
+   - Request access (usually instant)
+
+5. **Verify Setup**:
+   ```bash
+   aws sts get-caller-identity  # Should show your account info
+   ```
+
+6. **Start using Aegis IAM locally!**
+
+📖 **[Detailed Setup Guide →](LOCAL_SETUP.md)**
 
 **Security Best Practices:**
-- Create a dedicated IAM user with minimum required permissions
-- Use IAM roles for EC2 instances (if running on AWS)
-- Never commit AWS credentials to version control
-- Rotate credentials regularly
+- ✅ Run locally (credentials never leave your machine)
+- ✅ Create a dedicated IAM user with minimum required permissions
+- ✅ Never commit AWS credentials to version control
+- ✅ Rotate credentials regularly
+- ✅ Enable MFA on your AWS account
 
 ---
 
