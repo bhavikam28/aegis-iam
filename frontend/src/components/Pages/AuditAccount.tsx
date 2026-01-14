@@ -2525,298 +2525,259 @@ const AuditAccount: React.FC<AuditAccountProps> = ({ awsCredentials: propCredent
                 {remediationStep === 'complete' && remediationResults && (
                   <div>
                     {remediationResults.remediated > 0 ? (
-                      <div className="bg-gradient-to-r from-emerald-50 via-green-50 to-teal-50 border-2 border-emerald-300 rounded-xl p-6 mb-6 shadow-lg">
-                        <div className="flex items-center space-x-3 mb-4">
-                          <div className="w-12 h-12 bg-gradient-to-br from-emerald-500 to-green-600 rounded-full flex items-center justify-center shadow-md">
-                            <CheckCircle className="w-7 h-7 text-white" />
-                          </div>
-                          <div>
-                            <h4 className="text-emerald-900 font-bold text-xl">Remediation Complete!</h4>
-                            <p className="text-emerald-800 text-base font-medium">
-                              Successfully fixed {remediationResults.remediated} out of {selectedFindings.size} selected issues.
-                            </p>
+                      <div className="space-y-6">
+                        {/* Summary Card - Clean and Professional */}
+                        <div className="bg-white border border-emerald-200 rounded-lg p-5 shadow-sm">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center">
+                                <CheckCircle className="w-6 h-6 text-emerald-600" />
+                              </div>
+                              <div>
+                                <h4 className="text-slate-900 font-semibold text-lg">Remediation Complete</h4>
+                                <p className="text-slate-600 text-sm">
+                                  {remediationResults.remediated} of {remediationResults.total_findings} issue{remediationResults.total_findings !== 1 ? 's' : ''} fixed successfully
+                                </p>
+                              </div>
+                            </div>
+                            {remediationResults.failed > 0 && (
+                              <div className="px-3 py-1.5 bg-amber-100 text-amber-700 text-sm font-medium rounded">
+                                {remediationResults.failed} failed
+                              </div>
+                            )}
                           </div>
                         </div>
-                        
-                        {/* Show detailed results for successful fixes */}
+
+                        {/* Results - Compact Card Design */}
                         {remediationResults.results && remediationResults.results.filter((r: any) => r.success).length > 0 && (
-                          <div className="mt-4 space-y-4">
-                            {remediationResults.results.filter((r: any) => r.success).map((result: any, idx: number) => (
-                              <div key={idx} className="bg-white border-2 border-emerald-200 rounded-xl p-6 shadow-lg">
-                                <div className="flex items-start gap-3 mb-4">
-                                  <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-green-600 rounded-full flex items-center justify-center text-white font-bold flex-shrink-0 shadow-md">
-                                    {idx + 1}
-                                  </div>
-                                  <div className="flex-1">
-                                    <h5 className="text-emerald-900 font-bold text-lg mb-1">{result.title}</h5>
-                                    <p className="text-emerald-700 text-sm font-semibold">Remediation Status: Fixed ✓</p>
-                                  </div>
-                                </div>
-                                
-                                {/* Display structured success_details if available (for multiple roles) */}
-                                {result.success_details && result.success_details.length > 0 ? (
-                                  <div className="space-y-4">
-                                    {/* Summary header */}
-                                    <div className="bg-gradient-to-r from-emerald-50 via-green-50 to-teal-50 border-2 border-emerald-300 rounded-lg p-4">
-                                      <p className="text-emerald-900 font-bold text-base">
-                                        ✅ Successfully remediated {result.success_details.length} role{result.success_details.length > 1 ? 's' : ''}!
-                                      </p>
-                                    </div>
-                                    
-                                    {/* Per-role details */}
-                                    {result.success_details.map((detail: any, roleIdx: number) => (
-                                      <div key={roleIdx} className="bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 border-2 border-indigo-200 rounded-xl p-5 shadow-md">
-                                        {/* Role Header */}
-                                        <div className="flex items-center gap-3 mb-4 pb-3 border-b-2 border-indigo-200">
-                                          <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold text-lg shadow-md">
-                                            {roleIdx + 1}
-                                          </div>
-                                          <div className="flex-1">
-                                            <p className="text-indigo-900 font-bold text-lg font-mono">{detail.role}</p>
-                                            <p className="text-indigo-600 text-xs font-semibold">Successfully Remediated ✓</p>
-                                          </div>
-                                          <a
-                                            href={`https://console.aws.amazon.com/iam/home#/roles/${detail.role}`}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5"
-                                          >
-                                            <ExternalLink className="w-3.5 h-3.5" />
-                                            View in Console
-                                          </a>
+                          <div className="space-y-3">
+                            {remediationResults.results.filter((r: any) => r.success).map((result: any, idx: number) => {
+                              const hasMultipleRoles = result.success_details && result.success_details.length > 1;
+                              const rolesCount = result.success_details?.length || 1;
+                              
+                              return (
+                                <div key={idx} className="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
+                                  {/* Finding Header */}
+                                  <div className="bg-slate-50 border-b border-slate-200 px-5 py-3.5">
+                                    <div className="flex items-center justify-between">
+                                      <div className="flex items-center gap-3">
+                                        <div className="w-7 h-7 bg-slate-200 rounded-full flex items-center justify-center text-slate-700 font-medium text-xs">
+                                          {idx + 1}
                                         </div>
+                                        <div>
+                                          <h5 className="text-slate-900 font-semibold text-base">{result.title}</h5>
+                                          <p className="text-slate-500 text-xs mt-0.5">
+                                            {hasMultipleRoles ? `${rolesCount} roles` : '1 role'}
+                                          </p>
+                                        </div>
+                                      </div>
+                                      <span className="px-2.5 py-1 bg-emerald-100 text-emerald-700 text-xs font-medium rounded">Fixed</span>
+                                    </div>
+                                  </div>
+
+                                  {/* Roles List - Compact, No Repetition */}
+                                  {result.success_details && result.success_details.length > 0 ? (
+                                    <div className="divide-y divide-slate-100">
+                                      {result.success_details.map((detail: any, roleIdx: number) => {
+                                        // Extract actual removed permissions (not "already removed")
+                                        const actualActions = detail.actions_taken?.filter((a: string) => 
+                                          a.includes('Removed unused permission:') && !a.includes('already removed')
+                                        ) || [];
+                                        const alreadyRemovedCount = detail.actions_taken?.filter((a: string) => 
+                                          a.includes('already removed')
+                                        ).length || 0;
                                         
-                                        {/* Actions Taken */}
-                                        {detail.actions_taken && detail.actions_taken.length > 0 && (
-                                          <div className="mb-4">
-                                            <p className="text-indigo-900 font-bold text-sm mb-2 flex items-center gap-2">
-                                              <CheckCircle className="w-4 h-4 text-emerald-600" />
-                                              Actions Taken ({detail.actions_taken.length})
-                                            </p>
-                                            <div className="bg-white rounded-lg p-3 border border-indigo-200 space-y-1.5">
-                                              {detail.actions_taken.map((action: string, actionIdx: number) => (
-                                                <div key={actionIdx} className="flex items-start gap-2 text-sm text-slate-800">
-                                                  <span className="text-emerald-600 font-bold mt-0.5">•</span>
-                                                  <span className="flex-1">{action}</span>
+                                        // Extract permission names
+                                        const removedPerms = actualActions.map((a: string) => {
+                                          const match = a.match(/Removed unused permission: (\S+)/);
+                                          return match ? match[1] : null;
+                                        }).filter(Boolean);
+                                        
+                                        return (
+                                          <div key={roleIdx} className="px-5 py-3.5 hover:bg-slate-50 transition-colors">
+                                            <div className="flex items-start justify-between gap-4">
+                                              <div className="flex-1 min-w-0">
+                                                <div className="flex items-center gap-2 mb-1.5">
+                                                  <span className="font-mono text-sm font-semibold text-slate-900">{detail.role}</span>
+                                                  <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 text-xs font-medium rounded">Remediated</span>
                                                 </div>
-                                              ))}
+                                                
+                                                {/* Actions Summary - Concise */}
+                                                {(removedPerms.length > 0 || alreadyRemovedCount > 0) && (
+                                                  <div className="mt-1.5 text-xs text-slate-600">
+                                                    {removedPerms.length > 0 && (
+                                                      <div>
+                                                        <span className="font-medium text-slate-700">Removed:</span> {removedPerms.join(', ')}
+                                                      </div>
+                                                    )}
+                                                    {alreadyRemovedCount > 0 && (
+                                                      <div className="text-slate-500 italic mt-0.5">
+                                                        {alreadyRemovedCount} permission{alreadyRemovedCount > 1 ? 's' : ''} previously remediated
+                                                      </div>
+                                                    )}
+                                                  </div>
+                                                )}
+                                              </div>
+                                              
+                                              <a
+                                                href={`https://console.aws.amazon.com/iam/home#/roles/${detail.role}`}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium rounded transition-colors flex items-center gap-1.5 flex-shrink-0"
+                                              >
+                                                <ExternalLink className="w-3.5 h-3.5" />
+                                                Console
+                                              </a>
                                             </div>
                                           </div>
-                                        )}
-                                        
-                                        {/* Detailed Message */}
-                                        {detail.message && (
-                                          <div className="bg-white rounded-lg p-4 border border-indigo-200">
-                                            <p className="text-indigo-900 font-bold text-sm mb-2">Remediation Details:</p>
-                                            <div 
-                                              className="text-sm text-slate-800 leading-relaxed"
-                                              dangerouslySetInnerHTML={{ 
-                                                __html: detail.message
-                                                  .replace(/\*\*(.*?)\*\*/g, '<strong class="text-purple-800 font-semibold">$1</strong>')
-                                                  .replace(/• /g, '<span class="text-indigo-600 font-bold">• </span>')
-                                                  .replace(/✅ /g, '<span class="text-emerald-600">✅ </span>')
-                                                  .replace(/📍 /g, '<span class="text-blue-600">📍 </span>')
-                                                  .replace(/📝 /g, '<span class="text-purple-600">📝 </span>')
-                                                  .replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" class="text-blue-600 hover:text-blue-800 underline font-medium">$1</a>')
-                                                  .replace(/\n/g, '<br />')
-                                              }}
-                                            />
-                                          </div>
-                                        )}
-                                      </div>
-                                    ))}
-                                    
-                                    {/* Verification Steps */}
-                                    <div className="bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 border-2 border-blue-300 rounded-xl p-5 shadow-md">
-                                      <p className="text-blue-900 font-bold text-base mb-3 flex items-center gap-2">
-                                        <Eye className="w-5 h-5 text-blue-600" />
-                                        Verification Steps
-                                      </p>
-                                      <ol className="space-y-2.5 text-blue-900 text-sm font-medium">
-                                        <li className="flex items-start gap-3">
-                                          <span className="font-bold min-w-[24px] text-blue-600 bg-blue-200 rounded-full w-6 h-6 flex items-center justify-center">1</span>
-                                          <span>Open AWS Console → IAM → Roles</span>
-                                        </li>
-                                        <li className="flex items-start gap-3">
-                                          <span className="font-bold min-w-[24px] text-blue-600 bg-blue-200 rounded-full w-6 h-6 flex items-center justify-center">2</span>
-                                          <span>Select each remediated role from the list above</span>
-                                        </li>
-                                        <li className="flex items-start gap-3">
-                                          <span className="font-bold min-w-[24px] text-blue-600 bg-blue-200 rounded-full w-6 h-6 flex items-center justify-center">3</span>
-                                          <span>Go to 'Permissions' tab to review inline policies</span>
-                                        </li>
-                                        <li className="flex items-start gap-3">
-                                          <span className="font-bold min-w-[24px] text-blue-600 bg-blue-200 rounded-full w-6 h-6 flex items-center justify-center">4</span>
-                                          <span>Go to 'Access Advisor' tab to verify permission usage</span>
-                                        </li>
-                                        <li className="flex items-start gap-3">
-                                          <span className="font-bold min-w-[24px] text-blue-600 bg-blue-200 rounded-full w-6 h-6 flex items-center justify-center">5</span>
-                                          <span>Monitor CloudWatch Logs for any AccessDenied errors</span>
-                                        </li>
-                                      </ol>
+                                        );
+                                      })}
                                     </div>
-                                    
-                                    {/* Fallback: Show message if no success_details structure */}
-                                    {result.message && (
-                                      <div className="mt-4 text-sm text-slate-800 leading-relaxed bg-slate-50 p-4 rounded-lg border border-slate-200">
-                                        <p className="text-slate-600 font-semibold mb-2">Additional Information:</p>
-                                        <div 
-                                          dangerouslySetInnerHTML={{ 
-                                            __html: result.message
-                                              .replace(/\*\*(.*?)\*\*/g, '<strong class="text-purple-800">$1</strong>')
-                                              .replace(/• /g, '<span class="text-indigo-600">• </span>')
-                                              .replace(/✅ /g, '<span class="text-emerald-600">✅ </span>')
-                                              .replace(/📍 /g, '<span class="text-blue-600">📍 </span>')
-                                              .replace(/📝 /g, '<span class="text-purple-600">📝 </span>')
-                                              .replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" class="text-blue-600 hover:text-blue-800 underline font-medium">$1</a>')
-                                              .replace(/\n/g, '<br />')
-                                          }}
-                                        />
-                                      </div>
-                                    )}
-                                  </div>
-                                ) : (
-                                  /* Single role or no success_details - show message */
-                                  <div 
-                                    className="mt-3 text-sm text-slate-800 leading-relaxed bg-slate-50 p-4 rounded-lg border border-slate-200"
-                                    dangerouslySetInnerHTML={{ 
-                                      __html: result.message
-                                        .replace(/\*\*(.*?)\*\*/g, '<strong class="text-purple-800">$1</strong>')
-                                        .replace(/• /g, '<span class="text-indigo-600">• </span>')
-                                        .replace(/✅ /g, '<span class="text-emerald-600">✅ </span>')
-                                        .replace(/📍 /g, '<span class="text-blue-600">📍 </span>')
-                                        .replace(/📝 /g, '<span class="text-purple-600">📝 </span>')
-                                        .replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" class="text-blue-600 hover:text-blue-800 underline font-medium">$1</a>')
-                                        .replace(/\n/g, '<br />')
-                                    }}
-                                  />
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                        
-                        {remediationResults.failed > 0 && (
-                          <div className="bg-amber-50 border-2 border-amber-300 rounded-lg p-4 mt-4">
-                            <p className="text-amber-900 text-sm font-semibold">
-                              ⚠️ {remediationResults.failed} fixes failed. Review errors above for details.
-                            </p>
+                                  ) : (
+                                    <div className="px-5 py-4 text-sm text-slate-600">
+                                      {result.message?.split('\n')[0] || 'Remediation completed successfully'}
+                                    </div>
+                                  )}
+
+                                  {/* Verification Steps - Collapsible, Show Only Once */}
+                                  {idx === 0 && (
+                                    <div className="bg-blue-50 border-t border-blue-100 px-5 py-3">
+                                      <details className="group">
+                                        <summary className="text-xs font-semibold text-blue-900 cursor-pointer list-none flex items-center gap-2 hover:text-blue-700">
+                                          <ChevronRight className="w-3.5 h-3.5 transition-transform group-open:rotate-90" />
+                                          Verification Steps
+                                        </summary>
+                                        <ol className="mt-3 space-y-2 text-xs text-blue-800 ml-5">
+                                          <li className="flex items-start gap-2">
+                                            <span className="font-semibold">1.</span>
+                                            <span>Open AWS Console → IAM → Roles</span>
+                                          </li>
+                                          <li className="flex items-start gap-2">
+                                            <span className="font-semibold">2.</span>
+                                            <span>Select each remediated role and review Permissions tab</span>
+                                          </li>
+                                          <li className="flex items-start gap-2">
+                                            <span className="font-semibold">3.</span>
+                                            <span>Check Access Advisor tab for permission usage</span>
+                                          </li>
+                                          <li className="flex items-start gap-2">
+                                            <span className="font-semibold">4.</span>
+                                            <span>Monitor CloudWatch Logs for AccessDenied errors</span>
+                                          </li>
+                                        </ol>
+                                      </details>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
                           </div>
                         )}
                       </div>
                     ) : (
-                      <div className="bg-gradient-to-r from-purple-50 via-indigo-50 to-blue-50 border-2 border-purple-300 rounded-xl p-6 mb-6 shadow-lg">
-                        <div className="flex items-center space-x-3 mb-4">
-                          <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-full flex items-center justify-center shadow-md">
-                            <XCircle className="w-7 h-7 text-white" />
-                          </div>
-                          <div>
-                            <h4 className="text-purple-900 font-bold text-xl">Remediation Failed</h4>
-                            <p className="text-indigo-700 text-base font-medium">
-                              {remediationResults.failed} fixes failed. See specific errors below:
-                            </p>
+                      <div className="space-y-4">
+                        {/* Summary Card */}
+                        <div className="bg-white border border-red-200 rounded-lg p-5 shadow-sm">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
+                                <XCircle className="w-6 h-6 text-red-600" />
+                              </div>
+                              <div>
+                                <h4 className="text-slate-900 font-semibold text-lg">Remediation Failed</h4>
+                                <p className="text-slate-600 text-sm">
+                                  {remediationResults.failed} of {remediationResults.total_findings} issue{remediationResults.total_findings !== 1 ? 's' : ''} could not be fixed
+                                </p>
+                              </div>
+                            </div>
                           </div>
                         </div>
                         {remediationResults.results && remediationResults.results.length > 0 && (
-                          <div className="mt-4 space-y-4">
+                          <div className="space-y-3">
                             {remediationResults.results.map((result: any, idx: number) => (
-                              <div key={idx} className="bg-white border-2 border-purple-200 rounded-xl overflow-hidden shadow-lg">
-                                <div className="bg-gradient-to-r from-purple-100 to-indigo-100 px-5 py-3 border-b-2 border-purple-200">
-                                  <p className="font-bold text-purple-900 text-lg">{result.title}</p>
+                              <div key={idx} className="bg-white border border-red-200 rounded-lg shadow-sm overflow-hidden">
+                                {/* Finding Header */}
+                                <div className="bg-slate-50 border-b border-slate-200 px-5 py-3.5">
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-3">
+                                      <div className="w-7 h-7 bg-slate-200 rounded-full flex items-center justify-center text-slate-700 font-medium text-xs">
+                                        {idx + 1}
+                                      </div>
+                                      <div>
+                                        <h5 className="text-slate-900 font-semibold text-base">{result.title}</h5>
+                                        {result.failed_roles && result.failed_roles.length > 0 && (
+                                          <p className="text-slate-500 text-xs mt-0.5">
+                                            {result.failed_roles.length} role{result.failed_roles.length > 1 ? 's' : ''} failed
+                                          </p>
+                                        )}
+                                      </div>
+                                    </div>
+                                    <span className="px-2.5 py-1 bg-red-100 text-red-700 text-xs font-medium rounded">Failed</span>
+                                  </div>
                                 </div>
                                 
-                                <div className="p-5 space-y-4">
-                                  {/* Show specific failed roles if available */}
+                                {/* Failed Roles - Compact */}
+                                <div className="divide-y divide-slate-100">
                                   {result.failed_roles && result.failed_roles.length > 0 ? (
-                                    result.failed_roles.slice(0, 5).map((failedRole: any, rIdx: number) => {
-                                      // Parse the detailed message to extract sections
+                                    result.failed_roles.slice(0, 10).map((failedRole: any, rIdx: number) => {
                                       const message = failedRole.reason || '';
-                                      const lines = message.split('\n');
+                                      const errorType = failedRole.error_type || 'unknown';
+                                      
+                                      // Extract key info from message
+                                      const isWildcard = message.includes('wildcard') || errorType === 'wildcard_replacement_failed';
+                                      const isManagedPolicy = message.includes('managed policies') || errorType === 'managed_policies_only';
                                       
                                       return (
-                                        <div key={rIdx} className="bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 border-2 border-indigo-200 rounded-xl p-5 shadow-md">
-                                          {/* Role Name Header */}
-                                          <div className="flex items-center gap-3 mb-4 pb-3 border-b-2 border-indigo-200">
-                                            <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-full flex items-center justify-center text-white font-bold text-lg shadow-md">
-                                              {rIdx + 1}
+                                        <div key={rIdx} className="px-5 py-3.5 hover:bg-slate-50 transition-colors">
+                                          <div className="flex items-start justify-between gap-4">
+                                            <div className="flex-1 min-w-0">
+                                              <div className="flex items-center gap-2 mb-1.5">
+                                                <span className="font-mono text-sm font-semibold text-slate-900">{failedRole.role}</span>
+                                                <span className="px-2 py-0.5 bg-red-50 text-red-700 text-xs font-medium rounded">Failed</span>
+                                              </div>
+                                              
+                                              {/* Reason - Concise */}
+                                              <div className="mt-1.5 text-xs text-slate-600">
+                                                {isWildcard && (
+                                                  <div className="text-slate-700 font-medium">
+                                                    Wildcard permissions detected - manual fix required
+                                                  </div>
+                                                )}
+                                                {isManagedPolicy && (
+                                                  <div className="text-slate-700 font-medium">
+                                                    Uses managed policies only - cannot auto-remediate
+                                                  </div>
+                                                )}
+                                                {!isWildcard && !isManagedPolicy && (
+                                                  <div className="text-slate-600">
+                                                    {message.split('\n').find((line: string) => line.trim() && !line.includes('SECURITY RISK') && !line.includes('Why This Failed') && !line.includes('Manual Fix Required')) || 'Manual remediation required'}
+                                                  </div>
+                                                )}
+                                              </div>
                                             </div>
-                                            <div>
-                                              <p className="text-indigo-900 font-bold text-lg font-mono">{failedRole.role}</p>
-                                              <p className="text-purple-600 text-xs font-semibold">Remediation Failed</p>
-                                            </div>
+                                            
+                                            <a
+                                              href={`https://console.aws.amazon.com/iam/home#/roles/${failedRole.role}`}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium rounded transition-colors flex items-center gap-1.5 flex-shrink-0"
+                                            >
+                                              <ExternalLink className="w-3.5 h-3.5" />
+                                              Console
+                                            </a>
                                           </div>
-                                          
-                                          {/* Security Risk */}
-                                          {message.includes('SECURITY RISK') && (
-                                            <div className="bg-gradient-to-r from-red-50 via-rose-50 to-pink-50 border-l-4 border-red-400 p-5 rounded-xl mb-4 shadow-md">
-                                              <p className="text-red-900 font-bold text-base mb-2">
-                                                SECURITY RISK
-                                              </p>
-                                              <p className="text-red-800 text-sm font-medium leading-relaxed">
-                                                This role has wildcard permissions (<code className="px-2 py-0.5 bg-red-200 rounded text-xs font-mono">s3:*</code>, <code className="px-2 py-0.5 bg-red-200 rounded text-xs font-mono">*:*</code>) that include the unused actions.
-                                              </p>
-                                            </div>
-                                          )}
-                                          
-                                          {/* Why This Failed */}
-                                          {message.includes('Why This Failed') && (
-                                            <div className="bg-gradient-to-r from-amber-50 via-orange-50 to-yellow-50 border-l-4 border-amber-500 p-5 rounded-xl mb-4 shadow-md">
-                                              <p className="text-amber-900 font-bold text-base mb-2">
-                                                Why This Failed
-                                              </p>
-                                              <p className="text-amber-800 text-sm font-medium leading-relaxed">
-                                                Auto-remediation cannot safely modify wildcards because they cover <strong>100+ actions</strong>. Removing the wildcard would require listing all remaining actions explicitly, which is error-prone and may break functionality.
-                                              </p>
-                                            </div>
-                                          )}
-                                          
-                                          {/* Manual Fix Required */}
-                                          {message.includes('Manual Fix Required') && (
-                                            <div className="bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 border-l-4 border-blue-500 p-5 rounded-xl shadow-md">
-                                              <p className="text-blue-900 font-bold text-base mb-3">
-                                                Manual Fix Required
-                                              </p>
-                                              <ol className="space-y-2.5 text-blue-900 text-sm font-medium">
-                                                <li className="flex items-start gap-3">
-                                                  <span className="font-bold min-w-[24px] text-blue-600">1.</span>
-                                                  <span>Review the policy to identify which actions are actually needed</span>
-                                                </li>
-                                                <li className="flex items-start gap-3">
-                                                  <span className="font-bold min-w-[24px] text-blue-600">2.</span>
-                                                  <span>Replace wildcards (<code className="px-1.5 py-0.5 bg-blue-200 rounded text-xs">s3:*</code>, <code className="px-1.5 py-0.5 bg-blue-200 rounded text-xs">*:*</code>) with explicit action lists</span>
-                                                </li>
-                                                <li className="flex items-start gap-3">
-                                                  <span className="font-bold min-w-[24px] text-blue-600">3.</span>
-                                                  <span>Exclude the unused permissions: <code className="px-1.5 py-0.5 bg-blue-200 rounded text-xs font-mono">s3:DeleteBucket</code>, <code className="px-1.5 py-0.5 bg-blue-200 rounded text-xs font-mono">iam:DeleteUser</code>, <code className="px-1.5 py-0.5 bg-blue-200 rounded text-xs font-mono">rds:DeleteDBInstance</code></span>
-                                                </li>
-                                                <li className="flex items-start gap-3">
-                                                  <span className="font-bold min-w-[24px] text-blue-600">4.</span>
-                                                  <span>Test in staging before deploying to production</span>
-                                                </li>
-                                              </ol>
-                                              {message.includes('Wildcard Actions Detected') && (
-                                                <div className="mt-3 pt-3 border-t border-blue-200">
-                                                  <p className="text-blue-800 text-xs font-semibold">
-                                                    Note: This also addresses the 'Wildcard Actions Detected' critical finding.
-                                                  </p>
-                                                </div>
-                                              )}
-                                            </div>
-                                          )}
                                         </div>
                                       );
                                     })
                                   ) : (
-                                    <div className="text-indigo-800 text-sm leading-relaxed whitespace-pre-line font-medium bg-indigo-50 p-4 rounded-lg border border-indigo-200">
-                                      {result.message}
+                                    <div className="px-5 py-4 text-sm text-slate-600">
+                                      {result.message?.split('\n')[0] || 'Remediation failed'}
                                     </div>
                                   )}
                                   
-                                  {result.failed_roles && result.failed_roles.length > 5 && (
-                                    <div className="bg-purple-100 border border-purple-300 rounded-lg p-3">
-                                      <p className="text-purple-900 text-sm font-bold">
-                                        ...and {result.failed_roles.length - 5} more roles with similar issues
-                                      </p>
+                                  {result.failed_roles && result.failed_roles.length > 10 && (
+                                    <div className="px-5 py-3 bg-slate-50 text-slate-600 text-xs">
+                                      ...and {result.failed_roles.length - 10} more role{result.failed_roles.length - 10 > 1 ? 's' : ''} with similar issues
                                     </div>
                                   )}
                                 </div>
