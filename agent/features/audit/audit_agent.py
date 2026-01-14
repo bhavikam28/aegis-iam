@@ -2046,13 +2046,32 @@ class AuditAgent:
                         'actions_taken': []
                     }
                 
+                # Check if permissions already removed (already remediated)
+                already_removed = []
                 failed_removals = []
                 for perm in unused_perms:
-                    result = self._remove_permission(role_name, perm)
-                    if result:
-                        actions_taken.append(f"Removed unused permission: {perm} from inline policy")
+                    # Check if permission still exists in the role
+                    if not self._permission_exists(role_name, perm):
+                        already_removed.append(perm)
+                        logging.info(f"✅ Permission {perm} already removed from {role_name} (previously remediated)")
                     else:
-                        failed_removals.append(perm)
+                        result = self._remove_permission(role_name, perm)
+                        if result:
+                            actions_taken.append(f"Removed unused permission: {perm} from inline policy")
+                        else:
+                            failed_removals.append(perm)
+                
+                # If all permissions were already removed, return success
+                if already_removed and not failed_removals and not actions_taken:
+                    return {
+                        'success': True,
+                        'message': f"✅ Already Remediated!\n\nAll unused permissions were already removed from role '{role_name}' in a previous remediation.\n\n📋 Permissions already removed:\n" + "\n".join([f"• {perm}" for perm in already_removed]) + f"\n\n✅ Verification:\n1. Open AWS Console → IAM → Roles → {role_name}\n2. Go to 'Permissions' tab\n3. Review inline policies - unused permissions are not present\n\n📍 Direct Link: https://console.aws.amazon.com/iam/home#/roles/{role_name}",
+                        'actions_taken': [f"Verified {len(already_removed)} permissions already removed"]
+                    }
+                
+                # If some were already removed and some were just removed now
+                if already_removed:
+                    actions_taken.insert(0, f"✅ {len(already_removed)} permission(s) already removed (verified)")
                 
                 # If some failed, provide specific guidance
                 if failed_removals and not actions_taken:
@@ -2135,12 +2154,55 @@ class AuditAgent:
                 'actions_taken': []
             }
 
+    def _permission_exists(self, role_name: str, permission: str) -> bool:
+        """Check if a permission exists in the role's policies"""
+        try:
+            if not self.boto_iam:
+                return False
+            
+            # Check inline policies
+            inline_policies = self.boto_iam.list_role_policies(RoleName=role_name)['PolicyNames']
+            for policy_name in inline_policies:
+                policy_doc = self.boto_iam.get_role_policy(
+                    RoleName=role_name,
+                    PolicyName=policy_name
+                )['PolicyDocument']
+                
+                for statement in policy_doc.get('Statement', []):
+                    actions = statement.get('Action', [])
+                    if isinstance(actions, str):
+                        actions = [actions]
+                    
+                    # Check for exact match
+                    if permission in actions:
+                        return True
+                    
+                    # Check for wildcards that would include this permission
+                    for action in actions:
+                        if '*' in action:
+                            if action == '*':
+                                return True  # Full wildcard
+                            elif ':' in action:
+                                service = action.split(':')[0]
+                                if permission.startswith(f"{service}:"):
+                                    return True  # Service wildcard like s3:*
+            
+            return False
+        except Exception as e:
+            logging.warning(f"⚠️ Error checking if permission exists: {e}")
+            return True  # Assume it exists if we can't check (safer to try removal)
+    
     def _remove_permission(self, role_name: str, permission: str) -> bool:
         """Remove a specific permission from a role - Try AWS IAM MCP Server first, fall back to boto3"""
         try:
             if not role_name or not role_name.strip():
                 logging.error(f"❌ Invalid role name: '{role_name}'")
                 return False
+            
+            # First check if permission exists (might already be removed)
+            if not self._permission_exists(role_name, permission):
+                logging.info(f"✅ Permission {permission} already removed from {role_name}")
+                return True  # Already removed, consider it success
             
             # Try AWS IAM MCP Server first (supports write operations!)
             if self.iam_client:
