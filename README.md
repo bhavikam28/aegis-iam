@@ -1,354 +1,398 @@
 # Aegis IAM
 
-**AI-Powered AWS IAM Security Platform**
+> AI-powered AWS IAM security platform for policy generation, validation, and autonomous account auditing.
 
-Generate, validate, and audit AWS IAM policies using Claude Sonnet 4.5. Transform natural language into production-ready policies with comprehensive security analysis and compliance validation.
-
-[![Live Demo](https://img.shields.io/badge/Live%20Demo-Aegis%20IAM-blue?style=for-the-badge)](https://aegis-iam.vercel.app)
-[![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
-
----
-
-## ⚠️ Disclaimer
-
-**This software is provided for demonstration and reference purposes only. Use at your own risk.**
-
-This software is provided "AS IS" without any warranty. The authors are not responsible for any damages, losses, security breaches, or other consequences resulting from use of this software. Do not use in production without proper security review, testing, and compliance validation. You are solely responsible for reviewing all generated policies, managing AWS credentials securely, and monitoring AWS costs. This application uses your AWS credentials and makes API calls to your account—you are responsible for all AWS charges. This project is not affiliated with, endorsed by, or sponsored by AWS or Anthropic.
-
-**By using this software, you acknowledge and agree to these terms.**
+[![Live Demo](https://img.shields.io/badge/demo-live-brightgreen)](https://aegis-iam.vercel.app)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
 ---
 
-## 🚀 Quick Start
+## Overview
 
-### 🏠 Run Locally (Recommended for Full Functionality)
+Aegis IAM is an enterprise-grade security platform that leverages Claude Sonnet 4.5 to generate, validate, and audit AWS IAM policies. Built for developers, security teams, and DevOps engineers who need to manage IAM permissions at scale while maintaining security best practices and compliance requirements.
 
-**For complete access to all features with maximum security, run Aegis IAM on your local machine. Your AWS credentials never leave your computer.**
+### Key Capabilities
 
-📖 **[Complete Local Setup Guide →](LOCAL_SETUP.md)**
-
-**Quick setup (5 minutes):**
-
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/bhavikam28/aegis-iam.git
-   cd aegis-iam
-   ```
-
-2. **Configure AWS CLI:**
-   ```bash
-   aws configure
-   # Enter your AWS Access Key ID, Secret Key, and region
-   ```
-
-3. **Start backend:**
-   ```bash
-   cd agent
-   python -m venv venv
-   source venv/bin/activate  # Windows: venv\Scripts\activate
-   pip install -r requirements.txt
-   uvicorn main:app --reload --port 8000
-   ```
-
-4. **Start frontend (new terminal):**
-   ```bash
-   cd frontend
-   npm install
-   echo "VITE_API_URL=http://localhost:8000" > .env
-   npm run dev
-   ```
-
-5. **Access:** [http://localhost:5173](http://localhost:5173)
-
-✅ **All features available**  
-✅ **AWS credentials stay on your machine**  
-✅ **Maximum security**  
+- **Policy Generation**: Convert natural language requirements into production-ready IAM policies
+- **Security Validation**: Deep analysis against 20+ security categories and 8 compliance frameworks  
+- **Autonomous Auditing**: Full AWS account scanning with CloudTrail-based unused permission detection
+- **Auto-Remediation**: One-click fixes for common security misconfigurations
+- **CI/CD Integration**: Automated policy analysis in pull requests via GitHub App
 
 ---
 
-### 🌐 Online Demo (Showcase Only)
+## Quick Start
 
-Visit **[https://aegis-iam.vercel.app](https://aegis-iam.vercel.app)** to explore the interface and see sample outputs.
+### Prerequisites
 
-⚠️ **Note:** The hosted version is for demonstration purposes. For full functionality, please run locally.
+- Node.js 18+ and npm
+- Python 3.11+
+- AWS CLI configured with credentials
+- Amazon Bedrock access (Claude Sonnet 4.5 model enabled)
+
+### Local Installation
+
+**1. Clone the repository**
+```bash
+git clone https://github.com/bhavikam28/aegis-iam.git
+cd aegis-iam
+```
+
+**2. Configure AWS credentials**
+```bash
+aws configure
+# Enter your AWS Access Key ID, Secret Access Key, and region
+```
+
+**3. Start the backend**
+```bash
+cd agent
+python -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
+pip install -r requirements.txt
+uvicorn main:app --reload --port 8000
+```
+
+**4. Start the frontend (new terminal)**
+```bash
+cd frontend
+npm install
+echo "VITE_API_URL=http://localhost:8000" > .env
+npm run dev
+```
+
+**5. Access the application**
+```
+http://localhost:5173
+```
+
+### Online Demo
+
+Visit [aegis-iam.vercel.app](https://aegis-iam.vercel.app) to explore the interface with demo data. For full functionality including AWS integrations, run locally.
 
 ---
 
-## ✨ Features
+## Features
 
-### 🔧 Policy Generation
-- **Natural Language to IAM Policies**: Describe what you need in plain English
-- **Dual Policy Generation**: Creates both Permissions and Trust policies
+### Policy Generation
+
+Generate production-ready IAM policies from natural language descriptions.
+
+- **Natural Language Processing**: Describe requirements in plain English
+- **Dual Policy Creation**: Automatic generation of both permissions and trust policies
+- **Compliance Integration**: Built-in support for PCI DSS, HIPAA, SOX, GDPR, CIS
 - **Multi-Format Export**: JSON, Terraform, CloudFormation, YAML
-- **Conversational Refinement**: Chat with AI to refine policies
-- **Compliance-Aware**: Built-in support for PCI DSS, HIPAA, SOX, GDPR, CIS
-- **Simple Explanations**: Get non-technical explanations for stakeholders
+- **Interactive Refinement**: Conversational interface for policy iteration
 
-### ✅ Policy Validation
-- **Deep Security Analysis**: Identifies over 20 security risks
-- **Compliance Framework Validation**: Checks against major compliance standards
-- **Security Scoring**: Get a security score (0-100, higher is better)
-- **Actionable Recommendations**: Code snippets and step-by-step fixes
-- **Export Reports**: PDF and email export options
+### Security Validation
 
-### 🔍 Account Audit
-- **Autonomous Scanning**: Analyzes entire AWS accounts
-- **CloudTrail Integration**: Identifies unused permissions
-- **Pattern Recognition**: Finds systemic security issues
-- **Prioritized Findings**: Critical, High, Medium, Low severity classification
-- **Auto-Remediation**: One-click fixes for common issues
+Comprehensive security analysis of IAM policies against industry standards.
 
-### 🔄 CI/CD Integration
-- **GitHub App Integration**: Zero-configuration setup
-- **Automatic PR Analysis**: Reviews IAM policy changes in pull requests
+- **Risk Detection**: 20+ security risk categories including wildcards, over-privileged access
+- **Compliance Validation**: PCI DSS, HIPAA, SOX, GDPR, CIS, HITRUST, NIST 800-53, ISO 27001
+- **Security Scoring**: Granular 0-100 scoring with detailed breakdown
+- **Actionable Recommendations**: Step-by-step remediation instructions with code snippets
+- **ARN Validation**: Live AWS role analysis via IAM API
+
+### Account Audit
+
+Autonomous scanning and remediation of AWS accounts.
+
+- **Role Discovery**: Automatic identification of user-managed IAM roles
+- **CloudTrail Analysis**: 90-day permission usage tracking for unused permission detection
+- **Pattern Recognition**: Identification of systemic security issues across roles
+- **Auto-Remediation**: One-click fixes for common misconfigurations
+- **Compliance Mapping**: Finding classification against compliance requirements
+- **Real-time Progress**: Server-sent events for audit status updates
+
+### CI/CD Integration
+
+Automated security analysis integrated into development workflows.
+
+- **GitHub App**: Zero-configuration OAuth-based installation
+- **PR Analysis**: Automatic IAM policy review on pull requests
 - **Multi-Format Support**: Terraform, CloudFormation, CDK, raw JSON
-- **CloudTrail Comparison**: Compares new permissions against actual usage
-- **PR Comments**: Automatic security feedback on pull requests
+- **CloudTrail Comparison**: Usage-based validation of new permissions
+- **Status Checks**: Pass/fail indicators based on configurable risk thresholds
 
 ---
 
-## 🏗️ Architecture
+## Architecture
 
-**Frontend:**
-- React 18 + TypeScript
+```
+┌─────────────────────────────────────────────────────────────┐
+│                        Frontend Layer                        │
+│                  React 18 + TypeScript + Vite                │
+└─────────────────────┬───────────────────────────────────────┘
+                      │ REST API + SSE
+┌─────────────────────┴───────────────────────────────────────┐
+│                        Backend Layer                         │
+│                   FastAPI + Python 3.11+                     │
+│                                                              │
+│  ┌────────────┐  ┌────────────┐  ┌────────────┐            │
+│  │ Policy     │  │ Validator  │  │ Audit      │            │
+│  │ Agent      │  │ Agent      │  │ Agent      │            │
+│  └────────────┘  └────────────┘  └────────────┘            │
+└─────────────────────┬───────────────────────────────────────┘
+                      │
+┌─────────────────────┴───────────────────────────────────────┐
+│                      AWS Services Layer                      │
+│                                                              │
+│  Amazon Bedrock (Claude Sonnet 4.5) │ AWS IAM API           │
+│  AWS CloudTrail                      │ AWS STS               │
+└──────────────────────────────────────────────────────────────┘
+```
+
+### Technology Stack
+
+**Frontend**
+- React 18 with TypeScript
 - Tailwind CSS for styling
 - Vite for build tooling
-- Server-Sent Events (SSE) for real-time updates
+- Server-Sent Events for real-time updates
 
-**Backend:**
-- FastAPI (Python) with async endpoints
-- AWS Bedrock (Claude Sonnet 4.5) for AI capabilities
-- MCP (Model Context Protocol) for AWS integration
-- Strands Agents SDK for agentic workflows
+**Backend**
+- FastAPI with async/await
+- Strands Agents SDK for AI orchestration
+- boto3 for AWS API integration
+- MCP (Model Context Protocol) with fallback support
 
-**AWS Services:**
-- Amazon Bedrock (Claude Sonnet 4.5)
-- AWS IAM API
-- AWS CloudTrail
-- AWS STS
-
----
-
-## 🔐 AWS Credentials Setup
-
-### For Local Installation (Secure Method)
-
-Aegis IAM uses **AWS CLI-based authentication** when running locally. This is the most secure method - your credentials stay on your machine.
-
-**Setup Steps:**
-
-1. **Install AWS CLI** (if not already installed):
-   ```bash
-   # macOS/Linux
-   brew install awscli
-   
-   # Windows
-   # Download from: https://aws.amazon.com/cli/
-   
-   # Or via pip
-   pip install awscli
-   ```
-
-2. **Configure AWS CLI** (one-time setup):
-   ```bash
-   aws configure
-   ```
-   
-   Enter your:
-   - AWS Access Key ID (from IAM Console)
-   - AWS Secret Access Key
-   - Default region (e.g., `us-east-1`)
-   - Default output format (e.g., `json`)
-
-3. **Required IAM Permissions** - Attach this policy to your IAM user:
-   ```json
-   {
-     "Version": "2012-10-17",
-     "Statement": [{
-       "Effect": "Allow",
-       "Action": [
-         "bedrock:InvokeModel",
-         "bedrock:InvokeModelWithResponseStream",
-         "iam:GetRole",
-         "iam:GetPolicy",
-         "iam:GetPolicyVersion",
-         "iam:ListRoles",
-         "iam:ListAttachedRolePolicies",
-         "iam:GetRolePolicy",
-         "cloudtrail:LookupEvents",
-         "sts:GetCallerIdentity"
-       ],
-       "Resource": "*"
-     }]
-   }
-   ```
-
-4. **Enable Amazon Bedrock**:
-   - Go to [AWS Bedrock Console](https://console.aws.amazon.com/bedrock/)
-   - Select Model access
-   - Enable **Claude Sonnet 4.5**
-   - Request access (usually instant)
-
-5. **Verify Setup**:
-   ```bash
-   aws sts get-caller-identity  # Should show your account info
-   ```
-
-6. **Start using Aegis IAM locally!**
-
-📖 **[Detailed Setup Guide →](LOCAL_SETUP.md)**
-
-**Security Best Practices:**
-- ✅ Run locally (credentials never leave your machine)
-- ✅ Create a dedicated IAM user with minimum required permissions
-- ✅ Never commit AWS credentials to version control
-- ✅ Rotate credentials regularly
-- ✅ Enable MFA on your AWS account
+**AI/ML**
+- Claude Sonnet 4.5 via Amazon Bedrock
+- Autonomous agent architecture
+- Context-aware policy generation
 
 ---
 
-## 💰 AWS Costs
+## Configuration
 
-This application invokes AWS Bedrock on your AWS account. You are responsible for all AWS charges.
+### Environment Variables
 
-**Typical costs per operation:**
-- Policy generation: $0.01 - $0.05
-- Policy validation: $0.02 - $0.08
-- Full account audit: $0.10 - $0.50
-
-The Aegis IAM application itself is free. All AWS costs are based on your Bedrock usage. Monitor your AWS billing dashboard to track costs.
-
----
-
-## 📁 Project Structure
-
-```
-aegis-iam/
-├── frontend/              # React + TypeScript frontend
-│   ├── src/
-│   │   ├── components/    # React components
-│   │   │   ├── Pages/    # Main feature pages
-│   │   │   ├── Modals/   # Modal dialogs
-│   │   │   └── Layout/   # Layout components
-│   │   ├── services/     # API service layer
-│   │   ├── utils/        # Utility functions
-│   │   └── types/        # TypeScript type definitions
-│   └── package.json
-│
-├── agent/                # FastAPI backend
-│   ├── features/         # Feature modules
-│   │   ├── policy_generation/  # Policy generation agent
-│   │   ├── validation/         # Validation agent
-│   │   ├── audit/              # Audit agent
-│   │   └── cicd/               # CI/CD integration
-│   ├── utils/           # Utility modules
-│   │   ├── iac_exporter.py     # IaC format conversion
-│   │   └── iam_deployer.py     # AWS deployment
-│   ├── main.py          # FastAPI application
-│   └── requirements.txt
-│
-└── README.md
-```
-
----
-
-## 🔧 Environment Variables
-
-**Backend (Optional - for CI/CD):**
+**Backend** (optional - for CI/CD integration)
 ```bash
 GITHUB_APP_ID=your_app_id
 GITHUB_PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY-----\n..."
 GITHUB_WEBHOOK_SECRET=your_webhook_secret
 ```
 
-**Frontend:**
+**Frontend**
 ```bash
-VITE_API_URL=http://localhost:8000  # Local development
-# Or: https://your-backend.onrender.com for production
+VITE_API_URL=http://localhost:8000  # Development
+# Production: https://your-backend-url.com
+```
+
+### AWS Credentials
+
+Aegis IAM uses the AWS CLI credential chain for secure, local-first authentication.
+
+**Required IAM Permissions**
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Effect": "Allow",
+    "Action": [
+      "bedrock:InvokeModel",
+      "bedrock:InvokeModelWithResponseStream",
+      "iam:GetRole",
+      "iam:GetPolicy",
+      "iam:GetPolicyVersion",
+      "iam:ListRoles",
+      "iam:ListAttachedRolePolicies",
+      "iam:GetRolePolicy",
+      "cloudtrail:LookupEvents",
+      "sts:GetCallerIdentity"
+    ],
+    "Resource": "*"
+  }]
+}
+```
+
+**Setup Steps**
+1. Install AWS CLI: `pip install awscli`
+2. Configure credentials: `aws configure`
+3. Enable Bedrock access in AWS Console
+4. Verify setup: `aws sts get-caller-identity`
+
+---
+
+## Project Structure
+
+```
+aegis-iam/
+├── frontend/              # React TypeScript application
+│   ├── src/
+│   │   ├── components/    # React components
+│   │   │   ├── Pages/     # Feature pages
+│   │   │   ├── Modals/    # Modal dialogs
+│   │   │   └── Layout/    # Layout components
+│   │   ├── services/      # API service layer
+│   │   ├── utils/         # Utility functions
+│   │   └── types/         # TypeScript definitions
+│   └── package.json
+│
+├── agent/                 # FastAPI backend
+│   ├── features/          # Feature modules
+│   │   ├── policy_generation/  # Policy generation agent
+│   │   ├── validation/         # Validation agent
+│   │   ├── audit/              # Audit agent
+│   │   └── cicd/               # CI/CD integration
+│   ├── utils/             # Utility modules
+│   ├── main.py            # FastAPI application
+│   └── requirements.txt
+│
+├── README.md
+├── LICENSE
+└── LOCAL_SETUP.md         # Detailed setup instructions
 ```
 
 ---
 
-## 🎯 Use Cases
+## Security
 
-**Developers:**
-- Learn IAM policy structure
-- Speed up policy development
-- Validate policies before deploying
-- Generate IaC templates
+### Credential Management
 
-**Security Teams:**
-- Audit AWS accounts for security issues
-- Enforce compliance requirements
-- Shift-left security practices
-- Generate security reports
+- AWS credentials never transmitted over network
+- No credential storage in databases or logs
+- Local-first architecture with AWS CLI credential chain
+- Support for IAM roles and instance profiles
 
-**DevOps Engineers:**
-- Automate IAM policy reviews
-- Reduce privilege creep
-- Generate Infrastructure as Code
-- Integrate security into CI/CD pipelines
+### Privacy
+
+- No user authentication or tracking
+- No telemetry or analytics collection
+- All operations performed locally
+- Open source and auditable
+
+### Best Practices
+
+- Run locally for maximum security
+- Use dedicated IAM user with minimum required permissions
+- Enable MFA on AWS accounts
+- Rotate credentials regularly
+- Review generated policies before deployment
 
 ---
 
-## 🤝 Contributing
+## Use Cases
 
-Contributions are welcome! Please follow these steps:
+**Developers**
+- Accelerate IAM policy creation from hours to minutes
+- Learn IAM policy structure through AI-generated examples
+- Validate policies before deployment
+- Generate Infrastructure as Code templates
+
+**Security Teams**
+- Audit AWS accounts for security misconfigurations
+- Enforce compliance requirements
+- Identify and remediate unused permissions
+- Generate security reports for stakeholders
+
+**DevOps Engineers**
+- Integrate security analysis into CI/CD pipelines
+- Automate IAM policy reviews in pull requests
+- Reduce privilege creep through regular audits
+- Maintain least-privilege access across environments
+
+---
+
+## Cost Considerations
+
+Aegis IAM invokes Amazon Bedrock APIs using your AWS credentials. You are responsible for all AWS charges incurred.
+
+**Typical Costs per Operation**
+- Policy generation: $0.01 - $0.05
+- Policy validation: $0.02 - $0.08
+- Account audit: $0.10 - $0.50
+
+Costs are based on Claude Sonnet 4.5 pricing. Monitor your AWS billing dashboard to track usage.
+
+---
+
+## Documentation
+
+- [Local Setup Guide](LOCAL_SETUP.md) - Detailed installation and configuration
+- [Deployment Guide](DEPLOYMENT.md) - Production deployment instructions
+- [API Documentation](docs/API.md) - Backend API reference (coming soon)
+- [Contributing Guide](CONTRIBUTING.md) - How to contribute (coming soon)
+
+---
+
+## Roadmap
+
+**Planned Features**
+- Multi-account audit support via AWS Organizations
+- Policy versioning and history tracking
+- Team collaboration features
+- Scheduled automated audits
+- Additional CI/CD platform integrations (GitLab, Bitbucket)
+- Enhanced auto-remediation capabilities
+
+**Community Requests**
+- API access for programmatic usage
+- Slack/Teams integration for notifications
+- Custom compliance framework definitions
+- Policy template library
+
+---
+
+## Contributing
+
+Contributions are welcome! Please follow these guidelines:
 
 1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
----
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-**Open Source**: Free to use, modify, and distribute. Contributions welcome!
+Please ensure your code follows the existing style and includes appropriate tests.
 
 ---
 
-## 🙏 Acknowledgments
+## Disclaimer
 
-- **Anthropic Claude Sonnet 4.5** for AI capabilities
-- **Amazon Bedrock** for serverless AI inference
-- **Strands Agents SDK** for agentic workflows
-- **MCP Protocol** for AWS integration
+This software is provided "AS IS" without warranty of any kind. Users are solely responsible for:
 
----
+- Reviewing all generated policies before deployment
+- Managing AWS credentials securely
+- Monitoring AWS costs and usage
+- Ensuring compliance with organizational security policies
+- Validating auto-remediation changes before applying
 
-## 📞 Contact
-
-**Bhavika M** - [@bhavikam28](https://github.com/bhavikam28)
-
-**Project Link:** [https://github.com/bhavikam28/aegis-iam](https://github.com/bhavikam28/aegis-iam)  
-**Live Demo:** [https://aegis-iam.vercel.app](https://aegis-iam.vercel.app)
+This project is not affiliated with, endorsed by, or sponsored by AWS or Anthropic.
 
 ---
 
-## 🛠️ Technology Stack
+## License
 
-- **Frontend:** React 18, TypeScript, Tailwind CSS, Vite
-- **Backend:** FastAPI, Python 3.11+
-- **AI:** Claude Sonnet 4.5 via Amazon Bedrock
-- **AWS Integration:** MCP (Model Context Protocol), boto3
-- **Agent Framework:** Strands Agents SDK
-- **Deployment:** Vercel (Frontend), Render/Railway (Backend)
+This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
 
 ---
 
-## 📊 Roadmap
+## Acknowledgments
 
-- [ ] Support for additional compliance frameworks
-- [ ] Enhanced auto-remediation capabilities
-- [ ] Multi-account audit support
-- [ ] Policy versioning and history
-- [ ] Team collaboration features
-- [ ] API access for programmatic usage
+Built with:
+- [Claude Sonnet 4.5](https://www.anthropic.com/claude) by Anthropic
+- [Amazon Bedrock](https://aws.amazon.com/bedrock/) for AI inference
+- [Strands Agents SDK](https://github.com/strands-ai/strands) for agent orchestration
+- [FastAPI](https://fastapi.tiangolo.com/) for backend framework
+- [React](https://react.dev/) for frontend interface
 
 ---
 
-**Made with ❤️ for the AWS security community**
+## Contact
+
+**Author**: Bhavika M  
+**GitHub**: [@bhavikam28](https://github.com/bhavikam28)  
+**Project**: [github.com/bhavikam28/aegis-iam](https://github.com/bhavikam28/aegis-iam)  
+**Live Demo**: [aegis-iam.vercel.app](https://aegis-iam.vercel.app)
+
+For questions, issues, or feature requests, please use [GitHub Issues](https://github.com/bhavikam28/aegis-iam/issues).
+
+---
+
+<p align="center">
+  <sub>Built for the AWS security community</sub>
+</p>
