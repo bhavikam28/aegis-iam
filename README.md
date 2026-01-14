@@ -5,7 +5,7 @@
 Generate, validate, and audit AWS IAM policies using Claude Sonnet 4.5. Transform natural language into production-ready policies with comprehensive security analysis and compliance validation.
 
 [![Live Demo](https://img.shields.io/badge/Live%20Demo-Aegis%20IAM-blue?style=for-the-badge)](https://aegis-iam.vercel.app)
-[![License](https://img.shields.io/badge/License-All%20Rights%20Reserved-red?style=for-the-badge)](LICENSE)
+[![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
 
 ---
 
@@ -305,7 +305,9 @@ Contributions are welcome! Please follow these steps:
 
 ## 📄 License
 
-All rights reserved. This project is provided for demonstration and reference purposes only.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+**Open Source**: Free to use, modify, and distribute. Contributions welcome!
 
 ---
 
