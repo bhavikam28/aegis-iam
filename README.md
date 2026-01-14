@@ -130,12 +130,17 @@ Automated security analysis integrated into development workflows.
 │                        Backend Layer                         │
 │                   FastAPI + Python 3.11+                     │
 │                                                              │
-│  ┌────────────┐  ┌────────────┐  ┌────────────┐            │
-│  │ Policy     │  │ Validator  │  │ Audit      │            │
-│  │ Agent      │  │ Agent      │  │ Agent      │            │
-│  └────────────┘  └────────────┘  └────────────┘            │
+│  ┌────────────┐  ┌────────────┐  ┌────────────┐  ┌──────┐  │
+│  │ Policy     │  │ Validator  │  │ Audit      │  │ CI/CD│  │
+│  │ Agent      │  │ Agent      │  │ Agent      │  │Agent │  │
+│  └────────────┘  └────────────┘  └────────────┘  └──────┘  │
 └─────────────────────┬───────────────────────────────────────┘
-                      │
+                      │                      ▲
+                      │                      │ GitHub Webhook
+                      │              ┌───────┴────────┐
+                      │              │ GitHub Actions │
+                      │              │   PR Analysis  │
+                      │              └────────────────┘
 ┌─────────────────────┴───────────────────────────────────────┐
 │                      AWS Services Layer                      │
 │                                                              │
