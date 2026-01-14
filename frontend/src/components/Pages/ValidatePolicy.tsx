@@ -142,6 +142,12 @@ const ValidatePolicy: React.FC<ValidatePolicyProps> = ({ awsCredentials: propCre
   // PERSISTENCE: Load saved state on mount
   // ============================================
   useEffect(() => {
+    // DEMO MODE: Don't load saved state - always start fresh for clean demo
+    if (demoMode) {
+      console.log('🎬 Demo mode: Starting with fresh state (no saved data loaded)');
+      return;
+    }
+    
     const saved = loadFromStorage<{
       inputType: 'policy' | 'arn';
       inputValue: string;
@@ -162,7 +168,7 @@ const ValidatePolicy: React.FC<ValidatePolicyProps> = ({ awsCredentials: propCre
       setShowInitialForm(saved.showInitialForm ?? true);
       setIsChatbotOpen(saved.isChatbotOpen ?? false);
     }
-  }, []); // Only run on mount
+  }, [demoMode]); // Re-run if demoMode changes
 
   // ============================================
   // PERSISTENCE: Save state whenever it changes
