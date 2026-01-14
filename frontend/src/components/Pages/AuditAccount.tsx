@@ -3,12 +3,15 @@ import { Scan, Shield, Activity, Database, Users, Lock, AlertTriangle, CheckCirc
 import { saveToStorage, loadFromStorage, STORAGE_KEYS } from '@/utils/persistence';
 import CollapsibleTile from '@/components/Common/CollapsibleTile';
 import SecurityTips from '@/components/Common/SecurityTips';
+import LoadingScreen from '@/components/Common/LoadingScreen';
 import { getComplianceLink } from '@/utils/complianceLinks';
 import { AWSCredentials, validateCredentials, maskAccessKeyId, getRegionDisplayName } from '@/utils/awsCredentials';
 import { API_URL } from '@/config/api';
 
 interface AuditSummary {
   total_roles: number;
+  user_managed_roles?: number;
+  aws_service_roles_excluded?: number;
   roles_analyzed: number;
   total_findings: number;
   critical_issues: number;
@@ -19,6 +22,12 @@ interface AuditSummary {
   unused_permissions_found: number;
 }
 
+interface ManagedPolicyInfo {
+  role_name: string;
+  managed_policies: string[];
+  policy_count: number;
+}
+
 interface Finding {
   id: string;
   severity: 'Critical' | 'High' | 'Medium' | 'Low';
@@ -27,12 +36,15 @@ interface Finding {
   description: string;
   recommendation: string;
   role?: string;
+  affected_roles_list?: string[];  // Actual list of role names
+  affected_services_list?: string[];  // Actual list of service names
   affected_permissions?: string[];
   why_it_matters?: string;
   impact?: string;
   detailed_remediation?: string;
   compliance_violations?: string[];
   policy_snippet?: string;
+  managed_policies_info?: ManagedPolicyInfo[];  // For managed policy findings
 }
 
 interface AuditResponse {
@@ -87,6 +99,16 @@ const AuditAccount: React.FC<AuditAccountProps> = ({ awsCredentials: propCredent
   // (No pre-fill needed for Audit - it just starts when button is clicked)
 
   // ============================================
+  // Clear error when credentials are available
+  // ============================================
+  useEffect(() => {
+    // Clear error if credentials are available (credentials were just configured)
+    if (awsCredentials && error && (error.includes('credentials') || error.includes('Please configure'))) {
+      setError(null);
+    }
+  }, [awsCredentials, error]); // Clear error when credentials change
+
+  // ============================================
   // PERSISTENCE: Load saved state on mount
   // ============================================
   useEffect(() => {
@@ -113,6 +135,10 @@ const AuditAccount: React.FC<AuditAccountProps> = ({ awsCredentials: propCredent
       setViewMode(saved.viewMode || 'compact');
       setCurrentPage(saved.currentPage || 1);
       setGroupBy(saved.groupBy || 'severity');
+      // Clear any error when loading saved state (credentials might be available now)
+      if (awsCredentials) {
+        setError(null);
+      }
     }
   }, []); // Only run on mount
 
@@ -143,7 +169,7 @@ const AuditAccount: React.FC<AuditAccountProps> = ({ awsCredentials: propCredent
       setIsAuditing(true);
       setError(null);
       
-      // Show loading for 2-3 seconds to simulate audit process
+      // Show loading screen for 3 seconds to simulate audit process
       setTimeout(() => {
         import('@/utils/demoData').then(({ mockAuditAccountResponse }) => {
           const demoResponse = mockAuditAccountResponse();
@@ -151,7 +177,7 @@ const AuditAccount: React.FC<AuditAccountProps> = ({ awsCredentials: propCredent
           setIsAuditing(false);
           setError(null);
         });
-      }, 2500);
+      }, 3000);
       return;
     }
     
@@ -164,15 +190,30 @@ const AuditAccount: React.FC<AuditAccountProps> = ({ awsCredentials: propCredent
     
     setIsAuditing(true);
     setError(null);
+    
+    // IMPORTANT: Clear any previous audit results to ensure fresh data
+    setAuditResults(null);
+    setChatMessages([]);
+    setSelectedFindings(new Set());
+    setRemediationResults(null);
 
     try {
-      const response = await fetch(`${API_URL}/api/audit/account`, {
+      // Add cache-busting to ensure FRESH audit every time (no cached data!)
+      const timestamp = new Date().getTime();
+      const response = await fetch(`${API_URL}/api/audit/account?t=${timestamp}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        },
         body: JSON.stringify({
           mode: 'full',
           aws_region: awsCredentials.region,
-          aws_credentials: awsCredentials || undefined
+          aws_credentials: awsCredentials || undefined,
+          force_refresh: true,  // Backend flag to ensure fresh audit
+          audit_id: timestamp  // Unique identifier for this audit
         })
       });
 
@@ -185,6 +226,8 @@ const AuditAccount: React.FC<AuditAccountProps> = ({ awsCredentials: propCredent
           ...data,
           audit_summary: {
             total_roles: data.audit_summary?.total_roles || 0,
+            user_managed_roles: data.audit_summary?.user_managed_roles,
+            aws_service_roles_excluded: data.audit_summary?.aws_service_roles_excluded,
             roles_analyzed: data.audit_summary?.roles_analyzed || 0,
             total_findings: data.audit_summary?.total_findings || 0,
             critical_issues: data.audit_summary?.critical_issues || 0,
@@ -312,7 +355,7 @@ const AuditAccount: React.FC<AuditAccountProps> = ({ awsCredentials: propCredent
     setIsChatLoading(true);
     
     try {
-      // Send to backend for AI response
+      // Send to backend for AI response (with AWS credentials for Bedrock)
       const response = await fetch(`${API_URL}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -321,8 +364,14 @@ const AuditAccount: React.FC<AuditAccountProps> = ({ awsCredentials: propCredent
           context: {
             findings: auditResults.findings,
             risk_score: auditResults.risk_score,
+            security_score: auditResults.security_score,
             audit_summary: auditResults.audit_summary
-          }
+          },
+          aws_credentials: awsCredentials ? {
+            access_key_id: awsCredentials.access_key_id,
+            secret_access_key: awsCredentials.secret_access_key,
+            region: awsCredentials.region
+          } : undefined
         })
       });
       
@@ -348,42 +397,57 @@ const AuditAccount: React.FC<AuditAccountProps> = ({ awsCredentials: propCredent
   };
 
   const getSeverityColor = (severity: string) => {
-    // Premium theme with richer, more saturated colors
+    // Elegant theme with gradients matching GeneratePolicy/ValidatePolicy style
     switch (severity) {
       case 'Critical': return { 
-        bg: 'bg-white', 
-        border: 'border-red-300', 
-        text: 'text-red-800', 
-        icon: 'bg-red-500 text-white',
-        badge: 'bg-red-500 text-white border-red-600'
+        bg: 'bg-gradient-to-br from-rose-50/80 to-pink-50/60', 
+        border: 'border-rose-300/60', 
+        text: 'text-rose-800', 
+        icon: 'bg-gradient-to-br from-rose-500 to-pink-600 text-white',
+        badge: 'bg-gradient-to-r from-rose-500 to-pink-600 text-white border-rose-600 shadow-md',
+        recommendation: 'from-blue-50 via-indigo-50 to-purple-50 border-blue-400',
+        whyItMatters: 'from-purple-50 via-fuchsia-50 to-pink-50 border-purple-400',
+        impact: 'from-indigo-50 via-violet-50 to-purple-50 border-indigo-400'
       };
       case 'High': return { 
-        bg: 'bg-white', 
-        border: 'border-orange-300', 
-        text: 'text-orange-800', 
-        icon: 'bg-orange-500 text-white',
-        badge: 'bg-orange-500 text-white border-orange-600'
+        bg: 'bg-gradient-to-br from-amber-50/80 to-orange-50/60', 
+        border: 'border-amber-300/60', 
+        text: 'text-amber-800', 
+        icon: 'bg-gradient-to-br from-amber-500 to-orange-600 text-white',
+        badge: 'bg-gradient-to-r from-amber-500 to-orange-600 text-white border-amber-600 shadow-md',
+        recommendation: 'from-blue-50 via-cyan-50 to-teal-50 border-blue-400',
+        whyItMatters: 'from-violet-50 via-purple-50 to-indigo-50 border-violet-400',
+        impact: 'from-sky-50 via-blue-50 to-indigo-50 border-sky-400'
       };
       case 'Medium': return { 
-        bg: 'bg-white', 
-        border: 'border-yellow-300', 
-        text: 'text-yellow-800', 
-        icon: 'bg-yellow-500 text-white',
-        badge: 'bg-yellow-500 text-white border-yellow-600'
+        bg: 'bg-gradient-to-br from-blue-50/80 to-cyan-50/60', 
+        border: 'border-blue-300/60', 
+        text: 'text-blue-800', 
+        icon: 'bg-gradient-to-br from-blue-500 to-cyan-600 text-white',
+        badge: 'bg-gradient-to-r from-blue-500 to-cyan-600 text-white border-blue-600 shadow-md',
+        recommendation: 'from-indigo-50 via-blue-50 to-cyan-50 border-indigo-400',
+        whyItMatters: 'from-purple-50 via-indigo-50 to-blue-50 border-purple-400',
+        impact: 'from-blue-50 via-sky-50 to-cyan-50 border-blue-400'
       };
       case 'Low': return { 
-        bg: 'bg-white', 
-        border: 'border-blue-300', 
-        text: 'text-blue-800', 
-        icon: 'bg-blue-500 text-white',
-        badge: 'bg-blue-500 text-white border-blue-600'
+        bg: 'bg-gradient-to-br from-slate-50/80 to-blue-50/60', 
+        border: 'border-slate-300/60', 
+        text: 'text-slate-800', 
+        icon: 'bg-gradient-to-br from-slate-500 to-blue-600 text-white',
+        badge: 'bg-gradient-to-r from-slate-500 to-blue-600 text-white border-slate-600 shadow-md',
+        recommendation: 'from-slate-50 via-blue-50 to-indigo-50 border-slate-400',
+        whyItMatters: 'from-blue-50 via-indigo-50 to-purple-50 border-blue-400',
+        impact: 'from-slate-50 via-gray-50 to-blue-50 border-slate-400'
       };
       default: return { 
-        bg: 'bg-white', 
-        border: 'border-slate-300', 
+        bg: 'bg-gradient-to-br from-slate-50/80 to-blue-50/60', 
+        border: 'border-slate-300/60', 
         text: 'text-slate-800', 
-        icon: 'bg-slate-500 text-white',
-        badge: 'bg-slate-500 text-white border-slate-600'
+        icon: 'bg-gradient-to-br from-slate-500 to-blue-600 text-white',
+        badge: 'bg-gradient-to-r from-slate-500 to-blue-600 text-white border-slate-600 shadow-md',
+        recommendation: 'from-slate-50 via-blue-50 to-indigo-50 border-slate-400',
+        whyItMatters: 'from-blue-50 via-indigo-50 to-purple-50 border-blue-400',
+        impact: 'from-slate-50 via-gray-50 to-blue-50 border-slate-400'
       };
     }
   };
@@ -432,8 +496,8 @@ const AuditAccount: React.FC<AuditAccountProps> = ({ awsCredentials: propCredent
       </div>
 
       <div className="relative max-w-7xl mx-auto px-4 sm:px-8 py-12 sm:py-20 z-10">
-        {/* Error Display */}
-        {error && (
+        {/* Error Display - Only show if there's an error AND we don't have successful audit results */}
+        {error && !auditResults?.success && (
           <div className="mb-8 bg-gradient-to-r from-red-500/10 to-rose-500/10 border-2 border-red-500/30 rounded-2xl p-6 backdrop-blur-xl">
             <div className="flex items-center space-x-3">
               <XCircle className="w-6 h-6 text-red-400" />
@@ -873,11 +937,68 @@ const AuditAccount: React.FC<AuditAccountProps> = ({ awsCredentials: propCredent
 
                 return (
                   <>
+                    {/* AWS Service Roles Info Banner - PROMINENT & BEAUTIFUL */}
+                    {auditResults.audit_summary?.aws_service_roles_excluded > 0 && (
+                      <div className="mb-6 bg-gradient-to-br from-indigo-50 via-blue-50 to-purple-50 border-2 border-indigo-300 rounded-2xl p-6 shadow-xl">
+                        <div className="flex items-start gap-5">
+                          <div className="flex-shrink-0 w-14 h-14 bg-gradient-to-br from-indigo-500 to-blue-600 rounded-2xl flex items-center justify-center shadow-lg">
+                            <Info className="w-7 h-7 text-white" />
+                          </div>
+                          <div className="flex-1">
+                            <div className="flex items-center gap-3 mb-3">
+                              <h4 className="text-indigo-900 text-xl font-bold">
+                                AWS Service Roles Excluded
+                              </h4>
+                              <span className="px-4 py-1.5 bg-gradient-to-r from-indigo-500 to-blue-600 text-white text-sm font-bold rounded-full shadow-md">
+                                {auditResults.audit_summary.aws_service_roles_excluded} roles
+                              </span>
+                            </div>
+                            
+                            <p className="text-indigo-800 text-base leading-relaxed font-medium mb-4">
+                              Your account has <strong>{auditResults.audit_summary.aws_service_roles_excluded} AWS Service Roles</strong> that are <strong className="text-indigo-900">system-managed by AWS</strong> and cannot be modified.
+                            </p>
+                            
+                            {/* Display ALL role names as elegant badges */}
+                            {auditResults.audit_summary.aws_service_role_names && auditResults.audit_summary.aws_service_role_names.length > 0 && (
+                              <div className="mb-4">
+                                <div className="text-indigo-900 text-sm font-bold mb-2">Excluded Roles:</div>
+                                <div className="flex flex-wrap gap-2">
+                                  {auditResults.audit_summary.aws_service_role_names.map((roleName: string, idx: number) => (
+                                    <span 
+                                      key={idx}
+                                      className="px-3 py-2 bg-white border-2 border-indigo-300 text-indigo-800 text-sm font-mono font-semibold rounded-lg shadow-sm hover:shadow-md hover:border-indigo-400 transition-all"
+                                    >
+                                      {roleName}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                            
+                            <div className="flex flex-wrap items-center gap-2 mb-3">
+                              <span className="px-4 py-2 bg-gradient-to-r from-emerald-100 to-green-100 text-emerald-800 font-bold rounded-lg border-2 border-emerald-400 shadow-sm text-sm">
+                                ✓ Designed with least privilege by AWS
+                              </span>
+                              <span className="px-4 py-2 bg-gradient-to-r from-slate-100 to-gray-100 text-slate-700 font-bold rounded-lg border-2 border-slate-400 shadow-sm text-sm">
+                                ✗ Cannot be modified by users
+                              </span>
+                            </div>
+                            
+                            <div className="bg-indigo-100 border-l-4 border-indigo-500 rounded-lg p-4">
+                              <p className="text-indigo-900 text-sm font-bold leading-relaxed">
+                                These roles are <strong className="text-indigo-950">excluded from all findings</strong> as they cannot be modified. Focus on analyzing the <strong className="text-indigo-950">{auditResults.audit_summary.user_managed_roles} user-managed roles</strong> below.
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    
                     {/* Results Summary */}
-                    <div className="mb-4 text-slate-600 text-sm font-medium">
-                      Showing <span className="text-slate-900 font-semibold">{filtered.length}</span> of <span className="text-slate-900 font-semibold">{auditResults.findings?.length || 0}</span> findings
+                    <div className="mb-4 text-slate-600 text-base font-medium">
+                      Showing <span className="text-slate-900 font-bold text-lg">{filtered.length}</span> of <span className="text-slate-900 font-bold text-lg">{auditResults.findings?.length || 0}</span> findings
                       {filtered.length !== (auditResults.findings?.length || 0) && (
-                        <span className="ml-2 px-2 py-1 bg-amber-100 text-amber-700 rounded-md text-xs font-medium border border-amber-200">
+                        <span className="ml-2 px-3 py-1.5 bg-amber-100 text-amber-700 rounded-lg text-sm font-bold border-2 border-amber-300 shadow-sm">
                           {(auditResults.findings?.length || 0) - filtered.length} filtered out
                         </span>
                       )}
@@ -928,6 +1049,29 @@ const AuditAccount: React.FC<AuditAccountProps> = ({ awsCredentials: propCredent
                                         className="mt-1 w-5 h-5 rounded-md border-2 border-slate-300 bg-white text-blue-600 focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 cursor-pointer transition-all hover:border-blue-400 checked:bg-blue-600 checked:border-blue-600"
                                       />
                                       <div className="flex-1">
+                                    {/* AWS Service Roles Exclusion Banner - Compact View */}
+                                    {finding.description && finding.description.includes('AWS Service Roles excluded') && (
+                                      <div className="bg-orange-50 border-l-4 border-orange-500 p-2 mb-2 rounded">
+                                        <p className="text-orange-900 text-xs font-bold flex items-center gap-1.5">
+                                          <Info className="w-4 h-4 flex-shrink-0" />
+                                          AWS Service Roles excluded (system-managed, cannot be modified)
+                                        </p>
+                                      </div>
+                                    )}
+                                    
+                                    {/* Wildcard Permissions Warning Banner - Compact View */}
+                                    {finding.description && finding.description.includes('wildcard permissions') && (
+                                      <div className="bg-gradient-to-r from-amber-50 to-orange-50 border-l-4 border-amber-500 p-3 mb-3 rounded-lg shadow-md animate-pulse-slow">
+                                        <p className="text-amber-900 text-sm font-bold flex items-center gap-2 mb-1">
+                                          <AlertTriangle className="w-5 h-5 flex-shrink-0" />
+                                          ⚠️ Wildcard Permissions - Manual Fix Required
+                                        </p>
+                                        <p className="text-amber-800 text-xs font-semibold leading-relaxed">
+                                          Roles use <code className="px-1.5 py-0.5 bg-amber-200 rounded text-xs">s3:*</code> or <code className="px-1.5 py-0.5 bg-amber-200 rounded text-xs">*:*</code>. Auto-remediation cannot safely modify wildcards. Manual editing required.
+                                        </p>
+                                      </div>
+                                    )}
+                                    
                                     <div className="flex items-center justify-between">
                                       <div className="flex items-center gap-3 flex-1 min-w-0">
                                         <span className={`px-2.5 py-1 ${colors.badge} border rounded-md text-xs font-semibold`}>
@@ -951,13 +1095,12 @@ const AuditAccount: React.FC<AuditAccountProps> = ({ awsCredentials: propCredent
                                     </div>
                                     {expandedFindings.has(globalIdx) && (
                                       <div className="mt-4 pt-4 border-t border-slate-200 space-y-3">
-                                        <div className="text-slate-600 text-sm leading-relaxed">{finding.description}</div>
-                                        <div className="bg-gradient-to-r from-emerald-100 to-green-100 border-2 border-emerald-400 rounded-lg p-3 shadow-sm">
-                                          <div className="text-emerald-800 text-xs font-bold mb-1.5 flex items-center">
-                                            <CheckCircle className="w-3 h-3 mr-1.5" />
+                                        <div className="text-slate-700 text-base leading-relaxed font-medium">{finding.description}</div>
+                                        <div className="bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 border-l-4 border-blue-500 rounded-xl p-4 shadow-md">
+                                          <div className="text-blue-900 text-sm font-bold mb-2">
                                             Quick Recommendation
                                           </div>
-                                          <div className="text-emerald-900 text-sm font-medium">{finding.recommendation}</div>
+                                          <div className="text-indigo-900 text-base font-semibold leading-relaxed">{finding.recommendation}</div>
                                         </div>
                                       </div>
                                     )}
@@ -982,9 +1125,39 @@ const AuditAccount: React.FC<AuditAccountProps> = ({ awsCredentials: propCredent
                                       className="mt-1 w-5 h-5 rounded-md border-2 border-slate-300 bg-white text-blue-600 focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 cursor-pointer transition-all hover:border-blue-400 checked:bg-blue-600 checked:border-blue-600"
                                     />
                                     <div className="flex-1">
+                                      {/* AWS Service Roles Exclusion Banner - ALWAYS VISIBLE */}
+                                      {finding.description && finding.description.includes('AWS Service Roles excluded') && (
+                                        <div className="bg-orange-50 border-2 border-orange-400 rounded-lg p-3 mb-3 shadow-sm animate-pulse-slow">
+                                          <div className="flex items-start gap-2">
+                                            <Info className="w-5 h-5 text-orange-600 flex-shrink-0" />
+                                            <p className="text-orange-900 text-sm font-bold">
+                                              AWS Service Roles excluded as they are system-managed and cannot be modified.
+                                            </p>
+                                          </div>
+                                        </div>
+                                      )}
+                                      
                                       <CollapsibleTile
-                                        title={finding.title}
-                                        subtitle={finding.description}
+                                        title={
+                                          <div className="flex items-center gap-2 flex-wrap">
+                                            <span>{finding.title}</span>
+                                            {/* Auto-fix / Manual label */}
+                                            {finding.title?.includes('Managed Policies') ? (
+                                              <span className="px-2.5 py-1 bg-amber-100 text-amber-900 text-xs font-bold rounded-lg border-2 border-amber-400">
+                                                🔧 MANUAL FIX REQUIRED
+                                              </span>
+                                            ) : finding.description?.includes('wildcard permissions') ? (
+                                              <span className="px-2.5 py-1 bg-orange-100 text-orange-900 text-xs font-bold rounded-lg border-2 border-orange-400">
+                                                ⚠️ WILDCARDS - MANUAL
+                                              </span>
+                                            ) : finding.type === 'Unused Permissions' ? (
+                                              <span className="px-2.5 py-1 bg-blue-100 text-blue-900 text-xs font-bold rounded-lg border-2 border-blue-400">
+                                                🤖 AUTO-FIX AVAILABLE
+                                              </span>
+                                            ) : null}
+                                          </div>
+                                        }
+                                        subtitle={finding.description.replace(/\. AWS Service Roles excluded as they are system-managed and cannot be modified\.?/gi, '.')}
                                         icon={
                                           <span className={`px-3 py-1.5 ${colors.badge} border rounded-lg font-semibold text-sm`}>
                                             {finding.severity}
@@ -995,12 +1168,90 @@ const AuditAccount: React.FC<AuditAccountProps> = ({ awsCredentials: propCredent
                                         className="mb-4"
                                         headerClassName="p-0"
                                       >
+                                        {/* AWS Service Roles Exclusion Banner */}
+                                        {finding.description && finding.description.includes('AWS Service Roles excluded') && (
+                                          <div className="bg-blue-50 border-2 border-blue-300 rounded-lg p-4 mb-4 shadow-sm">
+                                            <div className="flex items-start gap-3">
+                                              <Info className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                                              <div>
+                                                <div className="text-blue-900 text-sm font-bold mb-1">
+                                                  AWS Service Roles Excluded
+                                                </div>
+                                                <div className="text-blue-800 text-sm leading-relaxed">
+                                                  AWS Service Roles (like <code className="bg-blue-100 px-1.5 py-0.5 rounded text-xs">AWSServiceRoleFor*</code>) are system-managed and cannot be modified. This finding only includes <strong>user-managed roles</strong> that you can remediate.
+                                                </div>
+                                              </div>
+                                            </div>
+                                          </div>
+                                        )}
+                                        
+                                        {/* Wildcard Permissions Warning Banner - PROMINENT */}
+                                        {finding.description && finding.description.includes('wildcard permissions') && (
+                                          <div className="bg-gradient-to-r from-amber-50 via-orange-50 to-red-50 border-2 border-amber-500 rounded-xl p-5 mb-5 shadow-lg animate-pulse-slow">
+                                            <div className="flex items-start gap-4">
+                                              <div className="flex-shrink-0 w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center border-2 border-amber-400">
+                                                <AlertTriangle className="w-6 h-6 text-amber-600" />
+                                              </div>
+                                              <div>
+                                                <div className="text-amber-900 text-lg font-bold mb-2">
+                                                  ⚠️ Wildcard Permissions Detected
+                                                </div>
+                                                <div className="text-amber-900 text-base leading-relaxed font-semibold mb-3">
+                                                  Some roles use <code className="px-2 py-1 bg-amber-200 rounded font-mono text-sm">s3:*</code> or <code className="px-2 py-1 bg-amber-200 rounded font-mono text-sm">*:*</code> which grant 100+ permissions. Auto-remediation <strong>cannot safely modify wildcards</strong>.
+                                                </div>
+                                                <div className="bg-amber-100 border-l-4 border-amber-500 p-3 rounded">
+                                                  <p className="text-amber-900 text-sm font-bold mb-1">🔧 Manual Action Required:</p>
+                                                  <p className="text-amber-800 text-sm">Replace wildcards with explicit action lists, excluding unused permissions. See step-by-step remediation below.</p>
+                                                </div>
+                                              </div>
+                                            </div>
+                                          </div>
+                                        )}
+                                        
                                         {/* Basic Info */}
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                                          {finding.role && (
+                                          {(finding.role || (finding.affected_roles_list && finding.affected_roles_list.length > 0)) && (
                                             <div className="bg-slate-50 rounded-lg p-3 border border-slate-200">
-                                              <div className="text-slate-500 text-xs font-semibold mb-1">Affected Role</div>
-                                              <div className="text-slate-900 font-mono text-sm">{finding.role}</div>
+                                              <div className="text-slate-500 text-xs font-semibold mb-2">Affected {finding.affected_roles_list && finding.affected_roles_list.length > 1 ? 'Roles' : 'Role'}</div>
+                                              {finding.affected_roles_list && finding.affected_roles_list.length > 0 ? (
+                                                <div className="space-y-1">
+                                                  {finding.affected_roles_list.map((roleName, idx) => (
+                                                    <div key={idx} className="text-slate-900 font-mono text-xs bg-white px-2 py-1 rounded border border-slate-200">
+                                                      {roleName}
+                                                      {/* Show managed policies for this specific role if available */}
+                                                      {finding.managed_policies_info && finding.managed_policies_info.find(info => info.role_name === roleName) && (
+                                                        <div className="mt-1 pt-1 border-t border-slate-200">
+                                                          <div className="text-[10px] text-slate-500 font-semibold mb-0.5">Managed Policies ({finding.managed_policies_info.find(info => info.role_name === roleName)?.policy_count}):</div>
+                                                          <div className="flex flex-wrap gap-1">
+                                                            {finding.managed_policies_info.find(info => info.role_name === roleName)?.managed_policies.slice(0, 3).map((policy, pIdx) => (
+                                                              <span key={pIdx} className="px-1.5 py-0.5 bg-amber-100 text-amber-800 text-[10px] font-semibold rounded border border-amber-200">
+                                                                {policy}
+                                                              </span>
+                                                            ))}
+                                                            {(finding.managed_policies_info.find(info => info.role_name === roleName)?.managed_policies.length || 0) > 3 && (
+                                                              <span className="text-[10px] text-slate-500">+{(finding.managed_policies_info.find(info => info.role_name === roleName)?.managed_policies.length || 0) - 3} more</span>
+                                                            )}
+                                                          </div>
+                                                        </div>
+                                                      )}
+                                                    </div>
+                                                  ))}
+                                                </div>
+                                              ) : (
+                                                <div className="text-slate-900 font-mono text-sm">{finding.role}</div>
+                                              )}
+                                            </div>
+                                          )}
+                                          {finding.affected_services_list && finding.affected_services_list.length > 0 && (
+                                            <div className="bg-slate-50 rounded-lg p-3 border border-slate-200">
+                                              <div className="text-slate-500 text-xs font-semibold mb-2">Affected Services ({finding.affected_services_list.length})</div>
+                                              <div className="flex flex-wrap gap-1.5">
+                                                {finding.affected_services_list.map((service, idx) => (
+                                                  <span key={idx} className="px-2 py-1 bg-blue-100 text-blue-800 text-xs font-semibold rounded border border-blue-200">
+                                                    {service}
+                                                  </span>
+                                                ))}
+                                              </div>
                                             </div>
                                           )}
                                           {finding.affected_permissions && finding.affected_permissions.length > 0 && (
@@ -1016,36 +1267,33 @@ const AuditAccount: React.FC<AuditAccountProps> = ({ awsCredentials: propCredent
 
                                         {/* Recommendation */}
                                         {finding.recommendation && (
-                                          <div className="bg-gradient-to-r from-emerald-100 to-green-100 border-2 border-emerald-400 rounded-lg p-4 mb-4 shadow-sm">
-                                            <div className="text-emerald-800 text-sm font-bold mb-2 flex items-center">
-                                              <CheckCircle className="w-4 h-4 mr-2" />
+                                          <div className="bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 border-l-4 border-blue-500 p-5 mb-5 rounded-xl shadow-md">
+                                            <div className="text-blue-900 text-base font-bold mb-3">
                                               Quick Recommendation
                                             </div>
-                                            <div className="text-emerald-900 text-sm leading-relaxed font-medium">{finding.recommendation}</div>
+                                            <div className="text-indigo-900 text-base leading-relaxed font-medium">{finding.recommendation}</div>
                                           </div>
                                         )}
 
                                         {/* Detailed Information */}
-                                        <div className="space-y-4">
+                                        <div className="space-y-5">
                                       {/* Why It Matters */}
                                       {finding.why_it_matters && (
-                                        <div className="bg-gradient-to-r from-amber-100 to-yellow-100 border-2 border-amber-400 rounded-lg p-4 shadow-sm">
-                                          <div className="text-amber-800 text-sm font-bold mb-2 flex items-center">
-                                            <AlertCircle className="w-4 h-4 mr-2" />
+                                        <div className="bg-gradient-to-r from-amber-50 via-orange-50 to-yellow-50 border-l-4 border-amber-500 p-5 rounded-xl shadow-md">
+                                          <div className="text-amber-900 text-base font-bold mb-3">
                                             Why This Matters
                                           </div>
-                                          <div className="text-amber-900 text-sm leading-relaxed font-medium">{finding.why_it_matters}</div>
+                                          <div className="text-amber-900 text-base leading-relaxed font-medium">{finding.why_it_matters}</div>
                                         </div>
                                       )}
 
                                       {/* Impact */}
                                       {finding.impact && (
-                                        <div className="bg-gradient-to-r from-red-100 to-rose-100 border-2 border-red-400 rounded-lg p-4 shadow-sm">
-                                          <div className="text-red-800 text-sm font-bold mb-2 flex items-center">
-                                            <AlertTriangle className="w-4 h-4 mr-2" />
+                                        <div className="bg-gradient-to-r from-red-50 via-rose-50 to-pink-50 border-l-4 border-red-400 p-5 rounded-xl shadow-md">
+                                          <div className="text-red-900 text-base font-bold mb-3">
                                             Potential Impact
                                           </div>
-                                          <div className="text-red-900 text-sm leading-relaxed font-medium">{finding.impact}</div>
+                                          <div className="text-red-900 text-base leading-relaxed font-medium">{finding.impact}</div>
                                         </div>
                                       )}
 
@@ -1237,6 +1485,16 @@ const AuditAccount: React.FC<AuditAccountProps> = ({ awsCredentials: propCredent
                                         setExpandedFindings(newExpanded);
                                       }}
                                     >
+                                      {/* AWS Service Roles Exclusion Banner - Demo Compact View */}
+                                      {finding.description && finding.description.includes('AWS Service Roles excluded') && (
+                                        <div className="bg-orange-50 border-l-4 border-orange-500 p-2 mb-3 rounded">
+                                          <p className="text-orange-900 text-xs font-bold flex items-center gap-1.5">
+                                            <Info className="w-4 h-4 flex-shrink-0" />
+                                            AWS Service Roles excluded (system-managed, cannot be modified)
+                                          </p>
+                                        </div>
+                                      )}
+                                      
                                       <div className="flex items-center justify-between">
                                         <div className="flex items-center gap-3 flex-1 min-w-0">
                                           <span className={`px-2.5 py-1 ${colors.badge} border rounded-md text-xs font-semibold`}>
@@ -1261,9 +1519,9 @@ const AuditAccount: React.FC<AuditAccountProps> = ({ awsCredentials: propCredent
                                       {expandedFindings.has(globalIdx) && (
                                         <div className="mt-4 pt-4 border-t border-slate-200 space-y-3">
                                           <div className="text-slate-600 text-sm leading-relaxed">{finding.description}</div>
-                                          <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3">
-                                            <div className="text-emerald-700 text-xs font-semibold mb-1.5">Quick Recommendation</div>
-                                            <div className="text-slate-700 text-sm">{finding.recommendation}</div>
+                                          <div className="bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 border-l-4 border-blue-500 rounded-lg p-3">
+                                            <div className="text-blue-900 text-xs font-bold mb-1.5">Quick Recommendation</div>
+                                            <div className="text-indigo-900 text-sm font-medium">{finding.recommendation}</div>
                                           </div>
                                         </div>
                                       )}
@@ -1301,10 +1559,48 @@ const AuditAccount: React.FC<AuditAccountProps> = ({ awsCredentials: propCredent
                                     </div>
                                     
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                                      {finding.role && (
+                                      {(finding.role || (finding.affected_roles_list && finding.affected_roles_list.length > 0)) && (
                                         <div className="bg-slate-50 rounded-lg p-3 border border-slate-200">
-                                          <div className="text-slate-500 text-xs font-semibold mb-1">Affected Role</div>
-                                          <div className="text-slate-900 font-mono text-sm">{finding.role}</div>
+                                          <div className="text-slate-500 text-xs font-semibold mb-2">Affected {finding.affected_roles_list && finding.affected_roles_list.length > 1 ? 'Roles' : 'Role'}</div>
+                                          {finding.affected_roles_list && finding.affected_roles_list.length > 0 ? (
+                                            <div className="space-y-1 max-h-32 overflow-y-auto">
+                                              {finding.affected_roles_list.map((roleName, idx) => (
+                                                <div key={idx} className="text-slate-900 font-mono text-xs bg-white px-2 py-1 rounded border border-slate-200">
+                                                  {roleName}
+                                                  {/* Show managed policies for this specific role if available */}
+                                                  {finding.managed_policies_info && finding.managed_policies_info.find(info => info.role_name === roleName) && (
+                                                    <div className="mt-1 pt-1 border-t border-slate-200">
+                                                      <div className="text-[10px] text-slate-500 font-semibold mb-0.5">Managed Policies ({finding.managed_policies_info.find(info => info.role_name === roleName)?.policy_count}):</div>
+                                                      <div className="flex flex-wrap gap-1">
+                                                        {finding.managed_policies_info.find(info => info.role_name === roleName)?.managed_policies.slice(0, 3).map((policy, pIdx) => (
+                                                          <span key={pIdx} className="px-1.5 py-0.5 bg-amber-100 text-amber-800 text-[10px] font-semibold rounded border border-amber-200">
+                                                            {policy}
+                                                          </span>
+                                                        ))}
+                                                        {(finding.managed_policies_info.find(info => info.role_name === roleName)?.managed_policies.length || 0) > 3 && (
+                                                          <span className="text-[10px] text-slate-500">+{(finding.managed_policies_info.find(info => info.role_name === roleName)?.managed_policies.length || 0) - 3} more</span>
+                                                        )}
+                                                      </div>
+                                                    </div>
+                                                  )}
+                                                </div>
+                                              ))}
+                                            </div>
+                                          ) : (
+                                            <div className="text-slate-900 font-mono text-sm">{finding.role}</div>
+                                          )}
+                                        </div>
+                                      )}
+                                      {finding.affected_services_list && finding.affected_services_list.length > 0 && (
+                                        <div className="bg-slate-50 rounded-lg p-3 border border-slate-200">
+                                          <div className="text-slate-500 text-xs font-semibold mb-2">Affected Services ({finding.affected_services_list.length})</div>
+                                          <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto">
+                                            {finding.affected_services_list.map((service, idx) => (
+                                              <span key={idx} className="px-2 py-1 bg-blue-100 text-blue-800 text-xs font-semibold rounded border border-blue-200">
+                                                {service}
+                                              </span>
+                                            ))}
+                                          </div>
                                         </div>
                                       )}
                                       {finding.affected_permissions && finding.affected_permissions.length > 0 && (
@@ -1331,29 +1627,26 @@ const AuditAccount: React.FC<AuditAccountProps> = ({ awsCredentials: propCredent
                                       )}
                                     </div>
 
-                                    <div className="bg-gradient-to-r from-emerald-100 to-green-100 border-2 border-emerald-400 rounded-lg p-4 mb-4 shadow-sm">
-                                      <div className="text-emerald-800 text-sm font-bold mb-2 flex items-center">
-                                        <CheckCircle className="w-4 h-4 mr-2" />
+                                    <div className="bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 border-l-4 border-blue-500 rounded-lg p-4 mb-4 shadow-md">
+                                      <div className="text-blue-900 text-sm font-bold mb-2">
                                         Quick Recommendation
                                       </div>
-                                      <div className="text-emerald-900 text-sm leading-relaxed font-medium">{finding.recommendation}</div>
+                                      <div className="text-indigo-900 text-sm leading-relaxed font-medium">{finding.recommendation}</div>
                                     </div>
 
                                     {expandedFindings.has(globalIdx) && (
                                       <div className="mt-4 space-y-4 pt-4 border-t border-slate-200">
                                         {finding.why_it_matters && (
-                                          <div className="bg-gradient-to-r from-amber-100 to-yellow-100 border-2 border-amber-400 rounded-lg p-4 shadow-sm">
-                                            <div className="text-amber-800 text-sm font-bold mb-2 flex items-center">
-                                              <AlertCircle className="w-4 h-4 mr-2" />
+                                          <div className="bg-gradient-to-r from-amber-50 via-orange-50 to-yellow-50 border-l-4 border-amber-500 rounded-lg p-4 shadow-md">
+                                            <div className="text-amber-900 text-sm font-bold mb-2">
                                               Why This Matters
                                             </div>
                                             <div className="text-amber-900 text-sm leading-relaxed font-medium">{finding.why_it_matters}</div>
                                           </div>
                                         )}
                                         {finding.impact && (
-                                          <div className="bg-gradient-to-r from-red-100 to-rose-100 border-2 border-red-400 rounded-lg p-4 shadow-sm">
-                                            <div className="text-red-800 text-sm font-bold mb-2 flex items-center">
-                                              <AlertTriangle className="w-4 h-4 mr-2" />
+                                          <div className="bg-gradient-to-r from-red-50 via-rose-50 to-pink-50 border-l-4 border-red-400 rounded-lg p-4 shadow-md">
+                                            <div className="text-red-900 text-sm font-bold mb-2">
                                               Potential Impact
                                             </div>
                                             <div className="text-red-900 text-sm leading-relaxed font-medium">{finding.impact}</div>
@@ -2047,14 +2340,23 @@ const AuditAccount: React.FC<AuditAccountProps> = ({ awsCredentials: propCredent
                                   <div className="text-slate-600 text-sm font-mono mb-2">{finding.role}</div>
                                 )}
                                 <div className="text-slate-600 text-sm mb-3">{finding.description}</div>
+                                
+                                {/* AWS Service Roles Exclusion Note */}
+                                {finding.description && finding.description.includes('AWS Service Roles excluded') && (
+                                  <div className="bg-blue-100 border border-blue-300 rounded-md p-2 mb-3 flex items-start gap-2">
+                                    <Info className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
+                                    <p className="text-blue-800 text-xs">
+                                      <strong>Note:</strong> AWS Service Roles are excluded - only user-managed roles will be remediated.
+                                    </p>
+                                  </div>
+                                )}
                               </div>
                             </div>
-                            <div className="bg-gradient-to-r from-emerald-100 to-green-100 border-2 border-emerald-400 rounded-lg p-3 shadow-sm">
-                              <div className="text-emerald-800 text-sm font-bold mb-1 flex items-center">
-                                <CheckCircle className="w-3 h-3 mr-1.5" />
+                            <div className="bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 border-l-4 border-blue-500 rounded-lg p-3 shadow-md">
+                              <div className="text-blue-900 text-sm font-bold mb-1">
                                 Proposed Fix:
                               </div>
-                              <div className="text-emerald-900 text-sm font-medium">{finding.recommendation}</div>
+                              <div className="text-indigo-900 text-sm font-medium">{finding.recommendation}</div>
                             </div>
                           </div>
                         );
@@ -2141,12 +2443,36 @@ const AuditAccount: React.FC<AuditAccountProps> = ({ awsCredentials: propCredent
                           setRemediationStep('processing');
                           setIsRemediating(true);
                           const findingsToRemediate = Array.from(selectedFindings).map(idx => auditResults.findings?.[idx]).filter(Boolean);
+                          
+                          // Filter AWS Service Roles from affected_roles_list (defensive programming)
+                          const cleanedFindings = findingsToRemediate.map(finding => {
+                            if (finding.affected_roles_list && finding.affected_roles_list.length > 0) {
+                              const userManagedRoles = finding.affected_roles_list.filter(
+                                (role: string) => !role.startsWith('AWSServiceRoleFor')
+                              );
+                              return {
+                                ...finding,
+                                affected_roles_list: userManagedRoles,
+                                role: userManagedRoles.length > 1 
+                                  ? `Multiple roles (${userManagedRoles.length})` 
+                                  : (userManagedRoles[0] || null)
+                              };
+                            }
+                            return finding;
+                          });
+                          
+                          console.log('🔧 Cleaned findings (AWS Service Roles filtered):', cleanedFindings.map(f => ({
+                            id: f.id,
+                            title: f.title,
+                            affected_roles: f.affected_roles_list
+                          })));
+                          
                           try {
                             const response = await fetch(`${API_URL}/api/audit/remediate`, {
                               method: 'POST',
                               headers: { 'Content-Type': 'application/json' },
                               body: JSON.stringify({
-                                findings: findingsToRemediate,
+                                findings: cleanedFindings,
                                 mode: 'selected',
                                 aws_credentials: {
                                   access_key_id: awsCredentials.access_key_id,
@@ -2179,7 +2505,7 @@ const AuditAccount: React.FC<AuditAccountProps> = ({ awsCredentials: propCredent
                             Applying Changes...
                           </>
                         ) : (
-                          '🚀 Confirm & Apply Remediation'
+                          'Confirm & Apply Remediation'
                         )}
                       </button>
                     </div>
@@ -2198,24 +2524,308 @@ const AuditAccount: React.FC<AuditAccountProps> = ({ awsCredentials: propCredent
                 {/* Step 5: Complete - Premium Light */}
                 {remediationStep === 'complete' && remediationResults && (
                   <div>
-                    <div className="bg-emerald-50 border-2 border-emerald-200 rounded-xl p-6 mb-6">
-                      <div className="flex items-center space-x-3 mb-4">
-                        <CheckCircle className="w-8 h-8 text-emerald-600" />
-                        <div>
-                          <h4 className="text-emerald-800 font-bold text-xl">Remediation Complete!</h4>
-                          <p className="text-emerald-700 text-sm">
-                            Successfully fixed {remediationResults.remediated} out of {selectedFindings.size} selected issues.
-                          </p>
+                    {remediationResults.remediated > 0 ? (
+                      <div className="bg-gradient-to-r from-emerald-50 via-green-50 to-teal-50 border-2 border-emerald-300 rounded-xl p-6 mb-6 shadow-lg">
+                        <div className="flex items-center space-x-3 mb-4">
+                          <div className="w-12 h-12 bg-gradient-to-br from-emerald-500 to-green-600 rounded-full flex items-center justify-center shadow-md">
+                            <CheckCircle className="w-7 h-7 text-white" />
+                          </div>
+                          <div>
+                            <h4 className="text-emerald-900 font-bold text-xl">Remediation Complete!</h4>
+                            <p className="text-emerald-800 text-base font-medium">
+                              Successfully fixed {remediationResults.remediated} out of {selectedFindings.size} selected issues.
+                            </p>
+                          </div>
                         </div>
+                        
+                        {/* Show detailed results for successful fixes */}
+                        {remediationResults.results && remediationResults.results.filter((r: any) => r.success).length > 0 && (
+                          <div className="mt-4 space-y-4">
+                            {remediationResults.results.filter((r: any) => r.success).map((result: any, idx: number) => (
+                              <div key={idx} className="bg-white border-2 border-emerald-200 rounded-xl p-6 shadow-lg">
+                                <div className="flex items-start gap-3 mb-4">
+                                  <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-green-600 rounded-full flex items-center justify-center text-white font-bold flex-shrink-0 shadow-md">
+                                    {idx + 1}
+                                  </div>
+                                  <div className="flex-1">
+                                    <h5 className="text-emerald-900 font-bold text-lg mb-1">{result.title}</h5>
+                                    <p className="text-emerald-700 text-sm font-semibold">Remediation Status: Fixed ✓</p>
+                                  </div>
+                                </div>
+                                
+                                {/* Display structured success_details if available (for multiple roles) */}
+                                {result.success_details && result.success_details.length > 0 ? (
+                                  <div className="space-y-4">
+                                    {/* Summary header */}
+                                    <div className="bg-gradient-to-r from-emerald-50 via-green-50 to-teal-50 border-2 border-emerald-300 rounded-lg p-4">
+                                      <p className="text-emerald-900 font-bold text-base">
+                                        ✅ Successfully remediated {result.success_details.length} role{result.success_details.length > 1 ? 's' : ''}!
+                                      </p>
+                                    </div>
+                                    
+                                    {/* Per-role details */}
+                                    {result.success_details.map((detail: any, roleIdx: number) => (
+                                      <div key={roleIdx} className="bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 border-2 border-indigo-200 rounded-xl p-5 shadow-md">
+                                        {/* Role Header */}
+                                        <div className="flex items-center gap-3 mb-4 pb-3 border-b-2 border-indigo-200">
+                                          <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold text-lg shadow-md">
+                                            {roleIdx + 1}
+                                          </div>
+                                          <div className="flex-1">
+                                            <p className="text-indigo-900 font-bold text-lg font-mono">{detail.role}</p>
+                                            <p className="text-indigo-600 text-xs font-semibold">Successfully Remediated ✓</p>
+                                          </div>
+                                          <a
+                                            href={`https://console.aws.amazon.com/iam/home#/roles/${detail.role}`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5"
+                                          >
+                                            <ExternalLink className="w-3.5 h-3.5" />
+                                            View in Console
+                                          </a>
+                                        </div>
+                                        
+                                        {/* Actions Taken */}
+                                        {detail.actions_taken && detail.actions_taken.length > 0 && (
+                                          <div className="mb-4">
+                                            <p className="text-indigo-900 font-bold text-sm mb-2 flex items-center gap-2">
+                                              <CheckCircle className="w-4 h-4 text-emerald-600" />
+                                              Actions Taken ({detail.actions_taken.length})
+                                            </p>
+                                            <div className="bg-white rounded-lg p-3 border border-indigo-200 space-y-1.5">
+                                              {detail.actions_taken.map((action: string, actionIdx: number) => (
+                                                <div key={actionIdx} className="flex items-start gap-2 text-sm text-slate-800">
+                                                  <span className="text-emerald-600 font-bold mt-0.5">•</span>
+                                                  <span className="flex-1">{action}</span>
+                                                </div>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        )}
+                                        
+                                        {/* Detailed Message */}
+                                        {detail.message && (
+                                          <div className="bg-white rounded-lg p-4 border border-indigo-200">
+                                            <p className="text-indigo-900 font-bold text-sm mb-2">Remediation Details:</p>
+                                            <div 
+                                              className="text-sm text-slate-800 leading-relaxed"
+                                              dangerouslySetInnerHTML={{ 
+                                                __html: detail.message
+                                                  .replace(/\*\*(.*?)\*\*/g, '<strong class="text-purple-800 font-semibold">$1</strong>')
+                                                  .replace(/• /g, '<span class="text-indigo-600 font-bold">• </span>')
+                                                  .replace(/✅ /g, '<span class="text-emerald-600">✅ </span>')
+                                                  .replace(/📍 /g, '<span class="text-blue-600">📍 </span>')
+                                                  .replace(/📝 /g, '<span class="text-purple-600">📝 </span>')
+                                                  .replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" class="text-blue-600 hover:text-blue-800 underline font-medium">$1</a>')
+                                                  .replace(/\n/g, '<br />')
+                                              }}
+                                            />
+                                          </div>
+                                        )}
+                                      </div>
+                                    ))}
+                                    
+                                    {/* Verification Steps */}
+                                    <div className="bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 border-2 border-blue-300 rounded-xl p-5 shadow-md">
+                                      <p className="text-blue-900 font-bold text-base mb-3 flex items-center gap-2">
+                                        <Eye className="w-5 h-5 text-blue-600" />
+                                        Verification Steps
+                                      </p>
+                                      <ol className="space-y-2.5 text-blue-900 text-sm font-medium">
+                                        <li className="flex items-start gap-3">
+                                          <span className="font-bold min-w-[24px] text-blue-600 bg-blue-200 rounded-full w-6 h-6 flex items-center justify-center">1</span>
+                                          <span>Open AWS Console → IAM → Roles</span>
+                                        </li>
+                                        <li className="flex items-start gap-3">
+                                          <span className="font-bold min-w-[24px] text-blue-600 bg-blue-200 rounded-full w-6 h-6 flex items-center justify-center">2</span>
+                                          <span>Select each remediated role from the list above</span>
+                                        </li>
+                                        <li className="flex items-start gap-3">
+                                          <span className="font-bold min-w-[24px] text-blue-600 bg-blue-200 rounded-full w-6 h-6 flex items-center justify-center">3</span>
+                                          <span>Go to 'Permissions' tab to review inline policies</span>
+                                        </li>
+                                        <li className="flex items-start gap-3">
+                                          <span className="font-bold min-w-[24px] text-blue-600 bg-blue-200 rounded-full w-6 h-6 flex items-center justify-center">4</span>
+                                          <span>Go to 'Access Advisor' tab to verify permission usage</span>
+                                        </li>
+                                        <li className="flex items-start gap-3">
+                                          <span className="font-bold min-w-[24px] text-blue-600 bg-blue-200 rounded-full w-6 h-6 flex items-center justify-center">5</span>
+                                          <span>Monitor CloudWatch Logs for any AccessDenied errors</span>
+                                        </li>
+                                      </ol>
+                                    </div>
+                                    
+                                    {/* Fallback: Show message if no success_details structure */}
+                                    {result.message && (
+                                      <div className="mt-4 text-sm text-slate-800 leading-relaxed bg-slate-50 p-4 rounded-lg border border-slate-200">
+                                        <p className="text-slate-600 font-semibold mb-2">Additional Information:</p>
+                                        <div 
+                                          dangerouslySetInnerHTML={{ 
+                                            __html: result.message
+                                              .replace(/\*\*(.*?)\*\*/g, '<strong class="text-purple-800">$1</strong>')
+                                              .replace(/• /g, '<span class="text-indigo-600">• </span>')
+                                              .replace(/✅ /g, '<span class="text-emerald-600">✅ </span>')
+                                              .replace(/📍 /g, '<span class="text-blue-600">📍 </span>')
+                                              .replace(/📝 /g, '<span class="text-purple-600">📝 </span>')
+                                              .replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" class="text-blue-600 hover:text-blue-800 underline font-medium">$1</a>')
+                                              .replace(/\n/g, '<br />')
+                                          }}
+                                        />
+                                      </div>
+                                    )}
+                                  </div>
+                                ) : (
+                                  /* Single role or no success_details - show message */
+                                  <div 
+                                    className="mt-3 text-sm text-slate-800 leading-relaxed bg-slate-50 p-4 rounded-lg border border-slate-200"
+                                    dangerouslySetInnerHTML={{ 
+                                      __html: result.message
+                                        .replace(/\*\*(.*?)\*\*/g, '<strong class="text-purple-800">$1</strong>')
+                                        .replace(/• /g, '<span class="text-indigo-600">• </span>')
+                                        .replace(/✅ /g, '<span class="text-emerald-600">✅ </span>')
+                                        .replace(/📍 /g, '<span class="text-blue-600">📍 </span>')
+                                        .replace(/📝 /g, '<span class="text-purple-600">📝 </span>')
+                                        .replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" class="text-blue-600 hover:text-blue-800 underline font-medium">$1</a>')
+                                        .replace(/\n/g, '<br />')
+                                    }}
+                                  />
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        
+                        {remediationResults.failed > 0 && (
+                          <div className="bg-amber-50 border-2 border-amber-300 rounded-lg p-4 mt-4">
+                            <p className="text-amber-900 text-sm font-semibold">
+                              ⚠️ {remediationResults.failed} fixes failed. Review errors above for details.
+                            </p>
+                          </div>
+                        )}
                       </div>
-                      {remediationResults.failed > 0 && (
-                        <div className="bg-red-50 border border-red-200 rounded-lg p-3 mt-4">
-                          <p className="text-red-700 text-sm">
-                            {remediationResults.failed} fixes failed. Please review the errors and try again.
-                          </p>
+                    ) : (
+                      <div className="bg-gradient-to-r from-purple-50 via-indigo-50 to-blue-50 border-2 border-purple-300 rounded-xl p-6 mb-6 shadow-lg">
+                        <div className="flex items-center space-x-3 mb-4">
+                          <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-full flex items-center justify-center shadow-md">
+                            <XCircle className="w-7 h-7 text-white" />
+                          </div>
+                          <div>
+                            <h4 className="text-purple-900 font-bold text-xl">Remediation Failed</h4>
+                            <p className="text-indigo-700 text-base font-medium">
+                              {remediationResults.failed} fixes failed. See specific errors below:
+                            </p>
+                          </div>
                         </div>
-                      )}
-                    </div>
+                        {remediationResults.results && remediationResults.results.length > 0 && (
+                          <div className="mt-4 space-y-4">
+                            {remediationResults.results.map((result: any, idx: number) => (
+                              <div key={idx} className="bg-white border-2 border-purple-200 rounded-xl overflow-hidden shadow-lg">
+                                <div className="bg-gradient-to-r from-purple-100 to-indigo-100 px-5 py-3 border-b-2 border-purple-200">
+                                  <p className="font-bold text-purple-900 text-lg">{result.title}</p>
+                                </div>
+                                
+                                <div className="p-5 space-y-4">
+                                  {/* Show specific failed roles if available */}
+                                  {result.failed_roles && result.failed_roles.length > 0 ? (
+                                    result.failed_roles.slice(0, 5).map((failedRole: any, rIdx: number) => {
+                                      // Parse the detailed message to extract sections
+                                      const message = failedRole.reason || '';
+                                      const lines = message.split('\n');
+                                      
+                                      return (
+                                        <div key={rIdx} className="bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 border-2 border-indigo-200 rounded-xl p-5 shadow-md">
+                                          {/* Role Name Header */}
+                                          <div className="flex items-center gap-3 mb-4 pb-3 border-b-2 border-indigo-200">
+                                            <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-full flex items-center justify-center text-white font-bold text-lg shadow-md">
+                                              {rIdx + 1}
+                                            </div>
+                                            <div>
+                                              <p className="text-indigo-900 font-bold text-lg font-mono">{failedRole.role}</p>
+                                              <p className="text-purple-600 text-xs font-semibold">Remediation Failed</p>
+                                            </div>
+                                          </div>
+                                          
+                                          {/* Security Risk */}
+                                          {message.includes('SECURITY RISK') && (
+                                            <div className="bg-gradient-to-r from-red-50 via-rose-50 to-pink-50 border-l-4 border-red-400 p-5 rounded-xl mb-4 shadow-md">
+                                              <p className="text-red-900 font-bold text-base mb-2">
+                                                SECURITY RISK
+                                              </p>
+                                              <p className="text-red-800 text-sm font-medium leading-relaxed">
+                                                This role has wildcard permissions (<code className="px-2 py-0.5 bg-red-200 rounded text-xs font-mono">s3:*</code>, <code className="px-2 py-0.5 bg-red-200 rounded text-xs font-mono">*:*</code>) that include the unused actions.
+                                              </p>
+                                            </div>
+                                          )}
+                                          
+                                          {/* Why This Failed */}
+                                          {message.includes('Why This Failed') && (
+                                            <div className="bg-gradient-to-r from-amber-50 via-orange-50 to-yellow-50 border-l-4 border-amber-500 p-5 rounded-xl mb-4 shadow-md">
+                                              <p className="text-amber-900 font-bold text-base mb-2">
+                                                Why This Failed
+                                              </p>
+                                              <p className="text-amber-800 text-sm font-medium leading-relaxed">
+                                                Auto-remediation cannot safely modify wildcards because they cover <strong>100+ actions</strong>. Removing the wildcard would require listing all remaining actions explicitly, which is error-prone and may break functionality.
+                                              </p>
+                                            </div>
+                                          )}
+                                          
+                                          {/* Manual Fix Required */}
+                                          {message.includes('Manual Fix Required') && (
+                                            <div className="bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 border-l-4 border-blue-500 p-5 rounded-xl shadow-md">
+                                              <p className="text-blue-900 font-bold text-base mb-3">
+                                                Manual Fix Required
+                                              </p>
+                                              <ol className="space-y-2.5 text-blue-900 text-sm font-medium">
+                                                <li className="flex items-start gap-3">
+                                                  <span className="font-bold min-w-[24px] text-blue-600">1.</span>
+                                                  <span>Review the policy to identify which actions are actually needed</span>
+                                                </li>
+                                                <li className="flex items-start gap-3">
+                                                  <span className="font-bold min-w-[24px] text-blue-600">2.</span>
+                                                  <span>Replace wildcards (<code className="px-1.5 py-0.5 bg-blue-200 rounded text-xs">s3:*</code>, <code className="px-1.5 py-0.5 bg-blue-200 rounded text-xs">*:*</code>) with explicit action lists</span>
+                                                </li>
+                                                <li className="flex items-start gap-3">
+                                                  <span className="font-bold min-w-[24px] text-blue-600">3.</span>
+                                                  <span>Exclude the unused permissions: <code className="px-1.5 py-0.5 bg-blue-200 rounded text-xs font-mono">s3:DeleteBucket</code>, <code className="px-1.5 py-0.5 bg-blue-200 rounded text-xs font-mono">iam:DeleteUser</code>, <code className="px-1.5 py-0.5 bg-blue-200 rounded text-xs font-mono">rds:DeleteDBInstance</code></span>
+                                                </li>
+                                                <li className="flex items-start gap-3">
+                                                  <span className="font-bold min-w-[24px] text-blue-600">4.</span>
+                                                  <span>Test in staging before deploying to production</span>
+                                                </li>
+                                              </ol>
+                                              {message.includes('Wildcard Actions Detected') && (
+                                                <div className="mt-3 pt-3 border-t border-blue-200">
+                                                  <p className="text-blue-800 text-xs font-semibold">
+                                                    Note: This also addresses the 'Wildcard Actions Detected' critical finding.
+                                                  </p>
+                                                </div>
+                                              )}
+                                            </div>
+                                          )}
+                                        </div>
+                                      );
+                                    })
+                                  ) : (
+                                    <div className="text-indigo-800 text-sm leading-relaxed whitespace-pre-line font-medium bg-indigo-50 p-4 rounded-lg border border-indigo-200">
+                                      {result.message}
+                                    </div>
+                                  )}
+                                  
+                                  {result.failed_roles && result.failed_roles.length > 5 && (
+                                    <div className="bg-purple-100 border border-purple-300 rounded-lg p-3">
+                                      <p className="text-purple-900 text-sm font-bold">
+                                        ...and {result.failed_roles.length - 5} more roles with similar issues
+                                      </p>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
                     <div className="flex items-center justify-center space-x-4">
                       <button
                         onClick={() => {
@@ -2274,7 +2884,22 @@ const AuditAccount: React.FC<AuditAccountProps> = ({ awsCredentials: propCredent
                             ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white border-blue-400 max-w-md ml-auto' 
                             : 'bg-gradient-to-br from-blue-50 to-purple-50 border-blue-200 text-slate-700'
                         }`}>
-                          <p className={`text-sm whitespace-pre-wrap font-medium ${msg.role === 'user' ? 'text-white' : 'text-slate-700'}`}>{msg.content}</p>
+                          <div 
+                            className={`text-sm whitespace-pre-wrap font-medium leading-relaxed ${msg.role === 'user' ? 'text-white' : 'text-slate-700'}`}
+                            dangerouslySetInnerHTML={{
+                              __html: msg.content
+                                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                                .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                                .replace(/`([^`]+)`/g, '<code class="bg-slate-100 px-1.5 py-0.5 rounded text-xs font-mono">$1</code>')
+                                .replace(/^### (.*$)/gm, '<h3 class="font-bold text-base mt-4 mb-2">$1</h3>')
+                                .replace(/^## (.*$)/gm, '<h2 class="font-bold text-lg mt-4 mb-2">$1</h2>')
+                                .replace(/^# (.*$)/gm, '<h1 class="font-bold text-xl mt-4 mb-2">$1</h1>')
+                                .replace(/^\- (.*$)/gm, '<div class="ml-4 mb-1">• $1</div>')
+                                .replace(/^(\d+)\. (.*$)/gm, '<div class="ml-4 mb-1">$1. $2</div>')
+                                .replace(/\n\n/g, '<br /><br />')
+                                .replace(/\n/g, '<br />')
+                            }}
+                          />
                         </div>
                         {msg.role === 'user' && (
                           <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-slate-600 to-slate-700 flex items-center justify-center flex-shrink-0 shadow-lg">
@@ -2497,39 +3122,24 @@ const AuditAccount: React.FC<AuditAccountProps> = ({ awsCredentials: propCredent
               <button
                 onClick={() => {
                   if (!auditResults) return;
-                  const summaryLines = [
-                    'Aegis IAM - Audit Report',
-                    `Generated: ${new Date().toLocaleString()}`,
-                    '',
-                    `Security Score: ${auditResults.security_score ?? Math.max(0, 100 - (auditResults.risk_score || 100))}`,
-                    `Risk Score: ${auditResults.risk_score || 0}`,
-                    `Findings: ${auditResults.audit_summary.total_findings} (Critical ${auditResults.audit_summary.critical_issues}, High ${auditResults.audit_summary.high_issues}, Medium ${(auditResults.findings || []).filter(f => f.severity === 'Medium').length}, Low ${(auditResults.findings || []).filter(f => f.severity === 'Low').length})`,
-                    '',
-                    'Report generated by Aegis IAM.'
-                  ];
-                  const mailBody = summaryLines.join('\n');
-                  const mailto = `mailto:?subject=${encodeURIComponent('Aegis IAM Audit Report')}&body=${encodeURIComponent(mailBody)}`;
-                  if (navigator.share) {
-                    navigator.share({ title: 'Aegis IAM Audit Report', text: mailBody }).catch(() => {
-                      navigator.clipboard?.writeText(mailBody);
-                      alert('Sharing blocked. Summary copied to clipboard.');
+                  import('../../utils/emailReport').then(({ emailReport }) => {
+                    const securityScore = auditResults.security_score ?? Math.max(0, 100 - (auditResults.risk_score || 100));
+                    const grade = getSecurityGrade(securityScore);
+                    emailReport({
+                      title: 'Aegis IAM - Audit Report',
+                      generatedDate: new Date().toLocaleString(),
+                      score: securityScore,
+                      scoreLabel: grade.label,
+                      findings: (auditResults.findings || []).map(f => ({
+                        severity: f.severity,
+                        title: f.title,
+                        description: f.description,
+                        recommendation: f.recommendation
+                      })),
+                      summary: auditResults.audit_summary?.summary,
+                      recommendations: auditResults.recommendations
                     });
-                    return;
-                  }
-                  try {
-                    const link = document.createElement('a');
-                    link.href = mailto;
-                    link.target = '_self';
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
-                    // Fallback to direct navigation
-                    setTimeout(() => { window.location.href = mailto; }, 100);
-                  } catch (e) {
-                    console.warn('mailto navigation failed, copying to clipboard', e);
-                    navigator.clipboard?.writeText(mailBody);
-                    alert('Email client could not be opened. Summary copied to clipboard instead.');
-                  }
+                  });
                 }}
                 className="px-6 py-3 bg-white border-2 border-slate-300 hover:border-slate-400 text-slate-800 rounded-xl font-bold transition-all duration-300 flex items-center space-x-2 shadow-lg hover:shadow-xl hover:scale-105"
               >
@@ -2542,45 +3152,17 @@ const AuditAccount: React.FC<AuditAccountProps> = ({ awsCredentials: propCredent
 
         {/* Loading State - Show when auditing */}
         {isAuditing && !auditResults && (
-          <div className="relative min-h-screen flex items-center justify-center">
-            <div className="text-center px-8 max-w-3xl">
-              <div className="inline-flex items-center justify-center w-32 h-32 mb-10 relative">
-                <div className="absolute inset-0 border-4 border-transparent border-t-blue-500 border-r-purple-500 rounded-full animate-spin"></div>
-                <div className="absolute inset-2 border-4 border-transparent border-t-purple-500 border-r-pink-500 rounded-full animate-spin" style={{ animationDirection: 'reverse', animationDuration: '2s' }}></div>
-                <div className="absolute inset-0 bg-gradient-to-br from-blue-500/20 via-purple-500/20 to-pink-500/20 rounded-full animate-ping"></div>
-                <Shield className="w-16 h-16 text-blue-600 relative z-10 animate-pulse" />
-              </div>
-              
-              <h2 className="text-4xl sm:text-5xl font-extrabold bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent mb-4 animate-pulse leading-tight pb-2">
-                Autonomous Audit Running
-              </h2>
-              
-              <p className="text-xl text-slate-600 mb-8 leading-relaxed font-medium max-w-2xl mx-auto">
-                Scanning all IAM roles, policies, and analyzing CloudTrail logs...
-              </p>
-              
-              {/* Step indicators */}
-              <div className="flex flex-col items-center space-y-3 mb-8">
-                <div className="flex items-center space-x-3 px-5 py-2.5 bg-white/80 backdrop-blur-xl border-2 border-blue-200 rounded-full shadow-lg">
-                  <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-                  <span className="text-sm font-semibold text-slate-700">Discovering IAM roles...</span>
-                </div>
-                <div className="flex items-center space-x-3 px-5 py-2.5 bg-white/80 backdrop-blur-xl border-2 border-purple-200 rounded-full shadow-lg">
-                  <div className="w-2 h-2 bg-purple-500 rounded-full animate-pulse" style={{ animationDelay: '0.5s' }}></div>
-                  <span className="text-sm font-semibold text-slate-700">Analyzing CloudTrail events...</span>
-                </div>
-                <div className="flex items-center space-x-3 px-5 py-2.5 bg-white/80 backdrop-blur-xl border-2 border-pink-200 rounded-full shadow-lg">
-                  <div className="w-2 h-2 bg-pink-500 rounded-full animate-pulse" style={{ animationDelay: '1s' }}></div>
-                  <span className="text-sm font-semibold text-slate-700">Checking compliance...</span>
-                </div>
-              </div>
-
-              {/* Security Tips while auditing */}
-              <div className="mt-10">
-                <SecurityTips rotationInterval={4000} />
-              </div>
-            </div>
-          </div>
+          <LoadingScreen
+            title="Autonomous Audit Running"
+            className="leading-normal"
+            subtitle="Scanning all IAM roles, policies, and analyzing CloudTrail logs..."
+            steps={[
+              { label: 'Discovering IAM roles...', active: true, completed: false },
+              { label: 'Analyzing CloudTrail events...', active: false, completed: false },
+              { label: 'Checking compliance...', active: false, completed: false }
+            ]}
+            rotationInterval={4000}
+          />
         )}
 
         {/* Hero Section - Only show if no results and not auditing - Premium Light Theme */}
