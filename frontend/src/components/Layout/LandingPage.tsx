@@ -910,14 +910,27 @@ const LandingPage: React.FC<LandingPageProps> = ({
                 Get started with Aegis IAM today. Generate secure policies, validate compliance, 
                 and autonomously audit your AWS account—all powered by agentic AI.
               </p>
-              <button
-                onClick={handleGetStarted}
-                className="group relative overflow-hidden bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 hover:from-blue-700 hover:via-purple-700 hover:to-pink-700 text-white px-10 py-5 rounded-2xl font-bold text-lg sm:text-xl shadow-xl hover:shadow-2xl transition-all inline-flex items-center space-x-3 transform hover:scale-105"
-              >
-                <span className="relative z-10">Explore Demo</span>
-                <ArrowRight className="w-6 h-6 relative z-10 group-hover:translate-x-1 transition-transform" />
-                <div className="absolute inset-0 bg-white/10 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700"></div>
-              </button>
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+                {/* Primary CTA: Get Started (Real Product) */}
+                <button
+                  onClick={handleGetStarted}
+                  className="group relative overflow-hidden bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 hover:from-blue-700 hover:via-purple-700 hover:to-pink-700 text-white px-10 py-5 rounded-2xl font-bold text-lg sm:text-xl shadow-xl hover:shadow-2xl transition-all inline-flex items-center space-x-3 transform hover:scale-105"
+                >
+                  <span className="relative z-10">Get Started</span>
+                  <ArrowRight className="w-6 h-6 relative z-10 group-hover:translate-x-1 transition-transform" />
+                  <div className="absolute inset-0 bg-white/10 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700"></div>
+                </button>
+                
+                {/* Secondary CTA: Explore Demo */}
+                <button
+                  onClick={handleDemoMode}
+                  className="group relative overflow-hidden bg-white border-2 border-slate-300 hover:border-blue-500 text-slate-700 hover:text-blue-700 px-10 py-5 rounded-2xl font-bold text-lg sm:text-xl shadow-lg hover:shadow-xl transition-all inline-flex items-center space-x-3 transform hover:scale-105"
+                >
+                  <span className="relative z-10">Explore Demo</span>
+                  <ArrowRight className="w-6 h-6 relative z-10 group-hover:translate-x-1 transition-transform" />
+                  <div className="absolute inset-0 bg-slate-50 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700"></div>
+                </button>
+              </div>
             </div>
           </div>
         </section>

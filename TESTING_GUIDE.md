@@ -103,12 +103,12 @@ aws sts get-caller-identity
 
 ## Step 3: Enable Bedrock Access (Required for AI Features)
 
-The application uses **Amazon Bedrock** (Claude 3.7 Sonnet) for AI features. You need to enable it:
+The application uses **Amazon Bedrock** (Claude Sonnet 4.5) for AI features. You need to enable it:
 
 1. **Go to AWS Console:** https://console.aws.amazon.com/bedrock/
 2. **Click "Model access"** (left sidebar)
 3. **Click "Edit"** (top right)
-4. **Find "Claude 3.7 Sonnet"** and **Enable** it
+4. **Find "Claude Sonnet 4.5"** and **Enable** it
 5. **Click "Save changes"**
 
 **Note:** This is free to enable. You only pay per API call (~$0.01-0.10 per policy generation).

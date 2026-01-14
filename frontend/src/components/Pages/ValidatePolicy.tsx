@@ -4,6 +4,7 @@ import { saveToStorage, loadFromStorage, STORAGE_KEYS } from '@/utils/persistenc
 import { getComplianceLink } from '@/utils/complianceLinks';
 import CollapsibleTile from '@/components/Common/CollapsibleTile';
 import SecurityTips from '@/components/Common/SecurityTips';
+import LoadingScreen from '@/components/Common/LoadingScreen';
 import { AWSCredentials, validateCredentials, maskAccessKeyId, getRegionDisplayName } from '@/utils/awsCredentials';
 import { API_URL } from '@/config/api';
 import { ValidationRequest } from '@/types';
@@ -257,25 +258,33 @@ const ValidatePolicy: React.FC<ValidatePolicyProps> = ({ awsCredentials: propCre
       setLoading(true);
       setError(null);
       setShowInitialForm(false);
+      setValidationStep(0);
       
+      // Show loading screen for 2 seconds, then progress through steps
       setTimeout(() => {
-        import('@/utils/demoData').then(({ mockValidatePolicyResponse }) => {
-          const demoRequest: ValidationRequest = {
-            ...(inputType === 'arn' 
-              ? { role_arn: inputValue || 'arn:aws:iam::123456789012:role/LambdaExecutionRole' }
-              : { policy_json: inputValue || JSON.stringify({
-                  Version: "2012-10-17",
-                  Statement: [{ Effect: "Allow", Action: "s3:*", Resource: "*" }]
-                }, null, 2)
-              }),
-            compliance_frameworks: selectedFrameworks
-          };
-          const demoResponse = mockValidatePolicyResponse(demoRequest);
-          setResponse(demoResponse);
-          setLoading(false);
-          setValidationStep(0);
-        });
-      }, 1500);
+        setValidationStep(1);
+        setTimeout(() => {
+          setValidationStep(2);
+          setTimeout(() => {
+            import('@/utils/demoData').then(({ mockValidatePolicyResponse }) => {
+              const demoRequest: ValidationRequest = {
+                ...(inputType === 'arn' 
+                  ? { role_arn: inputValue || 'arn:aws:iam::123456789012:role/LambdaExecutionRole' }
+                  : { policy_json: inputValue || JSON.stringify({
+                      Version: "2012-10-17",
+                      Statement: [{ Effect: "Allow", Action: "s3:*", Resource: "*" }]
+                    }, null, 2)
+                  }),
+                compliance_frameworks: selectedFrameworks
+              };
+              const demoResponse = mockValidatePolicyResponse(demoRequest);
+              setResponse(demoResponse);
+              setLoading(false);
+              setValidationStep(0);
+            });
+          }, 1000);
+        }, 1000);
+      }, 2000);
       return;
     }
     
@@ -1010,67 +1019,16 @@ const ValidatePolicy: React.FC<ValidatePolicyProps> = ({ awsCredentials: propCre
         {/* LOADING STATE */}
         {/* ============================================ */}
         {loading && (
-          <div className="relative min-h-screen flex items-center justify-center">
-            <div className="text-center px-8 max-w-3xl">
-              <div className="inline-flex items-center justify-center w-32 h-32 mb-10 relative">
-                <div className="absolute inset-0 border-4 border-transparent border-t-blue-500 border-r-purple-500 rounded-full animate-spin"></div>
-                <div className="absolute inset-2 border-4 border-transparent border-t-purple-500 border-r-pink-500 rounded-full animate-spin" style={{ animationDirection: 'reverse', animationDuration: '2s' }}></div>
-                <div className="absolute inset-0 bg-gradient-to-br from-blue-500/20 via-purple-500/20 to-pink-500/20 rounded-full animate-ping"></div>
-                <Shield className="w-16 h-16 text-blue-600 relative z-10 animate-pulse" />
-              </div>
-              
-              <h2 className="text-4xl sm:text-5xl font-extrabold bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent mb-4 animate-pulse leading-tight pb-2">
-                Deep Security Scan
-              </h2>
-              
-              <p className="text-xl text-slate-600 mb-8 leading-relaxed font-medium max-w-2xl mx-auto">
-                Analyzing your IAM policy for vulnerabilities and compliance issues...
-              </p>
-              
-              {/* Step indicators */}
-              <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mb-8">
-                {['Checking security controls', 'Validating compliance', 'Calculating risk score'].map((label, idx) => {
-                  const isCurrent = validationStep === idx;
-                  const isDone = validationStep > idx;
-                  return (
-                    <div key={label} className="flex items-center w-full sm:w-auto">
-                      <div
-                        className={`flex items-center space-x-3 px-4 py-3 rounded-xl border-2 shadow-lg transition-all w-full sm:w-64 ${
-                          isCurrent
-                            ? 'bg-white/90 backdrop-blur-xl border-blue-300 shadow-blue-100'
-                            : 'bg-white/70 border-slate-200'
-                        }`}
-                      >
-                        <div
-                          className={`w-3 h-3 rounded-full ${
-                            isCurrent
-                              ? 'bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 animate-pulse'
-                              : isDone
-                              ? 'bg-blue-400'
-                              : 'bg-slate-300'
-                          }`}
-                        ></div>
-                        <div className="text-left">
-                          <div className="text-xs font-semibold text-slate-500">Step {idx + 1} of 3</div>
-                          <div className={`text-sm font-bold ${isCurrent ? 'text-slate-900' : 'text-slate-600'}`}>
-                            {label}...
-                          </div>
-                        </div>
-                      </div>
-                      {idx < 2 && (
-                        <div className="hidden sm:block w-10 h-0.5 bg-gradient-to-r from-blue-200 via-purple-200 to-pink-200 mx-2"></div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Security Tips while loading */}
-              <div className="mt-8">
-                <SecurityTips rotationInterval={4000} />
-              </div>
-            </div>
-          </div>
+          <LoadingScreen
+            title="Deep Security Scan"
+            subtitle="Analyzing your IAM policy for vulnerabilities and compliance issues..."
+            steps={[
+              { label: 'Checking security controls...', active: validationStep === 0, completed: validationStep > 0 },
+              { label: 'Validating compliance...', active: validationStep === 1, completed: validationStep > 1 },
+              { label: 'Calculating security score...', active: validationStep === 2, completed: validationStep > 2 }
+            ]}
+            rotationInterval={4000}
+          />
         )}
 
         {/* ============================================ */}
@@ -2577,7 +2535,7 @@ const ValidatePolicy: React.FC<ValidatePolicyProps> = ({ awsCredentials: propCre
                     <Sparkles className="w-7 h-7 text-blue-600" />
                     <span>Refine Your Policy with AI</span>
                   </h3>
-                  <p className="text-slate-600 text-sm mt-2 font-medium">Automated remediation powered by Claude 3.7 Sonnet</p>
+                  <p className="text-slate-600 text-sm mt-2 font-medium">Automated remediation powered by Claude Sonnet 4.5</p>
                 </div>
               </div>
 
@@ -2986,37 +2944,24 @@ ${response.recommendations?.map((r, i) => `${i + 1}. ${r}`).join('\n') || 'None'
                   </button>
                   <button
                     onClick={() => {
-                      const summaryLines = [
-                        'Aegis IAM - Validation Report',
-                        `Generated: ${new Date().toLocaleString()}`,
-                        '',
-                        `Risk Score: ${response.risk_score}/100 (${getSecurityGrade(100 - response.risk_score).label})`,
-                        `Findings: ${response.findings.length} (Critical ${response.findings.filter(f => f.severity === 'Critical').length}, High ${response.findings.filter(f => f.severity === 'High').length}, Medium ${response.findings.filter(f => f.severity === 'Medium').length}, Low ${response.findings.filter(f => f.severity === 'Low').length})`,
-                        '',
-                        'Report generated by Aegis IAM.'
-                      ];
-                      const mailBody = summaryLines.join('\n');
-                      const mailto = `mailto:?subject=${encodeURIComponent('Aegis IAM Validation Report')}&body=${encodeURIComponent(mailBody)}`;
-                      if (navigator.share) {
-                        navigator.share({ title: 'Aegis IAM Validation Report', text: mailBody }).catch(() => {
-                          navigator.clipboard?.writeText(mailBody);
-                          alert('Sharing blocked. Summary copied to clipboard.');
+                      import('../../utils/emailReport').then(({ emailReport }) => {
+                        const securityScore = 100 - response.risk_score;
+                        const grade = getSecurityGrade(securityScore);
+                        emailReport({
+                          title: 'Aegis IAM - Validation Report',
+                          generatedDate: new Date().toLocaleString(),
+                          score: securityScore,
+                          scoreLabel: grade.label,
+                          findings: response.findings.map(f => ({
+                            severity: f.severity,
+                            title: f.title,
+                            description: f.description,
+                            recommendation: f.recommendation
+                          })),
+                          quickWins: response.quick_wins,
+                          recommendations: response.recommendations
                         });
-                        return;
-                      }
-                      try {
-                        const link = document.createElement('a');
-                        link.href = mailto;
-                        link.target = '_self';
-                        document.body.appendChild(link);
-                        link.click();
-                        document.body.removeChild(link);
-                        setTimeout(() => { window.location.href = mailto; }, 100);
-                      } catch (e) {
-                        console.warn('mailto navigation failed, copying to clipboard', e);
-                        navigator.clipboard?.writeText(mailBody);
-                        alert('Email client could not be opened. Summary copied to clipboard instead.');
-                      }
+                      });
                     }}
                     className="group px-6 py-4 bg-white/90 hover:bg-white border-2 border-slate-200 hover:border-slate-300 rounded-xl text-slate-700 hover:text-slate-900 font-bold transition-all duration-300 shadow-lg hover:shadow-xl hover:scale-105 flex items-center space-x-3"
                   >

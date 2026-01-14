@@ -2,7 +2,7 @@
 
 **AI-Powered AWS IAM Security Platform**
 
-Generate, validate, and audit AWS IAM policies using Claude 3.7 Sonnet. Transform natural language into production-ready policies with comprehensive security analysis and compliance validation.
+Generate, validate, and audit AWS IAM policies using Claude Sonnet 4.5. Transform natural language into production-ready policies with comprehensive security analysis and compliance validation.
 
 [![Live Demo](https://img.shields.io/badge/Live%20Demo-Aegis%20IAM-blue?style=for-the-badge)](https://aegis-iam.vercel.app)
 [![License](https://img.shields.io/badge/License-All%20Rights%20Reserved-red?style=for-the-badge)](LICENSE)
@@ -117,12 +117,12 @@ Visit **[https://aegis-iam.vercel.app](https://aegis-iam.vercel.app)** to explor
 
 **Backend:**
 - FastAPI (Python) with async endpoints
-- AWS Bedrock (Claude 3.7 Sonnet) for AI capabilities
+- AWS Bedrock (Claude Sonnet 4.5) for AI capabilities
 - MCP (Model Context Protocol) for AWS integration
 - Strands Agents SDK for agentic workflows
 
 **AWS Services:**
-- Amazon Bedrock (Claude 3.7 Sonnet)
+- Amazon Bedrock (Claude Sonnet 4.5)
 - AWS IAM API
 - AWS CloudTrail
 - AWS STS
@@ -186,7 +186,7 @@ Aegis IAM uses **AWS CLI-based authentication** when running locally. This is th
 4. **Enable Amazon Bedrock**:
    - Go to [AWS Bedrock Console](https://console.aws.amazon.com/bedrock/)
    - Select Model access
-   - Enable **Claude 3.7 Sonnet**
+   - Enable **Claude Sonnet 4.5**
    - Request access (usually instant)
 
 5. **Verify Setup**:
@@ -311,7 +311,7 @@ All rights reserved. This project is provided for demonstration and reference pu
 
 ## 🙏 Acknowledgments
 
-- **Anthropic Claude 3.7 Sonnet** for AI capabilities
+- **Anthropic Claude Sonnet 4.5** for AI capabilities
 - **Amazon Bedrock** for serverless AI inference
 - **Strands Agents SDK** for agentic workflows
 - **MCP Protocol** for AWS integration
@@ -331,7 +331,7 @@ All rights reserved. This project is provided for demonstration and reference pu
 
 - **Frontend:** React 18, TypeScript, Tailwind CSS, Vite
 - **Backend:** FastAPI, Python 3.11+
-- **AI:** Claude 3.7 Sonnet via Amazon Bedrock
+- **AI:** Claude Sonnet 4.5 via Amazon Bedrock
 - **AWS Integration:** MCP (Model Context Protocol), boto3
 - **Agent Framework:** Strands Agents SDK
 - **Deployment:** Vercel (Frontend), Render/Railway (Backend)

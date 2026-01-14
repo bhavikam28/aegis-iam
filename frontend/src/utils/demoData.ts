@@ -585,14 +585,16 @@ export const mockAuditAccountResponse = () => {
     success: true,
     audit_summary: {
       total_roles: 47,
-      roles_analyzed: 47,
-      total_findings: 23,
-      critical_issues: 2,
-      high_issues: 8,
-      medium_issues: 10,
-      low_issues: 3,
+      user_managed_roles: 12,
+      aws_service_roles_excluded: 35,
+      roles_analyzed: 12,
+      total_findings: 5, // Reduced from 23 due to grouping
+      critical_issues: 1,
+      high_issues: 2,
+      medium_issues: 1,
+      low_issues: 1,
       cloudtrail_events_analyzed: 12500,
-      unused_permissions_found: 156
+      unused_permissions_found: 23
     },
     risk_score: 65,
     security_score: 35,
@@ -601,51 +603,103 @@ export const mockAuditAccountResponse = () => {
         id: "audit-finding-1",
         severity: "Critical" as const,
         type: "OverPrivileged",
-        title: "Administrator Access on Production Lambda Role",
+        title: "Administrator Access Detected",
         description: "The 'ProductionLambdaRole' has the AdministratorAccess managed policy attached, granting full access to all AWS services. CloudTrail analysis shows this role only uses S3:GetObject and Logs:PutLogEvents in practice.",
         recommendation: "Remove AdministratorAccess and replace with a custom policy granting only s3:GetObject on specific buckets and logs:PutLogEvents on specific log groups.",
         role: "ProductionLambdaRole",
         affected_permissions: ["*:*"],
-        why_it_matters: "Administrator permissions on production roles create an enormous attack surface. If this role is compromised (e.g., through Lambda code injection), an attacker would have complete control over your entire AWS account, including the ability to delete resources, steal data, or create new admin users.",
-        impact: "Critical - Full AWS account compromise possible if role is compromised",
-        detailed_remediation: "1. Analyze CloudTrail logs to confirm actual permissions used\n2. Create new custom policy with only s3:GetObject and logs:PutLogEvents\n3. Test in staging environment\n4. Swap policies during maintenance window\n5. Monitor for AccessDenied errors",
-        compliance_violations: ["PCI DSS 7.1.2", "HIPAA 164.308(a)(4)", "SOX Section 404"],
-        policy_snippet: '{"Effect": "Allow", "Action": "*", "Resource": "*"}'
-      },
-      {
-        id: "audit-finding-2",
-        severity: "High" as const,
-        type: "UnusedPermissions",
-        title: "156 Permissions Granted But Never Used",
-        description: "Across 23 IAM roles, analysis of 90 days of CloudTrail data reveals 156 permissions that are granted but have never been invoked. This includes dangerous permissions like ec2:TerminateInstances, rds:DeleteDBInstance, and s3:DeleteBucket.",
-        recommendation: "Remove all unused permissions identified in the analysis. Implement a quarterly review process to identify and remove permissions that aren't being used.",
-        role: "Multiple roles (23 affected)",
-        affected_permissions: ["ec2:TerminateInstances", "rds:DeleteDBInstance", "s3:DeleteBucket", "iam:DeleteRole", "lambda:DeleteFunction"],
-        why_it_matters: "Unused permissions provide no operational value but significantly increase risk. If an attacker compromises any of these roles, they could use these dormant permissions to cause destruction or data loss.",
-        impact: "High - Unnecessary risk exposure across multiple production roles",
-        detailed_remediation: "For each role: 1) Review CloudTrail data to confirm permissions are truly unused\n2) Create new policy version excluding unused permissions\n3) Test in staging for 1 week\n4) Deploy to production\n5) Monitor for 30 days\n6) Schedule quarterly re-analysis"
+        why_it_matters: "Administrator access grants complete control over all AWS resources and services. If compromised, attackers can create new admin users, modify all policies, delete critical resources, access all data, and cause complete account takeover.",
+        impact: "Critical Impact: Complete AWS account compromise. Attackers can create new admin users, modify all policies, delete any resource, access all data, exfiltrate sensitive information, and cause financial damage through service abuse. Violates all major compliance frameworks.",
+        detailed_remediation: "1. IMMEDIATE: Review role 'ProductionLambdaRole' actual usage in CloudTrail\n2. Identify minimum permissions needed\n3. Create custom policy with only required permissions (s3:GetObject, logs:PutLogEvents)\n4. Test in staging environment\n5. Replace AdministratorAccess during maintenance window\n6. Monitor closely for 48 hours\n7. Set up alerts for any permission denied errors",
+        compliance_violations: ["PCI DSS 7.1.2 (Least Privilege)", "HIPAA 164.308(a)(4) (Access Control)", "SOC 2 CC6.1", "CIS AWS 1.1, 1.2", "SOX Section 404"],
+        policy_snippet: JSON.stringify({
+          "Effect": "Allow",
+          "Action": "*",
+          "Resource": "*"
+        }, null, 2)
       },
       {
         id: "audit-finding-3",
         severity: "High" as const,
+        type: "UnusedPermissions",
+        title: "Unused IAM Permissions Detected",
+        description: "Found 156 permissions that have not been used in the last 90 days across 23 IAM roles. This includes dangerous permissions like ec2:TerminateInstances, rds:DeleteDBInstance, and s3:DeleteBucket.",
+        recommendation: "Remove unused permissions to follow principle of least privilege. For each role, create new policy version excluding unused permissions identified in CloudTrail analysis.",
+        role: "Multiple roles (23)",
+        affected_roles_list: ["ProductionLambdaRole", "EC2ManagementRole", "S3DataAccessRole", "RDSAdminRole", "CloudWatchMonitoringRole", "IAMAdminRole", "LambdaExecutionRole", "S3BackupRole", "EC2AutoScalingRole", "RDSReadOnlyRole", "CloudFormationRole", "CodeDeployRole", "ElasticBeanstalkRole", "ECSExecutionRole", "EKSNodeRole", "APIGatewayRole", "KinesisRole", "DynamoDBRole", "SNSRole", "SQSRole", "SESRole", "Route53Role", "CloudFrontRole"],
+        affected_permissions: ["ec2:TerminateInstances", "rds:DeleteDBInstance", "s3:DeleteBucket", "iam:DeleteRole", "lambda:DeleteFunction", "s3:DeleteObject", "ec2:DeleteSecurityGroup", "rds:DeleteDBCluster"],
+        why_it_matters: "Unused permissions provide no operational value but significantly increase risk. If an attacker compromises any role with unused permissions, they could use these dormant permissions to cause destruction, access sensitive data, or disrupt services.",
+        impact: "High - Unnecessary risk exposure without operational benefit. If compromised, attackers could use these permissions to delete resources, access sensitive data, or cause service disruptions. Increases attack surface unnecessarily.",
+        detailed_remediation: "1. Review CloudTrail data to confirm 156 permissions are truly unused\n2. For each role with unused permissions, create new policy version excluding them\n3. Test in staging environment for 1 week\n4. Deploy to production with monitoring\n5. Monitor for AccessDenied errors for 30 days\n6. Schedule quarterly re-analysis to identify new unused permissions",
+        compliance_violations: ["PCI DSS 7.1.2 (Least Privilege)", "HIPAA 164.308(a)(4) (Access Control)", "SOC 2 CC6.1"],
+        policy_snippet: JSON.stringify({
+          "Note": "156 unused permissions identified via CloudTrail analysis",
+          "Sample": ["ec2:TerminateInstances", "rds:DeleteDBInstance", "s3:DeleteBucket"]
+        }, null, 2)
+      },
+      {
+        id: "audit-finding-2",
+        severity: "High" as const,
         type: "Security",
-        title: "Wildcard Resources on EC2 Management Role",
-        description: "The 'EC2ManagementRole' uses Resource:'*' for EC2 permissions, allowing operations on all EC2 instances across all regions instead of limiting to specific instances or regions.",
-        recommendation: "Add resource-level restrictions to limit EC2 operations to specific instance ARNs or add condition keys to restrict operations to specific regions (us-east-1, us-west-2).",
-        role: "EC2ManagementRole",
-        affected_permissions: ["ec2:StartInstances", "ec2:StopInstances", "ec2:TerminateInstances"],
-        why_it_matters: "Without resource restrictions, this role could accidentally or maliciously affect EC2 instances in any region, including production instances that should never be terminated.",
-        impact: "High - Risk of accidental or malicious termination of critical instances"
+        title: "Wildcard Resources Detected (1521 instances)",
+        description: "Multiple roles use wildcard resources (*) allowing actions on ALL resources instead of specific ones. Affected services: access-analyzer, bedrock, cloudwatch, ec2, eks, elasticloadbalancing, logs, oam, organizations, rds, and 2 more.",
+        recommendation: "Specify exact resource ARNs instead of wildcards. For each role, identify specific resources needed and replace wildcard (*) with specific ARNs.",
+        role: "Multiple roles (8)",
+        affected_roles_list: ["APIGatewayToSQSRole", "AWSServiceRoleForAPIGateway", "AWSServiceRoleForRDS", "AWSServiceRoleForResourceExplorer", "EC2ManagementRole", "LambdaExecutionRole", "S3DataAccessRole", "CloudWatchMonitoringRole"],
+        affected_services_list: ["access-analyzer", "bedrock", "cloudwatch", "ec2", "eks", "elasticloadbalancing", "logs", "oam", "organizations", "rds", "resource-explorer-2", "secretsmanager"],
+        affected_permissions: ["redshift:DescribeEventSubscriptions", "inspector2:listCoverage", "xray:getInsightImpactGraph", "cloudformation:describeType", "cloudtrail:ListTrails", "mediapackage:listOriginEndpoints", "forecast:ListPredictors", "sagemaker:getModelPackageGroupPolicy", "connect:listQuickConnects", "appsync:getResolver"],
+        why_it_matters: "Wildcard resources (*) allow actions on ALL resources of a service, not just intended ones. This violates the principle of least privilege and can lead to unauthorized data access, resource deletion, or compliance violations across your entire account.",
+        impact: "High Impact: Unauthorized access to unintended resources across your entire account. Attackers could read, modify, or delete resources they should not have access to, leading to data breaches, service disruption, or compliance violations (PCI DSS 7.1.2, HIPAA 164.308).",
+        detailed_remediation: "1. For each affected role (8 roles total), identify specific resources needed\n2. Replace wildcard (*) with specific resource ARNs for all services\n3. Use resource-level restrictions (e.g., arn:aws:service:region:account:resource/*)\n4. Add condition keys to further restrict access if needed\n5. Test in staging environment for each role\n6. Deploy to production with monitoring\n7. Monitor CloudTrail for unauthorized access attempts across all affected roles",
+        compliance_violations: ["PCI DSS 7.1.2 (Least Privilege)", "HIPAA 164.308(a)(4) (Access Control)", "GDPR Article 5 (Data Minimization)", "SOC 2 CC6.1", "CIS AWS Benchmark 1.22"],
+        policy_snippet: JSON.stringify({
+          "Effect": "Allow",
+          "Action": ["ec2:StartInstances", "ec2:StopInstances"],
+          "Resource": "*"
+        }, null, 2)
       },
       {
         id: "audit-finding-4",
         severity: "Medium" as const,
         type: "BestPractice",
-        title: "Missing MFA Requirement for Sensitive Operations",
-        description: "15 roles with permissions for destructive operations (Delete, Terminate) don't require MFA authentication.",
-        recommendation: "Add aws:MultiFactorAuthPresent condition to all policies granting destructive permissions.",
-        role: "Multiple roles (15 affected)",
-        affected_permissions: ["s3:DeleteObject", "ec2:TerminateInstances", "rds:DeleteDBInstance"]
+        title: "Missing Condition Keys (2 instances)",
+        description: "2 roles with permissions for sensitive service secretsmanager lack appropriate condition keys (e.g., aws:MultiFactorAuthPresent, aws:SourceIP). This weakens security controls.",
+        recommendation: "Add appropriate condition keys (e.g., aws:MultiFactorAuthPresent, aws:SourceIP, encryption requirements) to restrict access based on context.",
+        role: "Multiple roles (2)",
+        affected_roles_list: ["AWSServiceRoleForRDS", "ProductionLambdaRole"],
+        affected_permissions: ["ec2:DescribeLocalGatewayRouteTables", "ec2:AllocateAddress", "ec2:DescribeLocalGatewayRouteTablePermissions", "ec2:DescribeVpcAttribute", "ec2:ModifyVpcEndpoint", "ec2:CreateCoipPoolPermission", "ec2:DeleteVpcEndpoints", "ec2:AuthorizeSecurityGroupIngress", "ec2:UnassignPrivateIpAddresses", "kinesis:DeleteStream"],
+        why_it_matters: "Missing condition keys remove important security restrictions. Conditions like IP whitelisting, encryption requirements, or MFA enforcement add critical security layers that prevent unauthorized access even if credentials are compromised.",
+        impact: "Medium - Reduced security controls allow unauthorized access even with valid credentials. Missing conditions like IP restrictions or encryption requirements increase the risk of credential theft exploitation.",
+        detailed_remediation: "1. Identify appropriate condition keys for each affected role (e.g., aws:MultiFactorAuthPresent, aws:SourceIP, s3:x-amz-server-side-encryption)\n2. Add Condition block to policy statements requiring MFA for destructive operations\n3. Test condition enforcement in staging\n4. Deploy to production\n5. Monitor for AccessDenied errors from users without MFA\n6. Communicate MFA requirement to users",
+        compliance_violations: ["PCI DSS 8.3 (MFA Requirements)", "HIPAA 164.312(a)(2) (Access Control)", "SOC 2 CC6.2"],
+        policy_snippet: JSON.stringify({
+          "Effect": "Allow",
+          "Action": ["s3:DeleteObject", "ec2:TerminateInstances"],
+          "Resource": "*",
+          "Condition": {
+            "BoolIfExists": {
+              "aws:MultiFactorAuthPresent": "false"
+            }
+          }
+        }, null, 2)
+      },
+      {
+        id: "audit-finding-5",
+        severity: "Low" as const,
+        type: "BestPractice",
+        title: "Missing AWS Config for IAM Tracking",
+        description: "AWS Config is not enabled to automatically track IAM policy changes. This makes it difficult to audit policy modifications and detect unauthorized changes.",
+        recommendation: "Enable AWS Config to track IAM policy changes automatically. Set up CloudWatch alarms for suspicious IAM activity.",
+        role: null,
+        affected_permissions: [],
+        why_it_matters: "This finding represents a security best practice that, while not immediately critical, should be addressed to maintain a strong security posture. AWS Config provides visibility into policy changes and helps detect unauthorized modifications.",
+        impact: "Low Impact: Reduced visibility into IAM policy changes. While not immediately critical, enabling AWS Config improves audit capabilities and helps detect unauthorized policy modifications.",
+        detailed_remediation: "1. Enable AWS Config in your AWS account\n2. Configure IAM resource recording\n3. Set up CloudWatch alarms for IAM policy changes\n4. Review Config rules for IAM compliance\n5. Set up SNS notifications for policy changes\n6. Schedule monthly reviews of Config findings",
+        compliance_violations: ["SOC 2 CC7.2 (Monitoring)", "CIS AWS Benchmark 2.5"],
+        policy_snippet: JSON.stringify({
+          "Note": "Enable AWS Config to track IAM policy changes",
+          "Recommendation": "Use AWS Config rules to monitor IAM policy modifications"
+        }, null, 2)
       }
     ],
     recommendations: [
@@ -768,6 +822,7 @@ export const mockCICDAnalysisResponse = () => {
     commit_sha: "7f8e9a2b",
     timestamp: new Date().toISOString(),
     risk_score: 55,
+    security_score: 45, // Inverted from risk_score (100 - 55 = 45)
     findings: [
       {
         severity: "High" as const,

@@ -6,6 +6,7 @@ import { GeneratePolicyResponse, ChatMessage } from '../../types';
 import { saveToStorage, loadFromStorage, clearStorage, STORAGE_KEYS } from '@/utils/persistence';
 import CollapsibleTile from '@/components/Common/CollapsibleTile';
 import SecurityTips from '@/components/Common/SecurityTips';
+import LoadingScreen from '@/components/Common/LoadingScreen';
 import { getComplianceLink } from '@/utils/complianceLinks';
 import { AWSCredentials, validateCredentials, maskAccessKeyId, getRegionDisplayName } from '@/utils/awsCredentials';
 import { mockGeneratePolicyResponse, DEMO_SIMPLE_PERMISSIONS_EXPLANATION, DEMO_SIMPLE_TRUST_EXPLANATION } from '@/utils/demoData';
@@ -377,7 +378,9 @@ What would you like to do?`,
     if (demoMode) {
       setLoading(true);
       setLoadingStep('analyzing');
+      setShowInitialForm(false);
       
+      // Show loading screen for 2 seconds
       setTimeout(() => {
         setLoadingStep('generating');
         
@@ -388,12 +391,11 @@ What would you like to do?`,
             restrictive
           });
           setResponse(demoResponse);
-          setShowInitialForm(false);
           setLoading(false);
           setLoadingStep('complete');
           setError(null);
-        }, 1500);
-      }, 1000);
+        }, 2000);
+      }, 2000);
       
       return;
     }
@@ -1144,87 +1146,15 @@ To use the full AI-powered chatbot features, please add your AWS credentials and
 
       {/* LOADING STATE - Premium Light with Step Indicators */}
       {!showInitialForm && loading && !response && (
-        <div className="relative min-h-screen flex items-center justify-center">
-          <div className="text-center px-8 max-w-3xl">
-            <div className="inline-flex items-center justify-center w-32 h-32 mb-10 relative">
-              <div className="absolute inset-0 border-4 border-transparent border-t-blue-500 border-r-purple-500 rounded-full animate-spin"></div>
-              <div className="absolute inset-2 border-4 border-transparent border-t-purple-500 border-r-pink-500 rounded-full animate-spin" style={{ animationDirection: 'reverse', animationDuration: '2s' }}></div>
-              <div className="absolute inset-0 bg-gradient-to-br from-blue-500/20 via-purple-500/20 to-pink-500/20 rounded-full animate-ping"></div>
-              <Shield className="w-16 h-16 text-blue-600 relative z-10 animate-pulse" />
-            </div>
-            
-            <h2 className="text-4xl sm:text-5xl font-extrabold bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent mb-4 animate-pulse leading-tight pb-2">
-              {loadingStep === 'analyzing' && 'Analyzing Your Request'}
-              {loadingStep === 'generating' && 'Generating Secure Policy'}
-              {loadingStep === 'complete' && 'Almost Done!'}
-            </h2>
-            
-            <p className="text-xl text-slate-600 mb-10 leading-relaxed font-medium max-w-2xl mx-auto">
-              {loadingStep === 'analyzing' && 'Understanding your AWS service requirements...'}
-              {loadingStep === 'generating' && 'Crafting least-privilege IAM policies with security scores...'}
-              {loadingStep === 'complete' && 'Finalizing your secure policy...'}
-            </p>
-            
-            {/* Step Progress Indicator */}
-            <div className="flex items-center justify-center space-x-2 sm:space-x-4 mb-10">
-              {/* Step 1: Analyzing */}
-              <div className={`flex flex-col items-center transition-all duration-500 ${loadingStep === 'analyzing' ? 'scale-110' : 'scale-100 opacity-60'}`}>
-                <div className={`w-12 h-12 sm:w-14 sm:h-14 rounded-full flex items-center justify-center transition-all duration-500 ${
-                  loadingStep === 'analyzing' 
-                    ? 'bg-gradient-to-br from-blue-500 to-indigo-600 shadow-lg shadow-blue-500/40' 
-                    : (loadingStep === 'generating' || loadingStep === 'complete')
-                      ? 'bg-gradient-to-br from-blue-600 to-indigo-700 shadow-lg shadow-blue-500/30'
-                      : 'bg-slate-200'
-                }`}>
-                  {loadingStep === 'analyzing' ? (
-                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                  ) : (
-                    <CheckCircle className="w-6 h-6 text-white" />
-                  )}
-                </div>
-                <span className={`text-xs sm:text-sm mt-2 font-semibold ${loadingStep === 'analyzing' ? 'text-blue-600' : 'text-blue-700'}`}>
-                  Analyze
-                </span>
-              </div>
-
-              {/* Connector */}
-              <div className={`w-8 sm:w-16 h-1 rounded-full transition-all duration-500 ${
-                loadingStep !== 'analyzing' ? 'bg-gradient-to-r from-blue-500 via-purple-500 to-purple-600' : 'bg-slate-200'
-              }`}></div>
-
-              {/* Step 2: Generating */}
-              <div className={`flex flex-col items-center transition-all duration-500 ${loadingStep === 'generating' ? 'scale-110' : 'scale-100 opacity-60'}`}>
-                <div className={`w-12 h-12 sm:w-14 sm:h-14 rounded-full flex items-center justify-center transition-all duration-500 ${
-                  loadingStep === 'generating' 
-                    ? 'bg-gradient-to-br from-pink-500 to-pink-600 shadow-lg shadow-pink-500/40' 
-                    : loadingStep === 'complete'
-                      ? 'bg-gradient-to-br from-pink-600 to-pink-700 shadow-lg shadow-pink-500/30'
-                      : 'bg-slate-200'
-                }`}>
-                  {loadingStep === 'generating' ? (
-                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                  ) : loadingStep === 'complete' ? (
-                    <CheckCircle className="w-6 h-6 text-white" />
-                  ) : (
-                    <span className="w-6 h-6 text-slate-400 font-bold">2</span>
-                  )}
-                </div>
-                <span className={`text-xs sm:text-sm mt-2 font-semibold ${
-                  loadingStep === 'generating' ? 'text-pink-600' 
-                  : loadingStep === 'complete' ? 'text-pink-700' 
-                  : 'text-slate-400'
-                }`}>
-                  Generate
-                </span>
-              </div>
-            </div>
-
-            {/* Security Tips while loading */}
-            <div className="mt-10">
-              <SecurityTips rotationInterval={4000} />
-            </div>
-          </div>
-        </div>
+        <LoadingScreen
+          title={loadingStep === 'analyzing' ? 'Analyzing Your Request' : loadingStep === 'generating' ? 'Generating Secure Policy' : 'Almost Done!'}
+          subtitle={loadingStep === 'analyzing' ? 'Understanding your AWS service requirements...' : loadingStep === 'generating' ? 'Crafting least-privilege IAM policies with security scores...' : 'Finalizing your secure policy...'}
+          steps={[
+            { label: 'Analyzing requirements...', active: loadingStep === 'analyzing', completed: loadingStep === 'generating' || loadingStep === 'complete' },
+            { label: 'Generating policy...', active: loadingStep === 'generating', completed: loadingStep === 'complete' }
+          ]}
+          rotationInterval={4000}
+        />
       )}
 
       {/* LOADING STATE AFTER MORE INFO PAGE - Premium Light Theme */}

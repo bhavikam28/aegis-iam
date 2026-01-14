@@ -1292,11 +1292,11 @@ class ValidatorAgent:
         if self._agent is None or needs_tools != has_tools:
             if mode == "audit":
                 logging.info("🔍 Creating Security Validator Agent with MCP tools (AUDIT MODE)...")
-                logging.info("   Model: us.anthropic.claude-3-7-sonnet-20250219-v1:0")
+                logging.info("   Model: us.anthropic.claude-sonnet-4-5-20250514-v1:0")
                 logging.info("   Tools: 4 MCP-powered (list_iam_roles_mcp, get_role_policy_mcp, get_attached_policies_mcp, get_role_trust_policy_mcp)")
                 
                 self._agent = Agent(
-                    model="us.anthropic.claude-3-7-sonnet-20250219-v1:0",
+                    model="us.anthropic.claude-sonnet-4-5-20250514-v1:0",
                     system_prompt=VALIDATOR_SYSTEM_PROMPT,
                     tools=[list_iam_roles_mcp, get_role_policy_mcp, get_attached_policies_mcp, get_role_trust_policy_mcp]
                 )
@@ -1304,11 +1304,11 @@ class ValidatorAgent:
             else:
                 # Quick mode - create agent WITHOUT tools to prevent tool calls
                 logging.info("🔍 Creating Security Validator Agent WITHOUT tools (QUICK MODE)...")
-                logging.info("   Model: us.anthropic.claude-3-7-sonnet-20250219-v1:0")
+                logging.info("   Model: us.anthropic.claude-sonnet-4-5-20250514-v1:0")
                 logging.info("   Tools: NONE (all data provided in prompt)")
                 
                 self._agent = Agent(
-                    model="us.anthropic.claude-3-7-sonnet-20250219-v1:0",
+                    model="us.anthropic.claude-sonnet-4-5-20250514-v1:0",
                     system_prompt=VALIDATOR_SYSTEM_PROMPT,
                     tools=[]  # NO TOOLS for quick mode
                 )

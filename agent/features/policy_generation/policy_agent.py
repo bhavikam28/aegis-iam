@@ -1130,12 +1130,12 @@ class PolicyAgent:
         """Lazy load the agent only when needed"""
         if self._agent is None:
             logging.info("🤖 Creating Strands Agent...")
-            logging.info("   Model: us.anthropic.claude-3-7-sonnet-20250219-v1:0")
+            logging.info("   Model: us.anthropic.claude-sonnet-4-5-20250514-v1:0")
             logging.info("   System prompt length: {} chars".format(len(SYSTEM_PROMPT)))
             logging.info("   Tools: 1 (generate_policy_from_bedrock)")
             
             self._agent = Agent(
-                model="us.anthropic.claude-3-7-sonnet-20250219-v1:0",
+                model="us.anthropic.claude-sonnet-4-5-20250514-v1:0",
                 system_prompt=SYSTEM_PROMPT,
                 tools=[generate_policy_from_bedrock]
             )

@@ -91,7 +91,7 @@ Your AWS user needs permissions. In AWS IAM Console:
 1. Go to [Amazon Bedrock Console](https://console.aws.amazon.com/bedrock/)
 2. Select your region (us-east-1, us-west-2, or eu-west-1 recommended)
 3. **Model access** (left sidebar)
-4. **Enable** → Select **Claude 3.7 Sonnet**
+4. **Enable** → Select **Claude Sonnet 4.5**
 5. Request access (usually instant approval)
 
 ### Step 5: Start the Backend
@@ -351,7 +351,7 @@ npm install
 
 Running locally, you only pay for:
 
-- **Amazon Bedrock** (Claude 3.7 Sonnet)
+- **Amazon Bedrock** (Claude Sonnet 4.5)
   - ~$0.01-$0.05 per policy generation
   - ~$0.02-$0.08 per validation
   - ~$0.10-$0.50 per full account audit

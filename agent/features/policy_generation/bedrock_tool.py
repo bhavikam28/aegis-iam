@@ -8,7 +8,7 @@ from contextvars import ContextVar
 logging.basicConfig(level=logging.INFO)
 
 bedrock_runtime = None
-MODEL_ID = 'us.anthropic.claude-3-7-sonnet-20250219-v1:0'
+MODEL_ID = 'us.anthropic.claude-sonnet-4-5-20250514-v1:0'
 
 # Context variable for user credentials (request-scoped, thread-safe)
 # SECURITY: Credentials stored only for duration of request, automatically cleared
@@ -381,7 +381,7 @@ CRITICAL REMINDERS:
         input_tokens = usage.get('input_tokens', 0)
         output_tokens = usage.get('output_tokens', 0)
         
-        # Claude 3.7 Sonnet pricing (us-east-1, as of 2024):
+        # Claude Sonnet 4.5 pricing (us-east-1, as of 2024):
         # Input: $3.00 per 1M tokens
         # Output: $15.00 per 1M tokens
         INPUT_COST_PER_1M = 3.00
@@ -393,7 +393,7 @@ CRITICAL REMINDERS:
         
         # Log what we got + token usage
         logging.info("=" * 80)
-        logging.info("💰 TOKEN USAGE & COST (AWS Bedrock Claude 3.7 Sonnet):")
+        logging.info("💰 TOKEN USAGE & COST (AWS Bedrock Claude Sonnet 4.5):")
         logging.info(f"   Input tokens: {input_tokens:,} → ${input_cost:.6f}")
         logging.info(f"   Output tokens: {output_tokens:,} → ${output_cost:.6f}")
         logging.info(f"   💵 ESTIMATED COST: ${total_cost:.6f} per request")

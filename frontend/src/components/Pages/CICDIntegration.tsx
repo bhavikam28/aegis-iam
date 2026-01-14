@@ -21,6 +21,7 @@ interface AnalysisResult {
   commit_sha?: string;
   timestamp: string;
   risk_score: number;
+  security_score?: number; // Higher = Better (inverted from risk_score)
   findings: Array<{
     severity: 'Critical' | 'High' | 'Medium' | 'Low';
     title: string;
@@ -141,7 +142,8 @@ const CICDIntegration: React.FC<CICDIntegrationProps> = ({ demoMode = false }) =
     }
   };
 
-  const getRiskScoreColor = (score: number) => {
+  const getSecurityScoreColor = (score: number) => {
+    // Security Score: Higher = Better (opposite of risk score)
     if (score >= 70) return 'text-emerald-600';
     if (score >= 40) return 'text-blue-600';
     if (score >= 20) return 'text-amber-600';
@@ -470,8 +472,8 @@ const CICDIntegration: React.FC<CICDIntegrationProps> = ({ demoMode = false }) =
                         )}
                       </div>
                       <div className="flex items-center space-x-4">
-                        <span className={`text-lg font-bold ${getRiskScoreColor(result.risk_score)}`}>
-                          Risk: {result.risk_score}/100
+                        <span className={`text-lg font-bold ${getSecurityScoreColor(result.security_score ?? (100 - result.risk_score))}`}>
+                          Security: {result.security_score ?? (100 - result.risk_score)}/100
                         </span>
                         <span className="text-sm text-slate-500">
                           {new Date(result.timestamp).toLocaleString()}
@@ -480,7 +482,7 @@ const CICDIntegration: React.FC<CICDIntegrationProps> = ({ demoMode = false }) =
                     </div>
                   }
                   subtitle={`${result.policies_analyzed} policies analyzed • ${result.findings.length} findings`}
-                  variant={result.status === 'error' ? 'error' : result.risk_score >= 70 ? 'success' : result.risk_score >= 40 ? 'info' : 'warning'}
+                  variant={result.status === 'error' ? 'error' : (result.security_score ?? (100 - result.risk_score)) >= 70 ? 'success' : (result.security_score ?? (100 - result.risk_score)) >= 40 ? 'info' : 'warning'}
                   defaultExpanded={false}
                 >
                   <div className="space-y-4">
@@ -620,9 +622,9 @@ const CICDIntegration: React.FC<CICDIntegrationProps> = ({ demoMode = false }) =
                           <p className="text-xl font-bold text-slate-900">{result.findings.length}</p>
                         </div>
                         <div className="bg-white rounded-lg p-3 border border-slate-200">
-                          <p className="text-xs text-slate-500 mb-1 font-medium">Risk Score</p>
-                          <p className={`text-xl font-bold ${getRiskScoreColor(result.risk_score)}`}>
-                            {result.risk_score}/100
+                          <p className="text-xs text-slate-500 mb-1 font-medium">Security Score</p>
+                          <p className={`text-xl font-bold ${getSecurityScoreColor(result.security_score ?? (100 - result.risk_score))}`}>
+                            {result.security_score ?? (100 - result.risk_score)}/100
                           </p>
                         </div>
                       </div>

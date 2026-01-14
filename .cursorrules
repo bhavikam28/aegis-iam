@@ -1,7 +1,7 @@
 # AEGIS-IAM Project Rules & Context
 
 ## Project Overview
-Aegis IAM is an AI-powered IAM security platform for AWS that generates, validates, and audits IAM policies using Claude 3.7 Sonnet.
+Aegis IAM is an AI-powered IAM security platform for AWS that generates, validates, and audits IAM policies using Claude Sonnet 4.5.
 
 ## Core Capabilities
 1. **Policy Generation**: Natural language → IAM permissions/trust policies via Bedrock
@@ -11,7 +11,7 @@ Aegis IAM is an AI-powered IAM security platform for AWS that generates, validat
 ## Tech Stack
 - **Frontend**: React 18 + TypeScript + Tailwind CSS + Vite
 - **Backend**: FastAPI (Python) with async endpoints
-- **AI Model**: Claude 3.7 Sonnet via Amazon Bedrock
+- **AI Model**: Claude Sonnet 4.5 via Amazon Bedrock
 - **AWS Integration**: boto3 + MCP (Model Context Protocol)
 - **Agent Framework**: Strands Agents SDK
 - **Communication**: REST API + Server-Sent Events (SSE)
@@ -38,7 +38,7 @@ Aegis IAM is an AI-powered IAM security platform for AWS that generates, validat
 - **Fallback**: boto3 if MCP unavailable
 
 ### AWS Services Layer
-- Amazon Bedrock (Claude 3.7 Sonnet)
+- Amazon Bedrock (Claude Sonnet 4.5)
 - AWS IAM API
 - AWS CloudTrail
 - AWS STS

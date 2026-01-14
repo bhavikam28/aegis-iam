@@ -773,18 +773,25 @@ async def generate(request: GenerationRequest):
     logging.info(f"   Request description length: {len(request.description)}")
     logging.info(f"   Conversation ID: {request.conversation_id}")
     logging.info(f"   User credentials provided: {request.aws_credentials is not None}")
-
-    # CRITICAL: Validate credentials are present for ALL requests
-    if not request.aws_credentials:
-        logging.error("CRITICAL ERROR: No credentials provided in request!")
-        logging.error("   This should not happen - frontend must send credentials with every request")
-        raise HTTPException(
-            status_code=400,
-            detail="AWS credentials are required for all requests (initial and follow-up). Please configure your AWS credentials in the modal."
-        )
-
-    # Set user credentials in context (thread-safe)
-    if request.aws_credentials:
+    
+    # Determine if using explicit credentials or default credential chain (CLI-based auth)
+    use_cli_auth = not request.aws_credentials or (
+        request.aws_credentials.access_key_id is None and 
+        request.aws_credentials.secret_access_key is None
+    )
+    
+    # Determine region (from request or default)
+    region = request.aws_credentials.region if request.aws_credentials else "us-east-1"
+    
+    if use_cli_auth:
+        # CLI-based auth: Use default credential chain (AWS CLI, env vars, instance profile)
+        logging.info(f"✅ Using AWS CLI/default credential chain (region: {region})")
+        logging.info("   Credentials will be read from: AWS CLI config, environment variables, or IAM instance profile")
+        # Don't set user credentials - let boto3 use default chain
+        # get_bedrock_client() will use default credentials when credentials dict is None
+    else:
+        # Explicit credentials provided: Use them
+        logging.info("✅ Using explicit AWS credentials from request")
         creds_dict = {
             'access_key_id': request.aws_credentials.access_key_id,
             'secret_access_key': request.aws_credentials.secret_access_key,
@@ -810,16 +817,16 @@ async def generate(request: GenerationRequest):
         actual_account_id = None
         try:
             import boto3
-            # Use user credentials if provided, otherwise default
-            if request.aws_credentials:
+            # Use default credential chain for CLI auth, explicit credentials otherwise
+            if use_cli_auth:
+                sts = boto3.client('sts', region_name=region)
+            else:
                 sts = boto3.client(
                     'sts',
                     aws_access_key_id=request.aws_credentials.access_key_id,
                     aws_secret_access_key=request.aws_credentials.secret_access_key,
                     region_name=request.aws_credentials.region
                 )
-            else:
-                sts = boto3.client('sts')
             
             actual_account_id = sts.get_caller_identity()['Account']
             logging.info(f"✅ Detected AWS Account ID: {actual_account_id}")
@@ -873,8 +880,8 @@ async def generate(request: GenerationRequest):
         logging.info(f"⚠️ Returning error response from outer handler: {error_response}")
         return error_response  # Return dict, not JSONResponse - let FastAPI handle it
     finally:
-        # SECURITY: Always clear user credentials after request
-        if request.aws_credentials:
+        # SECURITY: Only clear credentials if we set them (not for CLI auth)
+        if not use_cli_auth and request.aws_credentials:
             clear_user_credentials()
             logging.info("🧹 User credentials cleared from context")
 
@@ -2283,7 +2290,7 @@ Let me know if you have any questions!
                 try:
                     response = bedrock_runtime.invoke_model(
                         body=body,
-                        modelId="us.anthropic.claude-3-7-sonnet-20250219-v1:0"
+                        modelId="us.anthropic.claude-sonnet-4-5-20250514-v1:0"
                     )
                     body_bytes = response.get('body').read()
                     response_body = json.loads(body_bytes)
@@ -3517,6 +3524,10 @@ async def validate_policy(request: ValidationRequest):
                 compliance_status = {}
             logging.info(f"📊 Extracted compliance_status with {len(compliance_status)} frameworks: {list(compliance_status.keys())}")
             
+            # Calculate security score from risk_score (for consistency with Audit)
+            # Security score = 100 - risk_score (where higher security score = better security)
+            security_score = max(0, 100 - risk_score)
+            
             # CRITICAL: Agent returns "recommendations" not "security_improvements"
             recommendations = validation_data.get("recommendations", []) or validation_data.get("security_improvements", [])
             if not isinstance(recommendations, list):
@@ -3581,6 +3592,7 @@ async def validate_policy(request: ValidationRequest):
             response_dict = {
                 "success": True,
                 "risk_score": risk_score,
+                "security_score": security_score,  # Add security_score for consistency
                 "findings": findings,
                 "compliance_status": compliance_status,
                 "recommendations": recommendations,
@@ -3596,6 +3608,7 @@ async def validate_policy(request: ValidationRequest):
             # Frontend checks data.validation.* as fallback
             response_dict["validation"] = {
                 "risk_score": risk_score,
+                "security_score": security_score,  # Add security_score for consistency
                 "findings": findings,
                 "compliance_status": compliance_status,
                 "recommendations": recommendations,
@@ -3884,14 +3897,18 @@ async def remediate_findings(request: Request):
             logging.info(f"   Full finding keys: {list(finding.keys())}")
             logging.info(f"   Finding data: {json.dumps({k: v for k, v in finding.items() if k not in ['policy_snippet', 'detailed_remediation']}, indent=2)}")
             
-            # Check if finding has a role - some findings (like CloudTrail account-wide) don't have roles
-            has_role = bool(
-                finding.get('role') or 
-                finding.get('role_name') or 
-                finding.get('role_arn')
-            )
+            # Check if finding has role information (single role or multiple roles)
+            role_value = finding.get('role') or finding.get('role_name') or finding.get('role_arn')
             
-            if not has_role:
+            # Check for affected_roles_list (for findings that affect multiple roles)
+            affected_roles_list = finding.get('affected_roles_list', [])
+            has_multiple_roles = len(affected_roles_list) > 0
+            
+            # If role is "Multiple roles (X)", treat it as no single role (use affected_roles_list instead)
+            is_multiple_roles_string = isinstance(role_value, str) and role_value.startswith('Multiple roles')
+            has_role = bool(role_value) and not is_multiple_roles_string
+            
+            if not has_role and not has_multiple_roles:
                 logging.warning(f"   ⚠️ Finding {finding_id} does not have a role field")
                 logging.warning(f"   Available fields: {', '.join(finding.keys())}")
                 
@@ -3917,6 +3934,118 @@ async def remediate_findings(request: Request):
                 else:
                     logging.warning(f"   ❌ Could not extract role from finding content")
             
+            # Handle findings with multiple affected roles (e.g., unused permissions)
+            # This includes cases where role="Multiple roles (X)" and affected_roles_list is populated
+            if has_multiple_roles:
+                logging.info(f"   🔧 Finding {finding_id} affects {len(affected_roles_list)} roles - will remediate each role")
+                # Create a modified finding for each role and remediate
+                total_success = 0
+                total_failed = 0
+                all_actions = []
+                failed_roles_details = []  # Track specific failures
+                success_details = []  # Track successful remediations with full details
+                
+                for role_name in affected_roles_list[:10]:  # Limit to first 10 roles to avoid timeout
+                    try:
+                        # Create a role-specific finding (deep copy to avoid modifying original)
+                        import copy
+                        role_finding = copy.deepcopy(finding)
+                        role_finding['role'] = role_name
+                        role_finding['role_name'] = role_name
+                        
+                        # Log to verify role_name is set
+                        logging.info(f"   🔧 Remediating role: {role_name} (role_name field: {role_finding.get('role_name')})")
+                        
+                        # Apply fix for this specific role
+                        fix_result = auditor.apply_fix(role_finding)
+                        
+                        if fix_result.get('success'):
+                            total_success += 1
+                            all_actions.extend(fix_result.get('actions_taken', []))
+                            # Store the FULL success message for display
+                            success_details.append({
+                                'role': role_name,
+                                'message': fix_result.get('message', ''),
+                                'actions_taken': fix_result.get('actions_taken', [])
+                            })
+                        else:
+                            total_failed += 1
+                            error_msg = fix_result.get('message', 'Unknown error')
+                            error_type = fix_result.get('error_type', 'unknown')
+                            logging.warning(f"   ⚠️ Failed to fix {role_name}: {error_msg}")
+                            failed_roles_details.append({
+                                'role': role_name,
+                                'reason': error_msg,
+                                'error_type': error_type
+                            })
+                    except Exception as e:
+                        total_failed += 1
+                        logging.error(f"   ❌ Error fixing role {role_name}: {e}")
+                        failed_roles_details.append({
+                            'role': role_name,
+                            'reason': f"Unexpected error: {str(e)}",
+                            'error_type': 'exception'
+                        })
+                
+                # Return aggregated result with FULL SUCCESS DETAILS
+                if total_success > 0:
+                    # Build detailed success message
+                    if total_success == 1 and total_failed == 0:
+                        # Single role success - show full detailed message
+                        detailed_message = success_details[0]['message']
+                    else:
+                        # Multiple roles - aggregate messages
+                        detailed_message = f"✅ Successfully remediated {total_success} out of {len(affected_roles_list)} affected roles!\n\n"
+                        for idx, detail in enumerate(success_details[:5], 1):  # Show first 5 roles
+                            detailed_message += f"**Role {idx}: {detail['role']}**\n"
+                            actions = detail.get('actions_taken', [])
+                            for action in actions[:3]:  # Show first 3 actions per role
+                                detailed_message += f"  • {action}\n"
+                            if len(actions) > 3:
+                                detailed_message += f"  • ...and {len(actions) - 3} more actions\n"
+                            detailed_message += f"  📍 Direct Link: https://console.aws.amazon.com/iam/home#/roles/{detail['role']}\n\n"
+                        
+                        if len(success_details) > 5:
+                            detailed_message += f"...and {len(success_details) - 5} more roles\n\n"
+                        
+                        detailed_message += "✅ Verification Steps:\n"
+                        detailed_message += "1. Open AWS Console → IAM → Roles\n"
+                        detailed_message += "2. Select each remediated role\n"
+                        detailed_message += "3. Go to 'Permissions' tab to review inline policies\n"
+                        detailed_message += "4. Go to 'Access Advisor' tab to verify permission usage\n"
+                        detailed_message += "5. Monitor CloudWatch Logs for any AccessDenied errors"
+                    
+                    results.append({
+                        'finding_id': finding_id,
+                        'title': finding.get('title', 'Unknown'),
+                        'severity': severity,
+                        'success': True,
+                        'message': detailed_message,
+                        'actions_taken': all_actions[:20],  # Limit actions list
+                        'failed_roles': failed_roles_details if total_failed > 0 else [],
+                        'success_details': success_details  # Include full success details
+                    })
+                else:
+                    # Build detailed error message with specific reasons for each role
+                    detailed_errors = []
+                    for detail in failed_roles_details[:5]:  # Show first 5
+                        detailed_errors.append(f"• {detail['role']}: {detail['reason']}")
+                    
+                    error_summary = "\n".join(detailed_errors)
+                    if len(failed_roles_details) > 5:
+                        error_summary += f"\n...and {len(failed_roles_details) - 5} more roles"
+                    
+                    results.append({
+                        'finding_id': finding_id,
+                        'title': finding.get('title', 'Unknown'),
+                        'severity': severity,
+                        'success': False,
+                        'message': f"❌ Failed to remediate any of the {len(affected_roles_list)} affected roles.\n\n📋 Specific Errors:\n{error_summary}",
+                        'actions_taken': [],
+                        'failed_roles': failed_roles_details
+                    })
+                continue
+            
             # Skip findings without roles (account-wide findings cannot be auto-remediated)
             if not has_role:
                 logging.warning(f"   ⏭️ Skipping finding {finding_id} - no role information available")
@@ -3925,7 +4054,7 @@ async def remediate_findings(request: Request):
                     'title': finding.get('title', 'Unknown'),
                     'severity': severity,
                     'success': False,
-                    'message': f"Cannot auto-remediate: Finding is missing role information. This may be an account-wide finding that requires manual remediation.",
+                    'message': f"Cannot apply fix: Finding is missing role information. This finding may be related to account-wide or CloudTrail analysis and cannot be auto-remediated.",
                     'actions_taken': []
                 })
                 continue
@@ -3976,105 +4105,331 @@ async def remediate_findings(request: Request):
 
 @app.post("/api/chat")
 async def chat_about_audit(request: Request):
-    """Chat endpoint for explaining audit findings"""
+    """AI-powered chat endpoint for explaining audit findings - Uses Bedrock for intelligent responses"""
     try:
         data = await request.json()
-        user_message = data.get('message', '')
+        user_message = data.get('message', '').strip()
         context = data.get('context', {})
         
         findings = context.get('findings', [])
         risk_score = context.get('risk_score', 0)
+        security_score = context.get('security_score', max(0, 100 - risk_score))
         audit_summary = context.get('audit_summary', {})
         
-        # Build context for AI
-        findings_text = "\n".join([
-            f"- {f.get('title')} ({f.get('severity')}): {f.get('description')}"
-            for f in findings[:5]
-        ])
+        if not user_message:
+            return {
+                'success': False,
+                'response': 'Please ask a question about your audit findings.'
+            }
         
-        # Generate AI response based on user question
-        if 'explain' in user_message.lower() and 'role' in user_message.lower():
-            response_text = f"""Based on the audit, I found {audit_summary.get('total_roles', 0)} IAM roles in your AWS account. Here's what I discovered:
+        # Build comprehensive context for AI
+        findings_details = []
+        for idx, f in enumerate(findings, 1):
+            finding_detail = f"""Finding {idx}: {f.get('title', 'Unknown')}
+- Severity: {f.get('severity', 'Unknown')}
+- Type: {f.get('type', 'Unknown')}
+- Description: {f.get('description', 'No description')}
+- Affected Role(s): {f.get('role', 'N/A')}"""
+            
+            if f.get('affected_roles_list'):
+                finding_detail += f"\n- Specific Roles: {', '.join(f.get('affected_roles_list', []))}"
+            
+            if f.get('affected_services_list'):
+                finding_detail += f"\n- Affected Services: {', '.join(f.get('affected_services_list', []))}"
+            
+            if f.get('affected_permissions'):
+                perms = f.get('affected_permissions', [])
+                finding_detail += f"\n- Affected Permissions: {', '.join(perms[:5])}"
+                if len(perms) > 5:
+                    finding_detail += f" (+{len(perms) - 5} more)"
+            
+            if f.get('recommendation'):
+                finding_detail += f"\n- Recommendation: {f.get('recommendation')}"
+            
+            if f.get('why_it_matters'):
+                finding_detail += f"\n- Why This Matters: {f.get('why_it_matters')}"
+            
+            if f.get('detailed_remediation'):
+                finding_detail += f"\n- Remediation Steps: {f.get('detailed_remediation')}"
+            
+            findings_details.append(finding_detail)
+        
+        findings_text = "\n\n".join(findings_details)
+        
+        # Get AWS credentials for Bedrock (use context or default chain)
+        aws_creds_data = data.get('aws_credentials')
+        region = 'us-east-1'
+        if aws_creds_data:
+            region = aws_creds_data.get('region', 'us-east-1')
+            if aws_creds_data.get('access_key_id') and aws_creds_data.get('secret_access_key'):
+                set_user_credentials({
+                    'access_key_id': aws_creds_data.get('access_key_id'),
+                    'secret_access_key': aws_creds_data.get('secret_access_key'),
+                    'region': region
+                })
+        else:
+            # Try to get from context variable
+            from features.policy_generation.bedrock_tool import _user_credentials
+            try:
+                ctx_creds = _user_credentials.get()
+                if ctx_creds:
+                    region = ctx_creds.get('region', 'us-east-1')
+            except LookupError:
+                pass
+        
+        # Get Bedrock client
+        try:
+            from features.policy_generation.bedrock_tool import get_bedrock_client
+            bedrock = get_bedrock_client()
+        except Exception as e:
+            logging.error(f"Failed to get Bedrock client: {e}")
+            # Fallback to boto3
+            import boto3
+            bedrock = boto3.client('bedrock-runtime', region_name=region)
+        
+        # Build comprehensive AI prompt
+        system_prompt = """You are an expert AWS IAM security assistant helping users understand and fix security findings from an audit.
 
-Roles Analyzed:
-• AdminRole: Full administrative access
-• DeveloperRole: Development environment access
-• ReadOnlyRole: Read-only access across services
-• LambdaExecutionRole: Lambda function execution permissions
-• EC2InstanceRole: EC2 instance permissions
+CRITICAL FORMATTING RULES:
+- DO NOT use markdown formatting (no **, ##, *, etc.)
+- DO NOT use bold, italics, or code blocks
+- Write in plain, professional text only
+- Use simple line breaks and clear structure
+- Keep responses clean and readable
 
-Key Findings:
+Your role:
+- Explain findings in clear, non-technical language when needed
+- Provide specific, actionable recommendations
+- Guide users on how to fix issues step-by-step
+- Answer questions about AWS IAM best practices
+- Be helpful, professional, and concise
+
+When explaining fixes:
+- Be specific about which roles/permissions will be affected
+- Explain the impact of the fix
+- Provide clear next steps
+- If auto-remediation is available, explain how to use it
+
+When the user asks about a specific finding:
+- Reference the exact finding by title
+- Use the actual data from the findings (role names, permissions, etc.)
+- Don't make up or generalize - use the specific information provided
+- Format as plain text with clear sections, no markdown"""
+        
+        user_prompt = f"""You are analyzing an AWS IAM security audit. Here is the complete audit context:
+
+**Audit Summary:**
+- Total Roles Analyzed: {audit_summary.get('total_roles', 0)}
+- Security Score: {security_score}/100 (Higher = Better)
+- Risk Score: {risk_score}/100 (Lower = Better)
+- Total Findings: {len(findings)}
+- Critical Issues: {audit_summary.get('critical_issues', 0)}
+- High Priority Issues: {audit_summary.get('high_issues', 0)}
+- Medium Issues: {audit_summary.get('medium_issues', 0)}
+- Low Issues: {audit_summary.get('low_issues', 0)}
+- Unused Permissions Found: {audit_summary.get('unused_permissions_found', 0)}
+- CloudTrail Events Analyzed: {audit_summary.get('cloudtrail_events_analyzed', 0)}
+
+**All Security Findings:**
+
 {findings_text}
 
-Risk Assessment:
-Your account has a risk score of {risk_score}/100. The main concerns are:
-• {audit_summary.get('unused_permissions_found', 0)} unused permissions that should be removed
-• {audit_summary.get('critical_issues', 0)} critical security issues
-• {audit_summary.get('high_issues', 0)} high-priority issues
+**User Question:**
+{user_message}
 
-Would you like me to explain any specific role in more detail or help you fix these issues?"""
+**Instructions:**
+- Answer the user's question directly and specifically
+- Use the ACTUAL finding data provided above (don't make up or generalize)
+- If they ask about a specific finding, reference it by its exact title
+- If they ask how to fix something, provide specific steps based on the actual finding data
+- If they ask about unused permissions, use the actual permissions listed in the findings
+- If they ask about wildcard resources, reference the actual affected services and roles
+- Be helpful, clear, and actionable
+- If auto-remediation is available for a finding, explain how to use it (select the finding, click "Review Proposed Changes", then "Confirm & Apply Remediation")
+- Keep responses concise but comprehensive
+- DO NOT use markdown formatting (no **, no *, no #, no `, no code blocks)
+- Write in plain, professional text with clear structure and line breaks"""
         
-        elif 'fix' in user_message.lower() or 'remediate' in user_message.lower():
-            response_text = f"""I can help you fix these security issues! Here are your options:
-
-Auto-Fix Options:
-1. Fix All Issues - Automatically remediate all {len(findings)} findings
-2. Critical Only - Fix only the {audit_summary.get('critical_issues', 0)} critical issues
-3. Manual Review - I'll guide you through each fix step-by-step
-
-What will be fixed:
-• Remove {audit_summary.get('unused_permissions_found', 0)} unused permissions
-• Add MFA requirements where needed
-• Apply least-privilege principles
-• Restrict wildcard permissions
-
-Click the Auto-Fix All or Critical Only button above to proceed, or ask me about specific fixes you'd like to make."""
+        # Call Bedrock
+        body = json.dumps({
+            "anthropic_version": "bedrock-2023-05-31",
+            "max_tokens": 2000,
+            "system": system_prompt,
+            "messages": [{"role": "user", "content": [{"type": "text", "text": user_prompt}]}],
+            "temperature": 0.3  # Slightly higher for more natural conversation
+        })
         
-        elif 'unused' in user_message.lower() or 'permission' in user_message.lower():
-            response_text = f"""The audit found {audit_summary.get('unused_permissions_found', 0)} unused permissions by analyzing CloudTrail logs from the last 90 days.
-
-Unused Permissions Detected:
-• s3:DeleteBucket - Never used in 90 days
-• iam:DeleteUser - Never used in 90 days
-• ec2:TerminateInstances - Never used in 90 days
-• rds:DeleteDBInstance - Never used in 90 days
-
-Why This Matters:
-Unused permissions increase your attack surface. If an attacker compromises a role, they could use these dormant permissions to cause damage.
-
-Recommendation:
-Remove these unused permissions to follow the principle of least privilege. I can do this automatically if you click Auto-Fix All above."""
-        
-        else:
-            # Generic helpful response
-            response_text = f"""I'm here to help you understand and fix the security issues in your AWS account.
-
-Current Status:
-• Risk Score: {risk_score}/100
-• Total Findings: {len(findings)}
-• Critical Issues: {audit_summary.get('critical_issues', 0)}
-• High Priority: {audit_summary.get('high_issues', 0)}
-• Unused Permissions: {audit_summary.get('unused_permissions_found', 0)}
-
-I can help you with:
-• Explaining specific IAM roles and their permissions
-• Understanding security findings and recommendations
-• Automatically fixing security issues
-• Answering questions about AWS IAM best practices
-
-What would you like to know more about?"""
-        
-        return {
-            'success': True,
-            'response': response_text
-        }
+        try:
+            response = bedrock.invoke_model(body=body, modelId='us.anthropic.claude-sonnet-4-5-20250514-v1:0')
+            body_bytes = response.get('body').read()
+            
+            try:
+                response_body = json.loads(body_bytes)
+            except json.JSONDecodeError:
+                response_body = json.loads(body_bytes.decode('utf-8'))
+            
+            response_text = response_body.get('content', [{}])[0].get('text', '')
+            
+            # Clean up credentials
+            if aws_creds_data and aws_creds_data.get('access_key_id'):
+                clear_user_credentials()
+            
+            return {
+                'success': True,
+                'response': response_text
+            }
+            
+        except Exception as bedrock_error:
+            logging.error(f"Bedrock API error: {bedrock_error}")
+            # Fallback to intelligent template-based response
+            return await _generate_fallback_response(user_message, findings, audit_summary, risk_score, security_score)
         
     except Exception as e:
-        logging.error(f"Chat failed: {e}")
+        logging.error(f"Chat failed: {e}", exc_info=True)
         return {
             'success': False,
-            'response': 'I apologize, but I encountered an error. Please try asking your question again.'
+            'response': 'I apologize, but I encountered an error processing your question. Please try again or rephrase your question.'
         }
+
+
+async def _generate_fallback_response(user_message: str, findings: List[Dict], audit_summary: Dict, risk_score: int, security_score: int) -> Dict[str, Any]:
+    """Fallback response generator when Bedrock is unavailable"""
+    user_lower = user_message.lower()
+    
+    # Find relevant findings based on keywords
+    relevant_findings = []
+    if 'unused' in user_lower or 'permission' in user_lower:
+        relevant_findings = [f for f in findings if 'unused' in f.get('title', '').lower() or 'unused' in f.get('type', '').lower()]
+    elif 'wildcard' in user_lower:
+        relevant_findings = [f for f in findings if 'wildcard' in f.get('title', '').lower() or 'wildcard' in f.get('description', '').lower()]
+    elif 'mfa' in user_lower or 'multi-factor' in user_lower or 'condition' in user_lower:
+        relevant_findings = [f for f in findings if 'mfa' in f.get('title', '').lower() or 'condition' in f.get('title', '').lower()]
+    elif 'critical' in user_lower:
+        relevant_findings = [f for f in findings if f.get('severity') == 'Critical']
+    elif 'high' in user_lower:
+        relevant_findings = [f for f in findings if f.get('severity') == 'High']
+    
+    # If no specific finding matched, use all findings
+    if not relevant_findings:
+        relevant_findings = findings
+    
+    # Generate response based on question type
+    if 'how' in user_lower and ('fix' in user_lower or 'remediate' in user_lower):
+        # User wants to know how to fix
+        finding = relevant_findings[0] if relevant_findings else None
+        if finding:
+            response = f"""I can help you fix: **{finding.get('title')}**
+
+**What will be fixed:**
+{finding.get('recommendation', 'No specific recommendation available')}
+
+**Affected Role(s):** {finding.get('role', 'N/A')}
+
+**To proceed with auto-remediation:**
+1. Select the finding "{finding.get('title')}" by checking the box above
+2. Click "Review Proposed Changes" to see what will be modified
+3. Review the changes carefully
+4. Click "Confirm & Apply Remediation" to apply the fix
+
+**Manual Steps (if you prefer):**
+{finding.get('detailed_remediation', 'Please review the finding details for manual remediation steps.')}
+
+Would you like me to explain any specific part of the remediation process?"""
+        else:
+            response = f"""I can help you fix the security issues found in your audit.
+
+**Auto-Fix Options:**
+1. **Fix All Issues** - Automatically remediate all {len(findings)} findings
+2. **Critical Only** - Fix only the {audit_summary.get('critical_issues', 0)} critical issues
+3. **Select Specific Findings** - Choose which findings to fix individually
+
+**What will be fixed:**
+- Remove {audit_summary.get('unused_permissions_found', 0)} unused permissions
+- Add MFA requirements where needed
+- Apply least-privilege principles
+- Restrict wildcard permissions
+
+To proceed, select the findings you want to fix above, then click "Review Proposed Changes"."""
+    
+    elif 'explain' in user_lower:
+        # User wants explanation
+        finding = relevant_findings[0] if relevant_findings else None
+        if finding:
+            response = f"""**{finding.get('title')}** ({finding.get('severity')} Severity)
+
+**Description:**
+{finding.get('description', 'No description available')}
+
+**Why This Matters:**
+{finding.get('why_it_matters', 'This finding represents a security risk that should be addressed.')}
+
+**Potential Impact:**
+{finding.get('impact', 'This finding could lead to security vulnerabilities if not addressed.')}
+
+**Affected Role(s):** {finding.get('role', 'N/A')}"""
+            
+            if finding.get('affected_roles_list'):
+                response += f"\n\n**Specific Roles Affected:**\n"
+                for role in finding.get('affected_roles_list', [])[:5]:
+                    response += f"- {role}\n"
+            
+            if finding.get('affected_services_list'):
+                response += f"\n**Affected Services:** {', '.join(finding.get('affected_services_list', [])[:10])}"
+            
+            if finding.get('affected_permissions'):
+                perms = finding.get('affected_permissions', [])
+                response += f"\n\n**Affected Permissions:** {', '.join(perms[:5])}"
+                if len(perms) > 5:
+                    response += f" (+{len(perms) - 5} more)"
+            
+            response += f"\n\n**Recommendation:**\n{finding.get('recommendation', 'Review and address this finding based on your security requirements.')}"
+        else:
+            response = f"""**Audit Overview:**
+
+Your AWS account has a **Security Score of {security_score}/100** (Risk Score: {risk_score}/100).
+
+**Summary:**
+- **{audit_summary.get('total_roles', 0)}** IAM roles analyzed
+- **{len(findings)}** security findings identified
+- **{audit_summary.get('critical_issues', 0)}** critical issues requiring immediate attention
+- **{audit_summary.get('high_issues', 0)}** high-priority issues
+- **{audit_summary.get('unused_permissions_found', 0)}** unused permissions detected
+
+**Top Findings:**
+{chr(10).join([f"- {f.get('title')} ({f.get('severity')})" for f in findings[:5]])}
+
+Would you like me to explain any specific finding in more detail?"""
+    
+    else:
+        # Generic helpful response
+        response = f"""I'm here to help you understand and fix the security issues in your AWS account.
+
+**Current Status:**
+- Security Score: {security_score}/100 (Higher = Better)
+- Risk Score: {risk_score}/100 (Lower = Better)
+- Total Findings: {len(findings)}
+- Critical Issues: {audit_summary.get('critical_issues', 0)}
+- High Priority: {audit_summary.get('high_issues', 0)}
+- Unused Permissions: {audit_summary.get('unused_permissions_found', 0)}
+
+**I can help you with:**
+- Explaining specific findings and their impact
+- Understanding how to fix security issues
+- Automatically remediating findings
+- Answering questions about AWS IAM best practices
+
+**Try asking:**
+- "Explain the [finding name]"
+- "How do I fix [issue type]?"
+- "What are the unused permissions?"
+- "Tell me about the wildcard resources finding"
+
+What would you like to know more about?"""
+    
+    return {
+        'success': True,
+        'response': response
+    }
 
 
 @app.post("/api/audit/account")
@@ -4082,8 +4437,11 @@ async def audit_account(request: AccountAuditRequest):
     """
     Account audit endpoint for autonomous AWS account scan
     Matches frontend API call structure
+    
+    IMPORTANT: Always runs fresh audit - NO CACHING!
     """
     try:
+        logging.info(f"🔄 Running FRESH audit (mode: {request.mode}) - NO CACHED DATA")
         logging.debug(f"🤖 Account audit request: {request.mode} mode")
         
         # Convert to AuditRequest format
@@ -4092,7 +4450,7 @@ async def audit_account(request: AccountAuditRequest):
         )
         
         # Use existing audit endpoint
-        # Initialize Audit Agent
+        # Initialize Audit Agent (NEW instance every time - no state carried over)
         audit_agent = AuditAgent()
         
         # Perform comprehensive audit using 3 MCP servers
@@ -4102,11 +4460,12 @@ async def audit_account(request: AccountAuditRequest):
         if not result.get('success'):
             return result
         
-        # Format response for frontend
-        return {
+        # Format response for frontend with NO-CACHE headers
+        response_data = {
             "success": True,
             "audit_summary": result.get('audit_summary', {}),
             "risk_score": result.get('risk_score', 0),
+            "security_score": result.get('security_score', 0),
             "findings": result.get('findings', []),
             "cloudtrail_analysis": result.get('cloudtrail_analysis', {}),
             "scp_analysis": result.get('scp_analysis', {}),
@@ -4115,6 +4474,17 @@ async def audit_account(request: AccountAuditRequest):
             "timestamp": result.get('timestamp', ''),
             "agent_reasoning": "Comprehensive audit completed using aws-iam, aws-cloudtrail, and aws-api MCP servers"
         }
+        
+        # Return with NO-CACHE headers to prevent browser/proxy caching
+        from fastapi.responses import JSONResponse
+        return JSONResponse(
+            content=response_data,
+            headers={
+                "Cache-Control": "no-cache, no-store, must-revalidate, private, max-age=0",
+                "Pragma": "no-cache",
+                "Expires": "0"
+            }
+        )
         
     except Exception as e:
         logging.exception("❌ Error in account audit endpoint")
@@ -5237,7 +5607,7 @@ Format your response as a clear, professional explanation suitable for a complia
             bedrock_runtime = boto3.client(service_name='bedrock-runtime', region_name='us-east-1')
             logging.warning("⚠️ No AWS credentials provided, using default boto3 credentials (may fail on Vercel/Render)")
         
-        # Call Bedrock API directly - Use correct format for Claude 3.7 Sonnet
+        # Call Bedrock API directly - Use correct format for Claude Sonnet 4.5
         body = json.dumps({
             "anthropic_version": "bedrock-2023-05-31",
             "max_tokens": 2000,
