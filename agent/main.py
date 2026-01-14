@@ -382,19 +382,16 @@ def fix_s3_statement_separation(policy: dict) -> dict:
     return policy
 
 app = FastAPI(title="Aegis IAM Agent - MCP Enabled")
+
+# CORS Configuration - Allow all origins for local development
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "https://aegis-iam.vercel.app",
-        # Allow all Vercel preview deployments
-        "https://*.vercel.app",
-    ],
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
-    allow_headers=["*"],
-    allow_credentials=True,
-    expose_headers=["*"]
+    allow_origins=["*"],  # Allow all origins (can restrict in production)
+    allow_credentials=False,  # Must be False when allow_origins is "*"
+    allow_methods=["*"],  # Allow all methods including OPTIONS
+    allow_headers=["*"],  # Allow all headers
+    expose_headers=["*"],  # Expose all headers
+    max_age=3600,  # Cache preflight requests for 1 hour
 )
 
 class GenerationRequest(BaseModel):
@@ -440,6 +437,20 @@ conversations: Dict[str, List[Dict]] = {}
 conversation_cache: Dict[str, Dict[str, Any]] = {}
 aegis_agent = PolicyAgent()
 validator_agent = ValidatorAgent()
+
+@app.options("/{full_path:path}")
+async def options_handler(full_path: str):
+    """Handle OPTIONS preflight requests for CORS"""
+    return JSONResponse(
+        content={},
+        headers={
+            "Access-Control-Allow-Origin": "http://localhost:5173",
+            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS, PATCH",
+            "Access-Control-Allow-Headers": "*",
+            "Access-Control-Allow-Credentials": "true",
+            "Access-Control-Max-Age": "3600",
+        }
+    )
 
 @app.get("/")
 def health():
