@@ -2639,6 +2639,40 @@ const AuditAccount: React.FC<AuditAccountProps> = ({ awsCredentials: propCredent
                                     </div>
                                   )}
 
+                                  {/* Technical Details - Collapsible, Show Only Once */}
+                                  {idx === 0 && result.success_details && result.success_details.length > 0 && (
+                                    <div className="bg-slate-50 border-t border-slate-200 px-5 py-3">
+                                      <details className="group">
+                                        <summary className="text-xs font-semibold text-slate-700 cursor-pointer list-none flex items-center gap-2 hover:text-slate-900">
+                                          <ChevronRight className="w-3.5 h-3.5 transition-transform group-open:rotate-90" />
+                                          Technical Details
+                                        </summary>
+                                        <div className="mt-3 space-y-3 text-xs text-slate-600">
+                                          {result.success_details.map((detail: any, detailIdx: number) => (
+                                            <div key={detailIdx} className="bg-white rounded p-3 border border-slate-200">
+                                              <div className="font-mono font-semibold text-slate-900 mb-2">{detail.role}</div>
+                                              {detail.actions_taken && detail.actions_taken.length > 0 && (
+                                                <div className="space-y-1">
+                                                  <div className="font-medium text-slate-700 mb-1">Actions Taken:</div>
+                                                  <ul className="list-disc list-inside space-y-0.5 text-slate-600">
+                                                    {detail.actions_taken.map((action: string, actionIdx: number) => (
+                                                      <li key={actionIdx} className="text-xs">{action}</li>
+                                                    ))}
+                                                  </ul>
+                                                </div>
+                                              )}
+                                              {detail.policy_name && (
+                                                <div className="mt-2 text-slate-600">
+                                                  <span className="font-medium">Policy:</span> <span className="font-mono">{detail.policy_name}</span>
+                                                </div>
+                                              )}
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </details>
+                                    </div>
+                                  )}
+
                                   {/* Verification Steps - Collapsible, Show Only Once */}
                                   {idx === 0 && (
                                     <div className="bg-blue-50 border-t border-blue-100 px-5 py-3">
@@ -2787,28 +2821,35 @@ const AuditAccount: React.FC<AuditAccountProps> = ({ awsCredentials: propCredent
                         )}
                       </div>
                     )}
-                    <div className="flex items-center justify-center space-x-4">
-                      <button
-                        onClick={() => {
-                          setSelectedFindings(new Set());
-                          setRemediationStep('select');
-                          setRemediationResults(null);
-                          handleStartAudit();
-                        }}
-                        className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold transition-all shadow-sm"
-                      >
-                        Run New Audit
-                      </button>
-                      <button
-                        onClick={() => {
-                          setSelectedFindings(new Set());
-                          setRemediationStep('select');
-                          setRemediationResults(null);
-                        }}
-                        className="px-6 py-3 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-lg font-semibold transition-colors"
-                      >
-                        Remediate More
-                      </button>
+                    
+                    {/* Action Buttons - Well Spaced */}
+                    <div className="mt-8 pt-6 border-t border-slate-200">
+                      <div className="flex items-center justify-center gap-4">
+                        <button
+                          onClick={() => {
+                            setSelectedFindings(new Set());
+                            setRemediationStep('select');
+                            setRemediationResults(null);
+                            setAuditResults(null);
+                            setChatMessages([]);
+                            handleStartAudit();
+                          }}
+                          className="px-8 py-3.5 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-xl font-semibold transition-all shadow-md hover:shadow-lg transform hover:scale-105 flex items-center gap-2"
+                        >
+                          <RefreshCw className="w-5 h-5" />
+                          Run New Audit
+                        </button>
+                        <button
+                          onClick={() => {
+                            setSelectedFindings(new Set());
+                            setRemediationStep('select');
+                            setRemediationResults(null);
+                          }}
+                          className="px-8 py-3.5 bg-white border-2 border-slate-300 hover:border-slate-400 hover:bg-slate-50 text-slate-700 rounded-xl font-semibold transition-all shadow-sm hover:shadow-md"
+                        >
+                          Remediate More
+                        </button>
+                      </div>
                     </div>
                   </div>
                 )}
