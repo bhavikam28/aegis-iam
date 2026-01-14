@@ -162,10 +162,11 @@ const AWSSetupWizard: React.FC<AWSSetupWizardProps> = ({ isOpen, onClose, onComp
                     <p className="text-slate-700 font-semibold mb-6">Verify AWS CLI configuration</p>
                     <button
                       onClick={checkCLIAuth}
-                      className="px-8 py-3 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white rounded-xl font-semibold hover:shadow-xl transition-all transform hover:scale-105"
+                      disabled={checkingCliCredentials}
+                      className="px-8 py-3 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white rounded-xl font-semibold hover:shadow-xl transition-all transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      <RefreshCw className="w-5 h-5 inline-block mr-2" />
-                      Check Credentials
+                      <RefreshCw className={`w-5 h-5 inline-block mr-2 ${checkingCliCredentials ? 'animate-spin' : ''}`} />
+                      {checkingCliCredentials ? 'Checking...' : 'Check Credentials'}
                     </button>
                   </div>
                 </div>
@@ -228,13 +229,21 @@ const AWSSetupWizard: React.FC<AWSSetupWizardProps> = ({ isOpen, onClose, onComp
                       <div className="flex-1">
                         <h4 className="font-bold text-slate-900 mb-2">No Credentials Found</h4>
                         <p className="text-sm text-slate-600 mb-4">{connectionError || 'Configure AWS CLI first'}</p>
-                        <div className="bg-white/80 backdrop-blur-sm border border-red-200/50 rounded-xl p-4 text-sm text-slate-700 space-y-2">
+                        <div className="bg-white/80 backdrop-blur-sm border border-red-200/50 rounded-xl p-4 text-sm text-slate-700 space-y-2 mb-4">
                           <p className="font-semibold text-slate-900 mb-2">Setup AWS CLI:</p>
                           <div className="space-y-1.5 font-mono text-xs bg-slate-50 rounded-lg p-3 border border-slate-200">
                             <div>$ pip install awscli</div>
                             <div>$ aws configure</div>
                           </div>
                         </div>
+                        <button
+                          onClick={checkCLIAuth}
+                          disabled={checkingCliCredentials}
+                          className="w-full px-4 py-2.5 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl font-medium hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <RefreshCw className={`w-4 h-4 inline-block mr-2 ${checkingCliCredentials ? 'animate-spin' : ''}`} />
+                          {checkingCliCredentials ? 'Checking...' : 'Try Again / Refresh'}
+                        </button>
                       </div>
                     </div>
                   </div>
