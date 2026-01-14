@@ -747,6 +747,94 @@ export const mockAuditAccountResponse = () => {
 };
 
 // ============================================
+// REMEDIATION DEMO DATA
+// ============================================
+
+export const mockRemediationResponse = (findings: any[]): any => {
+  // Simulate a mix of successful and failed remediations
+  const results: any[] = [];
+  let remediated = 0;
+  let failed = 0;
+
+  findings.forEach((finding, idx) => {
+    // Simulate success for "Unused IAM Permissions" finding
+    if (finding.type === 'UnusedPermissions' && finding.role && !finding.role.includes('Multiple')) {
+      remediated++;
+      results.push({
+        success: true,
+        title: finding.title,
+        success_details: [
+          {
+            role: finding.role || 'DemoRole1',
+            actions_taken: [
+              'Removed unused permission: s3:DeleteBucket from inline policy',
+              'Removed unused permission: iam:DeleteUser from inline policy',
+              '2 permission(s) already removed (verified)'
+            ],
+            policy_name: 'DemoPolicy'
+          }
+        ]
+      });
+    } 
+    // Simulate failure for "Administrator Access" (managed policy)
+    else if (finding.type === 'OverPrivileged' && finding.title.includes('Administrator')) {
+      failed++;
+      results.push({
+        success: false,
+        title: finding.title,
+        failed_roles: [
+          {
+            role: finding.role || 'ProductionLambdaRole',
+            reason: 'This role uses managed policies only. Auto-remediation cannot modify AWS managed policies. Please create a custom inline policy with only the required permissions.',
+            error_type: 'managed_policies_only'
+          }
+        ]
+      });
+    }
+    // Simulate failure for wildcard permissions
+    else if (finding.title.includes('Wildcard')) {
+      failed++;
+      results.push({
+        success: false,
+        title: finding.title,
+        failed_roles: [
+          {
+            role: finding.affected_roles_list?.[0] || 'EC2ManagementRole',
+            reason: 'This role has wildcard permissions (s3:*, *:*) that include the unused actions. Auto-remediation cannot safely modify wildcards because they cover 100+ actions.',
+            error_type: 'wildcard_replacement_failed'
+          }
+        ]
+      });
+    }
+    // Default: simulate success for other findings
+    else if (finding.role && !finding.role.includes('Multiple')) {
+      remediated++;
+      results.push({
+        success: true,
+        title: finding.title,
+        success_details: [
+          {
+            role: finding.role,
+            actions_taken: [
+              `Removed unused permission: ${finding.affected_permissions?.[0] || 'demo:Action'} from inline policy`
+            ],
+            policy_name: 'DemoPolicy'
+          }
+        ]
+      });
+    }
+  });
+
+  return {
+    success: true,
+    remediated,
+    failed,
+    total_findings: findings.length,
+    results
+  };
+};
+
+// ============================================
 // ANALYZE HISTORY DEMO DATA  
 // ============================================
 

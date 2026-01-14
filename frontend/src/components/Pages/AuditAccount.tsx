@@ -273,6 +273,40 @@ const AuditAccount: React.FC<AuditAccountProps> = ({ awsCredentials: propCredent
   const handleRemediate = async (mode: 'all' | 'critical') => {
     if (!auditResults) return;
 
+    // Demo mode: Use demo remediation data
+    if (demoMode) {
+      setIsRemediating(true);
+      setError(null);
+      setRemediationResults(null);
+
+      // Simulate processing delay
+      setTimeout(() => {
+        import('@/utils/demoData').then(({ mockRemediationResponse }) => {
+          // Filter findings based on mode
+          let findingsToRemediate = auditResults.findings || [];
+          if (mode === 'critical') {
+            findingsToRemediate = findingsToRemediate.filter((f: any) => f.severity === 'Critical');
+          } else if (selectedFindings.size > 0) {
+            findingsToRemediate = Array.from(selectedFindings).map((idx: number) => findingsToRemediate[idx]).filter(Boolean);
+          }
+
+          // Filter out findings without role
+          findingsToRemediate = findingsToRemediate.filter((f: any) => f.role);
+
+          if (findingsToRemediate.length === 0) {
+            setError(`No ${mode === 'critical' ? 'critical' : 'selected'} findings with role information to remediate. Account-wide findings cannot be auto-remediated.`);
+            setIsRemediating(false);
+            return;
+          }
+
+          const demoResponse = mockRemediationResponse(findingsToRemediate);
+          setRemediationResults(demoResponse);
+          setIsRemediating(false);
+        });
+      }, 2000);
+      return;
+    }
+
     // Check for AWS credentials
     if (!awsCredentials) {
       setError('AWS credentials are required for remediation. Please configure your AWS credentials first.');
@@ -2433,6 +2467,41 @@ const AuditAccount: React.FC<AuditAccountProps> = ({ awsCredentials: propCredent
                             alert('Please confirm by checking the box');
                             return;
                           }
+                          
+                          // Demo mode: Use demo remediation data
+                          if (demoMode) {
+                            setRemediationStep('processing');
+                            setIsRemediating(true);
+                            const findingsToRemediate = Array.from(selectedFindings).map(idx => auditResults.findings?.[idx]).filter(Boolean);
+                            
+                            // Filter AWS Service Roles from affected_roles_list
+                            const cleanedFindings = findingsToRemediate.map(finding => {
+                              if (finding.affected_roles_list && finding.affected_roles_list.length > 0) {
+                                const userManagedRoles = finding.affected_roles_list.filter(
+                                  (role: string) => !role.startsWith('AWSServiceRoleFor')
+                                );
+                                return {
+                                  ...finding,
+                                  affected_roles_list: userManagedRoles,
+                                  role: userManagedRoles.length > 1 
+                                    ? `Multiple roles (${userManagedRoles.length})` 
+                                    : (userManagedRoles[0] || null)
+                                };
+                              }
+                              return finding;
+                            }).filter((f: any) => f.role);
+
+                            setTimeout(() => {
+                              import('@/utils/demoData').then(({ mockRemediationResponse }) => {
+                                const demoResponse = mockRemediationResponse(cleanedFindings);
+                                setRemediationResults(demoResponse);
+                                setRemediationStep('complete');
+                                setIsRemediating(false);
+                              });
+                            }, 2000);
+                            return;
+                          }
+                          
                           // Check for AWS credentials
                           if (!awsCredentials) {
                             setError('AWS credentials are required for remediation. Please configure your AWS credentials first.');
@@ -2709,8 +2778,8 @@ const AuditAccount: React.FC<AuditAccountProps> = ({ awsCredentials: propCredent
                         )}
                       </div>
                     ) : (
-                      <div className="space-y-4">
-                        {/* Summary Card */}
+                      <div className="space-y-6">
+                        {/* Summary Card - Clean and Professional */}
                         <div className="bg-white border border-red-200 rounded-lg p-5 shadow-sm">
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-3">
@@ -2726,97 +2795,132 @@ const AuditAccount: React.FC<AuditAccountProps> = ({ awsCredentials: propCredent
                             </div>
                           </div>
                         </div>
+
+                        {/* Results - Compact Card Design */}
                         {remediationResults.results && remediationResults.results.length > 0 && (
                           <div className="space-y-3">
-                            {remediationResults.results.map((result: any, idx: number) => (
-                              <div key={idx} className="bg-white border border-red-200 rounded-lg shadow-sm overflow-hidden">
-                                {/* Finding Header */}
-                                <div className="bg-slate-50 border-b border-slate-200 px-5 py-3.5">
-                                  <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-3">
-                                      <div className="w-7 h-7 bg-slate-200 rounded-full flex items-center justify-center text-slate-700 font-medium text-xs">
-                                        {idx + 1}
-                                      </div>
-                                      <div>
-                                        <h5 className="text-slate-900 font-semibold text-base">{result.title}</h5>
-                                        {result.failed_roles && result.failed_roles.length > 0 && (
+                            {remediationResults.results.map((result: any, idx: number) => {
+                              const hasMultipleRoles = result.failed_roles && result.failed_roles.length > 1;
+                              const rolesCount = result.failed_roles?.length || 0;
+                              
+                              return (
+                                <div key={idx} className="bg-white border border-red-200 rounded-lg shadow-sm overflow-hidden">
+                                  {/* Finding Header */}
+                                  <div className="bg-slate-50 border-b border-slate-200 px-5 py-3.5">
+                                    <div className="flex items-center justify-between">
+                                      <div className="flex items-center gap-3">
+                                        <div className="w-7 h-7 bg-slate-200 rounded-full flex items-center justify-center text-slate-700 font-medium text-xs">
+                                          {idx + 1}
+                                        </div>
+                                        <div>
+                                          <h5 className="text-slate-900 font-semibold text-base">{result.title}</h5>
                                           <p className="text-slate-500 text-xs mt-0.5">
-                                            {result.failed_roles.length} role{result.failed_roles.length > 1 ? 's' : ''} failed
+                                            {hasMultipleRoles ? `${rolesCount} roles` : '1 role'}
                                           </p>
-                                        )}
+                                        </div>
                                       </div>
+                                      <span className="px-2.5 py-1 bg-red-100 text-red-700 text-xs font-medium rounded">Failed</span>
                                     </div>
-                                    <span className="px-2.5 py-1 bg-red-100 text-red-700 text-xs font-medium rounded">Failed</span>
                                   </div>
-                                </div>
-                                
-                                {/* Failed Roles - Compact */}
-                                <div className="divide-y divide-slate-100">
+
+                                  {/* Failed Roles List - Compact, No Repetition */}
                                   {result.failed_roles && result.failed_roles.length > 0 ? (
-                                    result.failed_roles.slice(0, 10).map((failedRole: any, rIdx: number) => {
-                                      const message = failedRole.reason || '';
-                                      const errorType = failedRole.error_type || 'unknown';
-                                      
-                                      // Extract key info from message
-                                      const isWildcard = message.includes('wildcard') || errorType === 'wildcard_replacement_failed';
-                                      const isManagedPolicy = message.includes('managed policies') || errorType === 'managed_policies_only';
-                                      
-                                      return (
-                                        <div key={rIdx} className="px-5 py-3.5 hover:bg-slate-50 transition-colors">
-                                          <div className="flex items-start justify-between gap-4">
-                                            <div className="flex-1 min-w-0">
-                                              <div className="flex items-center gap-2 mb-1.5">
-                                                <span className="font-mono text-sm font-semibold text-slate-900">{failedRole.role}</span>
-                                                <span className="px-2 py-0.5 bg-red-50 text-red-700 text-xs font-medium rounded">Failed</span>
+                                    <div className="divide-y divide-slate-100">
+                                      {result.failed_roles.slice(0, 10).map((failedRole: any, rIdx: number) => {
+                                        const message = failedRole.reason || '';
+                                        const errorType = failedRole.error_type || 'unknown';
+                                        
+                                        // Extract key info from message
+                                        const isWildcard = message.includes('wildcard') || errorType === 'wildcard_replacement_failed';
+                                        const isManagedPolicy = message.includes('managed policies') || errorType === 'managed_policies_only';
+                                        
+                                        return (
+                                          <div key={rIdx} className="px-5 py-3.5 hover:bg-slate-50 transition-colors">
+                                            <div className="flex items-start justify-between gap-4">
+                                              <div className="flex-1 min-w-0">
+                                                <div className="flex items-center gap-2 mb-1.5">
+                                                  <span className="font-mono text-sm font-semibold text-slate-900">{failedRole.role}</span>
+                                                  <span className="px-2 py-0.5 bg-red-50 text-red-700 text-xs font-medium rounded">Failed</span>
+                                                </div>
+                                                
+                                                {/* Reason - Concise */}
+                                                <div className="mt-1.5 text-xs text-slate-600">
+                                                  {isWildcard && (
+                                                    <div className="text-slate-700 font-medium">
+                                                      Wildcard permissions detected - manual fix required
+                                                    </div>
+                                                  )}
+                                                  {isManagedPolicy && (
+                                                    <div className="text-slate-700 font-medium">
+                                                      Uses managed policies only - cannot auto-remediate
+                                                    </div>
+                                                  )}
+                                                  {!isWildcard && !isManagedPolicy && (
+                                                    <div className="text-slate-600">
+                                                      {message.split('\n').find((line: string) => line.trim() && !line.includes('SECURITY RISK') && !line.includes('Why This Failed') && !line.includes('Manual Fix Required')) || 'Manual remediation required'}
+                                                    </div>
+                                                  )}
+                                                </div>
                                               </div>
                                               
-                                              {/* Reason - Concise */}
-                                              <div className="mt-1.5 text-xs text-slate-600">
-                                                {isWildcard && (
-                                                  <div className="text-slate-700 font-medium">
-                                                    Wildcard permissions detected - manual fix required
-                                                  </div>
-                                                )}
-                                                {isManagedPolicy && (
-                                                  <div className="text-slate-700 font-medium">
-                                                    Uses managed policies only - cannot auto-remediate
-                                                  </div>
-                                                )}
-                                                {!isWildcard && !isManagedPolicy && (
-                                                  <div className="text-slate-600">
-                                                    {message.split('\n').find((line: string) => line.trim() && !line.includes('SECURITY RISK') && !line.includes('Why This Failed') && !line.includes('Manual Fix Required')) || 'Manual remediation required'}
-                                                  </div>
-                                                )}
-                                              </div>
+                                              <a
+                                                href={`https://console.aws.amazon.com/iam/home#/roles/${failedRole.role}`}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium rounded transition-colors flex items-center gap-1.5 flex-shrink-0"
+                                              >
+                                                <ExternalLink className="w-3.5 h-3.5" />
+                                                Console
+                                              </a>
                                             </div>
-                                            
-                                            <a
-                                              href={`https://console.aws.amazon.com/iam/home#/roles/${failedRole.role}`}
-                                              target="_blank"
-                                              rel="noopener noreferrer"
-                                              className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium rounded transition-colors flex items-center gap-1.5 flex-shrink-0"
-                                            >
-                                              <ExternalLink className="w-3.5 h-3.5" />
-                                              Console
-                                            </a>
                                           </div>
+                                        );
+                                      })}
+                                      
+                                      {result.failed_roles.length > 10 && (
+                                        <div className="px-5 py-3 bg-slate-50 text-slate-600 text-xs">
+                                          ...and {result.failed_roles.length - 10} more role{result.failed_roles.length - 10 > 1 ? 's' : ''} with similar issues
                                         </div>
-                                      );
-                                    })
+                                      )}
+                                    </div>
                                   ) : (
                                     <div className="px-5 py-4 text-sm text-slate-600">
                                       {result.message?.split('\n')[0] || 'Remediation failed'}
                                     </div>
                                   )}
-                                  
-                                  {result.failed_roles && result.failed_roles.length > 10 && (
-                                    <div className="px-5 py-3 bg-slate-50 text-slate-600 text-xs">
-                                      ...and {result.failed_roles.length - 10} more role{result.failed_roles.length - 10 > 1 ? 's' : ''} with similar issues
+
+                                  {/* Technical Details - Collapsible, Show Only Once */}
+                                  {idx === 0 && result.failed_roles && result.failed_roles.length > 0 && (
+                                    <div className="bg-slate-50 border-t border-slate-200 px-5 py-3">
+                                      <details className="group">
+                                        <summary className="text-xs font-semibold text-slate-700 cursor-pointer list-none flex items-center gap-2 hover:text-slate-900">
+                                          <ChevronRight className="w-3.5 h-3.5 transition-transform group-open:rotate-90" />
+                                          Technical Details
+                                        </summary>
+                                        <div className="mt-3 space-y-3 text-xs text-slate-600">
+                                          {result.failed_roles.slice(0, 10).map((failedRole: any, detailIdx: number) => (
+                                            <div key={detailIdx} className="bg-white rounded p-3 border border-slate-200">
+                                              <div className="font-mono font-semibold text-slate-900 mb-2">{failedRole.role}</div>
+                                              {failedRole.reason && (
+                                                <div className="space-y-1">
+                                                  <div className="font-medium text-slate-700 mb-1">Failure Reason:</div>
+                                                  <div className="text-slate-600 whitespace-pre-wrap">{failedRole.reason}</div>
+                                                </div>
+                                              )}
+                                              {failedRole.error_type && (
+                                                <div className="mt-2 text-slate-600">
+                                                  <span className="font-medium">Error Type:</span> <span className="font-mono">{failedRole.error_type}</span>
+                                                </div>
+                                              )}
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </details>
                                     </div>
                                   )}
                                 </div>
-                              </div>
-                            ))}
+                              );
+                            })}
                           </div>
                         )}
                       </div>
