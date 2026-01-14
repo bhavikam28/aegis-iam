@@ -1,8 +1,10 @@
 name: IAM Policy Security Check
 
-on:
-  pull_request:
-    paths:
+# Workflow disabled - requires deployed backend API
+# To enable: Set AEGIS_API_URL secret in repository settings
+# on:
+#   pull_request:
+#     paths:
       - '**/*.tf'
       - '**/*.yaml'
       - '**/*.yml'
