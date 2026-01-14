@@ -438,20 +438,6 @@ conversation_cache: Dict[str, Dict[str, Any]] = {}
 aegis_agent = PolicyAgent()
 validator_agent = ValidatorAgent()
 
-@app.options("/{full_path:path}")
-async def options_handler(full_path: str):
-    """Handle OPTIONS preflight requests for CORS"""
-    return JSONResponse(
-        content={},
-        headers={
-            "Access-Control-Allow-Origin": "http://localhost:5173",
-            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS, PATCH",
-            "Access-Control-Allow-Headers": "*",
-            "Access-Control-Allow-Credentials": "true",
-            "Access-Control-Max-Age": "3600",
-        }
-    )
-
 @app.get("/")
 def health():
     return {
