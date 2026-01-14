@@ -382,16 +382,17 @@ def fix_s3_statement_separation(policy: dict) -> dict:
     return policy
 
 app = FastAPI(title="Aegis IAM Agent - MCP Enabled")
-
-# CORS Configuration - Allow all origins for local development
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins (can restrict in production)
-    allow_credentials=False,  # Must be False when allow_origins is "*"
-    allow_methods=["*"],  # Allow all methods including OPTIONS
-    allow_headers=["*"],  # Allow all headers
-    expose_headers=["*"],  # Expose all headers
-    max_age=3600,  # Cache preflight requests for 1 hour
+    allow_origins=[
+        "http://localhost:5173",
+        "https://aegis-iam.vercel.app",
+        # Allow all Vercel preview deployments
+        "https://*.vercel.app",
+    ],
+    allow_methods=["*"],
+    allow_headers=["*"],
+    allow_credentials=True
 )
 
 class GenerationRequest(BaseModel):
