@@ -112,6 +112,12 @@ const AuditAccount: React.FC<AuditAccountProps> = ({ awsCredentials: propCredent
   // PERSISTENCE: Load saved state on mount
   // ============================================
   useEffect(() => {
+    // DEMO MODE: Don't load saved state - always start fresh for clean demo
+    if (demoMode) {
+      console.log('🎬 Demo mode: Starting with fresh state (no saved audit results loaded)');
+      return;
+    }
+    
     const saved = loadFromStorage<{
       auditResults: AuditResponse | null;
       chatMessages: Array<{role: 'user' | 'assistant', content: string}>;
@@ -140,7 +146,7 @@ const AuditAccount: React.FC<AuditAccountProps> = ({ awsCredentials: propCredent
         setError(null);
       }
     }
-  }, []); // Only run on mount
+  }, [demoMode, awsCredentials]); // Re-run if demoMode or credentials change
 
   // ============================================
   // PERSISTENCE: Save state whenever it changes

@@ -48,19 +48,10 @@ const CICDIntegration: React.FC<CICDIntegrationProps> = ({ demoMode = false }) =
   // Use centralized API URL configuration
   const apiUrl = API_URL;
 
-  // Demo mode: ALWAYS load demo data when in demo mode (including after refresh)
+  // Demo mode: Don't auto-load results - let user see landing page first
   useEffect(() => {
     if (demoMode) {
-      // Always restore demo data - use a flag to prevent infinite loops
-      const loadDemoData = async () => {
-        if (analysisResults.length === 0) {
-          const { mockCICDAnalysisResponse } = await import('@/utils/demoData');
-          setAnalysisResults([mockCICDAnalysisResponse()]);
-        }
-      };
-      loadDemoData();
-      
-      // Always set demo status
+      // Set demo status but DON'T auto-load results (let user click Refresh)
       setStatus({
         success: true,
         configured: true,
@@ -71,12 +62,13 @@ const CICDIntegration: React.FC<CICDIntegrationProps> = ({ demoMode = false }) =
         install_url: 'https://github.com/apps/aegis-iam/installations/new',
         webhook_url: 'https://aegis-iam-backend.onrender.com/api/github/webhook'
       });
+      console.log('🎬 Demo mode: Starting with fresh state (no analysis results pre-loaded)');
     } else {
       // Fetch recent analysis results
       fetchAnalysisResults();
       fetchStatus();
     }
-  }, [demoMode]); // Removed analysisResults.length to prevent infinite loops
+  }, [demoMode]);
 
   const fetchAnalysisResults = async () => {
     // In demo mode, restore demo data instead of fetching
